@@ -17,6 +17,17 @@
     --accent:#2c6e6a; --accent-soft:#d9ebe8; --plan:#9cc7c2;
     --ok:#2f7a4f; --ok-soft:#dbefe2; --warn:#b4432f; --warn-soft:#f6ddd7;
     --info:#355f8c; --info-soft:#dde8f4; --radius:14px;
+    --field:#fff; --soft:#e3e9e7; --track:#e6ecea; --hl:#f3f8f7; --on-accent:#fff; --game:#6b4fb3;
+    color-scheme: light;
+  }
+  /* Donker thema: eigen stappen, geen automatische omkering */
+  html[data-thema="donker"]{
+    --bg:#121718; --card:#1a2123; --ink:#e6edeb; --muted:#97a6a8; --line:#2b3537;
+    --accent:#5fb3ad; --accent-soft:#1d3634; --plan:#2f5c58;
+    --ok:#5cc489; --ok-soft:#163325; --warn:#f08a76; --warn-soft:#3b201b;
+    --info:#93b9e6; --info-soft:#1a2939;
+    --field:#222b2d; --soft:#283234; --track:#2c373a; --hl:#1f2c2b; --on-accent:#0d1716; --game:#a996ef;
+    color-scheme: dark;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;background:var(--bg);color:var(--ink);
@@ -38,9 +49,9 @@
   .line:last-of-type{border-bottom:0}
   label.f{display:block;font-size:14px;color:var(--muted);margin:10px 0 4px}
   input,select,textarea{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;
-    background:#fff;color:var(--ink);appearance:none;-webkit-appearance:none}
+    background:var(--field);color:var(--ink);appearance:none;-webkit-appearance:none}
   textarea{min-height:70px;resize:vertical}
-  .btn{border:0;border-radius:12px;padding:13px 16px;font:inherit;font-weight:600;background:var(--accent);color:#fff;width:100%;cursor:pointer}
+  .btn{border:0;border-radius:12px;padding:13px 16px;font:inherit;font-weight:600;background:var(--accent);color:var(--on-accent);width:100%;cursor:pointer}
   .btn.sec{background:var(--accent-soft);color:var(--accent)}
   .btn.ghost{background:none;color:var(--muted);font-weight:500}
   .btn.danger{background:var(--warn-soft);color:var(--warn)}
@@ -54,24 +65,24 @@
   .note{font-size:14px;color:var(--muted);margin:6px 2px}
   .empty{color:var(--muted);text-align:center;padding:16px 8px}
   .badge{font-size:13px;padding:3px 9px;border-radius:99px;background:var(--ok-soft);color:var(--ok);white-space:nowrap;font-weight:600}
-  .badge.none{background:#e8edeb;color:var(--muted);font-weight:500}
+  .badge.none{background:var(--soft);color:var(--muted);font-weight:500}
   .list-item{display:flex;align-items:center;gap:10px;padding:12px 2px;border-bottom:1px solid var(--line);cursor:pointer}
   .list-item:last-child{border-bottom:0}
   .big{font-size:38px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
   .unit{font-size:15px;font-weight:500;color:var(--muted);margin-left:4px;letter-spacing:0}
-  .seg{display:flex;background:#e3e9e7;border-radius:11px;padding:3px;gap:3px}
+  .seg{display:flex;background:var(--soft);border-radius:11px;padding:3px;gap:3px}
   .seg button{flex:1;border:0;background:none;border-radius:9px;padding:9px 4px;font:inherit;font-size:15px;color:var(--muted);cursor:pointer}
-  .seg button.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .seg button.on{background:var(--field);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
   .seg.small button{padding:6px 14px}
   .alert,.okbox,.infobox{border-radius:12px;padding:10px 12px;font-size:15px;margin:10px 0}
   .alert{background:var(--warn-soft);color:var(--warn)}
   .okbox{background:var(--ok-soft);color:var(--ok)}
   .infobox{background:var(--info-soft);color:var(--info)}
   .daynav{display:flex;gap:8px;align-items:center;margin:6px 0}
-  .nb{border:1px solid var(--line);background:#fff;border-radius:10px;width:46px;height:46px;font-size:22px;color:var(--ink);flex:none;cursor:pointer}
+  .nb{border:1px solid var(--line);background:var(--field);border-radius:10px;width:46px;height:46px;font-size:22px;color:var(--ink);flex:none;cursor:pointer}
   .daynav .lbl{flex:1;text-align:center;font-weight:600}
   .step{display:flex;align-items:center;gap:6px}
-  .step button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#fff;font-size:22px;color:var(--accent);cursor:pointer}
+  .step button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--field);font-size:22px;color:var(--accent);cursor:pointer}
   .sv{min-width:62px;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
   .ag{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);align-items:baseline}
   .ag:last-child{border-bottom:0}
@@ -80,11 +91,11 @@
   .count{display:flex;align-items:center;gap:10px}
   .m{margin:10px 0}
   .mv{font-size:15px;font-variant-numeric:tabular-nums}
-  .meter{height:9px;background:#e6ecea;border-radius:99px;overflow:hidden;margin-top:5px}
+  .meter{height:9px;background:var(--track);border-radius:99px;overflow:hidden;margin-top:5px}
   .meter i{display:block;height:100%;background:var(--accent);border-radius:99px}
   .meter.good i{background:var(--ok)}
   .meter.bad i{background:var(--warn)}
-  .track{position:relative;height:22px;background:#e6ecea;border-radius:8px;margin:34px 0 8px}
+  .track{position:relative;height:22px;background:var(--track);border-radius:8px;margin:34px 0 8px}
   .track i{position:absolute;top:0;bottom:0;left:0}
   .track i.gew{background:var(--accent);border-radius:8px 0 0 8px}
   .track i.gep{background:var(--plan)}
@@ -100,24 +111,24 @@
   th:first-child,td:first-child{text-align:left}
   th{font-size:12px;color:var(--muted);font-weight:600}
   tr.tot td{font-weight:700;border-bottom:0}
-  tr.vandaag td{background:#f3f8f7}
-  .mini{height:8px;background:#e6ecea;border-radius:99px;overflow:hidden;width:70px;display:inline-block;vertical-align:middle}
+  tr.vandaag td{background:var(--hl)}
+  .mini{height:8px;background:var(--track);border-radius:99px;overflow:hidden;width:70px;display:inline-block;vertical-align:middle}
   .mini i{display:block;height:100%;background:var(--accent)}
   .sheet-bg{position:fixed;inset:0;background:rgba(30,42,44,.35);z-index:20;display:flex;align-items:flex-end}
   .sheet{background:var(--bg);width:100%;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;
     padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-width:680px;margin:0 auto}
   .sheet h3{margin:0 0 6px;font-size:21px}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(140px + env(safe-area-inset-bottom));
-    background:var(--ink);color:#fff;padding:11px 18px;border-radius:12px;z-index:30;font-size:15px;max-width:90vw}
+    background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:12px;z-index:30;font-size:15px;max-width:90vw}
   .loading{position:fixed;inset:0;display:grid;place-items:center;color:var(--muted);background:var(--bg);z-index:50}
   .gear{border:0;background:none;font-size:24px;color:var(--muted);padding:4px;cursor:pointer}
   details summary{list-style:none;cursor:pointer;color:var(--accent);font-weight:600;padding:12px 4px}
   details summary::-webkit-details-marker{display:none}
   .chips{display:flex;gap:6px;flex-wrap:wrap}
-  .chip{border:1px solid var(--line);background:#fff;border-radius:99px;padding:8px 13px;font:inherit;font-size:15px;color:var(--accent);cursor:pointer}
-  .chip.game{color:#6b4fb3}
+  .chip{border:1px solid var(--line);background:var(--field);border-radius:99px;padding:8px 13px;font:inherit;font-size:15px;color:var(--accent);cursor:pointer}
+  .chip.game{color:var(--game)}
   .big.neg{color:var(--warn)}
-  .timer{border-color:var(--accent);background:#f4faf9}
+  .timer{border-color:var(--accent);background:var(--hl)}
   .vakrow input{width:auto}
   .list-item.vervallen .name{text-decoration:line-through;color:var(--muted)}
   .badge.warn{background:var(--warn-soft);color:var(--warn)}
@@ -125,10 +136,34 @@
   .dl:last-child{border-bottom:0}
   .dl .wanneer{font-size:13px;font-weight:600;white-space:nowrap}
   .dl.urgent .wanneer{color:var(--warn)}
-  .vink{width:34px;height:34px;border-radius:50%;border:2px solid var(--line);background:#fff;flex:none;cursor:pointer;color:var(--ok);font-size:17px}
+  .vink{width:34px;height:34px;border-radius:50%;border:2px solid var(--line);background:var(--field);flex:none;cursor:pointer;color:var(--ok);font-size:17px}
   .setup{max-width:520px;margin:40px auto;padding:0 16px}
+  .chip.code{color:var(--info)}
+  .tabelwrap{overflow-x:auto}
+  .grafiek{position:relative}
+  .grafiek svg{display:block;width:100%;height:auto;overflow:visible}
+  .grafiek .gt{font-weight:600;margin-bottom:2px}
+  .grafiek .gs{font-size:13px;color:var(--muted);margin-bottom:6px}
+  .grafiek .ax{font-size:11px;fill:var(--muted)}
+  .grafiek .grid{stroke:var(--line);stroke-width:1}
+  .grafiek .ref{stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 4}
+  .grafiek .tick{stroke:var(--ink);stroke-width:2;stroke-linecap:round}
+  .grafiek [data-i]{cursor:pointer}
+  .legenda{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--muted);margin:2px 0 6px}
+  .legenda span{display:inline-flex;align-items:center;gap:5px}
+  .legenda i{width:10px;height:10px;border-radius:3px;display:inline-block}
+  .legenda i.lijn{height:0;border-top:2px solid var(--ink);border-radius:0;width:12px}
+  .legenda i.stip{height:0;border-top:2px dashed var(--muted);border-radius:0;width:12px}
+  .tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;padding:6px 9px;border-radius:8px;
+    white-space:nowrap;transform:translate(-50%,-100%);display:none;z-index:3;line-height:1.35}
   .x{border:0;background:none;color:var(--warn);font-size:20px;padding:4px 8px;cursor:pointer}
 </style>
+<script>
+  // thema meteen toepassen (voordat de app tekent): licht, donker of systeem
+  (function(){ var k = 'systeem'; try { k = JSON.parse(localStorage.getItem('planner-thema')) || 'systeem'; } catch(e){}
+    var d = k === 'donker' || (k === 'systeem' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-thema', d ? 'donker' : 'licht'); })();
+</script>
 <!--TEST-HEAD-->
 </head>
 <body>
@@ -142,6 +177,7 @@
   <button data-v="diensten"><span class="i">€</span>Diensten</button>
   <button data-v="maand"><span class="i">▤</span>Maand</button>
   <button data-v="week"><span class="i">◷</span>Week</button>
+  <button data-v="trends"><span class="i">↗</span>Trends</button>
 </nav>
 <div id="sheetHost"></div>
 
@@ -214,15 +250,58 @@ function roep(fn, args, cfg){
                           body: JSON.stringify({sleutel: cfg.sleutel, fn, args}) })
     .then(r => r.json()).then(j => { if (!j.ok) throw new Error(j.fout || 'Onbekende fout'); return j.data; });
 }
+// Offline: deze schrijfacties worden bewaard en later verstuurd als er geen verbinding is.
+const OFFLINE_FN = ['bewaarDag', 'bewaarReflectie', 'bewaarDeadline'], WACHT_KEY = 'planner-wachtrij';
+const isNetwerkFout = e => /Failed to fetch|NetworkError|Load failed|network/i.test(e && e.message || String(e));
+function lokaal(fn, a){             // laat de wijziging meteen zien, ook zonder verbinding
+  const d = JSON.parse(JSON.stringify(D));
+  if (fn === 'bewaarDag') {
+    d.dagen = d.dagen.filter(x => x.datum !== a.datum);
+    if (Number(a.gamen) || a.sport || a.notitie || Number(a.coderen) || Number(a.slaap))
+      d.dagen.push({datum:a.datum, gamen:Number(a.gamen)||0, sport:!!a.sport, notitie:a.notitie||'', coderen:Number(a.coderen)||0, slaap:Number(a.slaap)||0});
+    const vakken = Object.keys(a.studie || {});
+    d.studie = d.studie.filter(x => !(x.datum === a.datum && vakken.includes(x.vak)));
+    vakken.forEach(v => { if (Number(a.studie[v]) > 0) d.studie.push({id:a.datum+'|'+v, datum:a.datum, vak:v, uren:Number(a.studie[v])}); });
+  } else if (fn === 'bewaarReflectie') {
+    d.reflecties = d.reflecties.filter(r => r.week !== a.week).concat([Object.assign({}, a)]);
+  } else if (fn === 'bewaarDeadline') {
+    const x = Object.assign({}, a, {id: a.id || 'nieuw-' + Date.now()});
+    d.deadlines = d.deadlines.filter(y => y.id !== x.id).concat([x]);
+  }
+  return d;
+}
+async function verstuurWachtrij(){
+  const rij = opslag.get(WACHT_KEY) || [];
+  if (!rij.length || IN_GOOGLE) return;
+  for (let n = 0; n < rij.length; n++) {
+    try { await roep(rij[n].fn, rij[n].args); }
+    catch(e) { opslag.set(WACHT_KEY, rij.slice(n)); return; }   // nog steeds offline: later opnieuw
+  }
+  opslag.weg(WACHT_KEY);
+  try { D = await roep('haalAlles', []); opslag.set(CACHE_KEY, D); inv = null;
+        if (!document.querySelector('.sheet-bg')) render(); toast('Offline wijzigingen opgeslagen ✓'); } catch(e) {}
+}
+window.addEventListener('online', verstuurWachtrij);
 function api(fn, ...args){
-  return roep(fn, args).then(d => {
+  if (!IN_GOOGLE && OFFLINE_FN.includes(fn) && (opslag.get(WACHT_KEY) || []).length) return inWachtrij(fn, args);
+  return roep(fn, args).catch(e => {
+    if (!IN_GOOGLE && OFFLINE_FN.includes(fn) && isNetwerkFout(e)) return inWachtrij(fn, args);
+    throw e;
+  }).then(d => {
     if (!IN_GOOGLE && d && d.diensten) opslag.set(CACHE_KEY, d);   // laatste stand bewaren: app opent direct
     return d;
   }).catch(e => {
     const m = e.message || String(e);
-    toast(/Failed to fetch|NetworkError|Load failed/i.test(m) ? 'Geen verbinding. Probeer het zo opnieuw.' : 'Er ging iets mis: ' + m);
+    toast(isNetwerkFout(e) ? 'Geen verbinding. Probeer het zo opnieuw.' : 'Er ging iets mis: ' + m);
     throw e;
   });
+}
+function inWachtrij(fn, args){
+  const rij = opslag.get(WACHT_KEY) || []; rij.push({fn, args}); opslag.set(WACHT_KEY, rij);
+  const d = lokaal(fn, args[0]); opslag.set(CACHE_KEY, d);
+  setTimeout(() => toast('Offline bewaard. Wordt verstuurd zodra je verbinding hebt.'), 2900);
+  setTimeout(verstuurWachtrij, 3000);   // misschien is de verbinding er alweer
+  return Promise.resolve(d);
 }
 function toast(t){ const el=document.createElement('div'); el.className='toast'; el.textContent=t; document.body.appendChild(el); setTimeout(()=>el.remove(),2800); }
 
@@ -238,7 +317,29 @@ function lessenWeek(ma){
 }
 function lessenOp(s){ const w=lessenWeek(maandag(s)); if (!w || w.fout) return w; return {lessen: w.lessen.filter(l=>l.datum===s)}; }
 
-function studieDoel(){ const s = D.vakken.reduce((t,v)=>t+v.weekdoel,0); return s || 15; }
+function basisDoel(){ const s = D.vakken.reduce((t,v)=>t+v.weekdoel,0); return s || 15; }
+/** Toetsweekmodus: eerstvolgend tentamen binnen X dagen vanaf datum s (of in de week vanaf maandag s). */
+function toetsweek(s, weekVanaf, dagen){
+  const n = dagen || Number(I().toetsweekDagen) || 0; if (!n) return null;
+  const eind = weekVanaf ? plus(s, 6) : s;
+  // "alleen indien nodig" telt niet mee: haal hem weg met "Niet nodig", of pas de opmerking aan als je hem wél moet maken
+  const t = D.tentamens.filter(t => !/indien nodig/i.test(t.opmerking||'') && t.datum >= s && dagenTot(eind, t.datum) <= n)
+    .sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd))[0];
+  return t ? { t, dagen: dagenTot(s, t.datum) } : null;
+}
+/** Doelen voor een week: in toetsweekmodus hoger studiedoel (extra uren naar het tentamenvak) en minder gamen. */
+function doelen(modus){
+  const i = I(), basis = basisDoel(), perVak = {};
+  D.vakken.forEach(v => perVak[v.vak] = v.weekdoel);
+  if (!modus) return { studie: basis, perVak, gameMax: i.gameMax };
+  const studie = Math.max(basis, Number(i.toetsweekStudie) || basis), extra = studie - basis;
+  const raak = D.vakken.filter(v => modus.t.vak.toLowerCase().includes(v.vak.toLowerCase()));
+  raak.forEach(v => perVak[v.vak] += extra / raak.length);
+  return { studie, perVak, gameMax: Math.min(i.gameMax, Number(i.toetsweekGameMax) || i.gameMax) };
+}
+function toetsBanner(m, d){
+  return m ? `<div class="infobox">📚 <b>Toetsweekmodus</b>: ${esc(m.t.vak)} op ${dagKort(m.t.datum)}. Studiedoel ${u(d.studie)} u, max ${u(d.gameMax)} u gamen. Liefst geen diensten.</div>` : '';
+}
 function studieOp(s){ const o={}; D.studie.filter(x=>x.datum===s).forEach(x=>o[x.vak]=(o[x.vak]||0)+x.uren); return o; }
 function weekStats(ma){
   const w = lessenWeek(ma);
@@ -246,21 +347,24 @@ function weekStats(ma){
   const dagen = [...Array(7)].map((_,i) => {
     const s = plus(ma,i), r = D.dagen.find(x=>x.datum===s) || {}, ds = dienstenOp(s), st = studieOp(s);
     Object.keys(st).forEach(v => perVak[v] = (perVak[v]||0) + st[v]);
-    return { s, studie:Object.values(st).reduce((a,b)=>a+b,0), gamen:r.gamen||0, sport:!!r.sport,
+    return { s, studie:Object.values(st).reduce((a,b)=>a+b,0), gamen:r.gamen||0, sport:!!r.sport, coderen:r.coderen||0, slaap:r.slaap||0,
              werk: ds.reduce((t,x)=>t+nettoU(x),0),
              les: w && w.lessen ? w.lessen.filter(l=>l.datum===s).reduce((t,l)=>t+l.uren,0) : null,
              laat: ds.some(isLaat) };
   });
   const som = k => dagen.reduce((t,d)=>t+(d[k]||0),0);
   const studie = som('studie'), gamen = som('gamen');
-  const verdiend = Math.min(I().gameMax, studie / (I().verdienPer || 2));
-  return { dagen, perVak, studie, gamen, verdiend, gameOver: verdiend - gamen,
+  const modus = toetsweek(ma, true), doel = doelen(modus);
+  const verdiend = Math.min(doel.gameMax, studie / (I().verdienPer || 2));
+  const slaapDagen = dagen.filter(d => d.slaap > 0);
+  return { dagen, perVak, studie, gamen, verdiend, gameOver: verdiend - gamen, modus, doel, coderen: som('coderen'),
+           slaapGem: slaapDagen.length ? slaapDagen.reduce((t,d)=>t+d.slaap,0) / slaapDagen.length : null, slaapN: slaapDagen.length,
            sport:dagen.filter(d=>d.sport).length, werk:som('werk'),
            les: w && w.lessen ? som('les') : null, laat: dagen.filter(d=>d.laat).length };
 }
 function vakMeters(ws){
   const namen = D.vakken.map(v=>v.vak).concat(Object.keys(ws.perVak).filter(v=>!D.vakken.some(x=>x.vak===v)));
-  return namen.map(v => { const doel = (D.vakken.find(x=>x.vak===v)||{}).weekdoel || 0, val = ws.perVak[v]||0;
+  return namen.map(v => { const doel = ws.doel.perVak[v] || 0, val = ws.perVak[v]||0;
     return meter(esc(v), val, doel || val || 1, u(val)+(doel?' / '+u(doel):'')+' u'); }).join('');
 }
 function meter(label, val, doel, txt, isMax){
@@ -277,7 +381,7 @@ $('#gear').onclick = () => openInstellingen();
 function render(){
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v===view));
   $('#stickyHost').innerHTML = '';
-  ({vandaag:renderVandaag, diensten:renderDiensten, maand:renderMaand, week:renderWeek})[view]();
+  ({vandaag:renderVandaag, diensten:renderDiensten, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
 }
 
 // ================= TIMER =================
@@ -287,24 +391,25 @@ setInterval(() => { const el = document.getElementById('tKlok'); if (el && D && 
 function timerHtml(){
   const t = D.timer;
   if (t) return `<div class="card timer"><div class="row"><div class="grow">
-      <div class="sub">Timer loopt · ${t.soort==='studie' ? 'studie '+esc(t.vak) : 'gamen'}</div><div class="big" id="tKlok">${klok(t)}</div></div>
+      <div class="sub">Timer loopt · ${t.soort==='studie' ? 'studie '+esc(t.vak) : esc(t.soort)}</div><div class="big" id="tKlok">${klok(t)}</div></div>
       <button class="btn small" id="tStop">■ Stop</button></div>
       <button class="btn ghost" id="tAnn" style="padding:6px;margin-top:4px">Timer annuleren</button></div>`;
   return `<div class="card"><div class="sub" style="margin-bottom:8px">Timer starten</div><div class="chips">
     ${D.vakken.map(v=>`<button class="chip" data-tv="${esc(v.vak)}">▶ ${esc(v.vak)}</button>`).join('')}
-    <button class="chip game" data-tg="1">▶ Gamen</button></div></div>`;
+    <button class="chip game" data-tg="gamen">▶ Gamen</button><button class="chip code" data-tg="coderen">▶ Coderen</button></div></div>`;
 }
 function timerKnoppen(){
   document.querySelectorAll('[data-tv]').forEach(b => b.onclick = async () => {
     D = await api('startTimer', 'studie', b.dataset.tv); render(); toast('Timer gestart: ' + b.dataset.tv); });
-  const g = $('[data-tg]'); if (g) g.onclick = async () => { D = await api('startTimer', 'gamen', ''); render(); toast('Timer gestart: gamen'); };
+  document.querySelectorAll('[data-tg]').forEach(g => g.onclick = async () => {
+    D = await api('startTimer', g.dataset.tg, ''); render(); toast('Timer gestart: ' + g.dataset.tg); });
   if ($('#tAnn')) $('#tAnn').onclick = async () => {
     const k = $('#tAnn'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer: tijd niet opslaan'; return; }
     D = await api('annuleerTimer'); render(); toast('Timer geannuleerd'); };
   if ($('#tStop')) $('#tStop').onclick = () => {
     const t = D.timer, minuten = Math.round((Date.now()-t.start)/60000);
     sheet(`<h3>Timer stoppen</h3>
-      <div class="sub">${t.soort==='studie' ? 'Studie '+esc(t.vak) : 'Gamen'} · gemeten ${Math.floor(minuten/60)} u ${minuten%60} min</div>
+      <div class="sub">${t.soort==='studie' ? 'Studie '+esc(t.vak) : t.soort==='coderen' ? 'Coderen' : 'Gamen'} · gemeten ${Math.floor(minuten/60)} u ${minuten%60} min</div>
       <label class="f">Opslaan als (minuten)</label><input id="tMin" inputmode="numeric" value="${minuten}">
       ${minuten > 240 ? '<div class="alert">Dat is lang. Vergeten te stoppen? Pas de minuten aan.</div>' : ''}
       <div class="note">Wordt opgeteld bij de dag waarop de timer startte.</div>
@@ -322,11 +427,12 @@ let dag = vandaag(), inv = null;
 function laadInv(){
   const r = D.dagen.find(x=>x.datum===dag);
   const studie = {}; D.vakken.forEach(v => studie[v.vak] = 0); Object.assign(studie, studieOp(dag));
-  inv = { dag, studie, gamen:r?r.gamen:0, sport:r?r.sport:false, notitie:r?(r.notitie||''):'' };
+  inv = { dag, studie, gamen:r?r.gamen:0, sport:r?r.sport:false, notitie:r?(r.notitie||''):'', coderen:r?(r.coderen||0):0, slaap:r?(r.slaap||0):0 };
 }
 const vakNamen = () => Object.keys(inv.studie);
-const invGet = k => k==='gamen' ? inv.gamen : inv.studie[vakNamen()[+k.slice(1)]];
-const invSet = (k,v) => { if (k==='gamen') inv.gamen = v; else inv.studie[vakNamen()[+k.slice(1)]] = v; };
+const LOS = ['gamen', 'coderen', 'slaap'];   // velden die niet bij een vak horen
+const invGet = k => LOS.includes(k) ? inv[k] : inv.studie[vakNamen()[+k.slice(1)]];
+const invSet = (k,v) => { if (LOS.includes(k)) inv[k] = v; else inv.studie[vakNamen()[+k.slice(1)]] = v; };
 function stepper(k, label){
   return `<div class="row line"><div class="grow">${label}</div><div class="step">
     <button data-k="${k}" data-d="-0.5" aria-label="minder">−</button><span class="sv" data-typ="${k}" style="cursor:pointer;text-decoration:underline dotted">${u(invGet(k))} u</span>
@@ -352,10 +458,11 @@ function renderVandaag(){
       <button class="nb" id="dNext" aria-label="volgende dag">›</button></div>
     ${isVandaag ? '' : '<button class="btn ghost" id="dNu" style="padding:6px">Terug naar vandaag</button>'}
     ${gister.length ? `<div class="alert">Late dienst gisteren (tot ${gister[gister.length-1].eind}): vandaag geen zwaar studieblok en geen vroege sportschool.</div>` : ''}
+    ${toetsBanner(toetsweek(dag), doelen(toetsweek(dag)))}
     ${timerHtml()}
     <div class="card count"><div class="grow"><div class="sub">Gametijd deze week</div>
       <div class="sub">verdiend ${u(ws.verdiend)} u · gebruikt ${u(ws.gamen)} u</div>
-      <div class="note" style="margin:4px 0 0">Elke ${u(i.verdienPer)} u studie = 1 u gamen (max ${u(i.gameMax)} u/week)</div></div>
+      <div class="note" style="margin:4px 0 0">Elke ${u(i.verdienPer)} u studie = 1 u gamen (max ${u(ws.doel.gameMax)} u/week)</div></div>
       <div class="big ${ws.gameOver<0?'neg':''}">${u(ws.gameOver)}<span class="unit">u over</span></div></div>
     ${t ? `<div class="card count"><div class="grow"><div class="sub">Volgende tentamen</div><div class="name">${esc(t.vak)}</div>
       <div class="sub">${dagKort(t.datum)}${t.tijd?' · '+t.tijd:''}${t.opmerking?' · '+esc(t.opmerking):''}</div>
@@ -372,6 +479,8 @@ function renderVandaag(){
     <div class="card">
       ${vakNamen().map((v,n) => stepper('s'+n, esc(v))).join('') || '<div class="note">Voeg vakken toe bij ⚙︎.</div>'}
       ${stepper('gamen','Gamen')}
+      ${stepper('coderen','Coderen <span class="sub">(leerlijn)</span>')}
+      ${stepper('slaap','Slaap afgelopen nacht')}
       <div class="row line"><div class="grow">Sportschool</div>
         <div class="seg small" id="vSport"><button data-v="0" class="${!inv.sport?'on':''}">Nee</button><button data-v="1" class="${inv.sport?'on':''}">Ja</button></div></div>
       <div class="note">Tik op een getal om het precies in te typen. Opslaan overschrijft deze dag; je kunt altijd terug om iets te wijzigen.</div>
@@ -379,8 +488,10 @@ function renderVandaag(){
     </div>
     <h2>Week ${weekNr(dag)}</h2>
     <div class="card">
-      ${meter('Zelfstudie totaal', ws.studie, studieDoel(), u(ws.studie)+' / '+u(studieDoel())+' u')}
+      ${meter('Zelfstudie totaal', ws.studie, ws.doel.studie, u(ws.studie)+' / '+u(ws.doel.studie)+' u')}
       ${meter('Sportschool', ws.sport, i.sportDoel, ws.sport+' / '+i.sportDoel+'×')}
+      ${meter('Coderen', ws.coderen, i.codeerDoel, u(ws.coderen)+' / '+u(i.codeerDoel)+' u')}
+      ${ws.slaapGem !== null ? `<div class="note">Slaap gemiddeld ${u(Math.round(ws.slaapGem*10)/10)} u per nacht (doel ${u(i.slaapDoel)} u)</div>` : ''}
       <div class="note">Sjiek deze week: ${u(ws.werk)} u${ws.les!==null?' · lessen: '+u(ws.les)+' u':''}</div>
     </div>`;
   $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="vOpslaan">Dag opslaan</button></div>`;
@@ -401,7 +512,7 @@ function renderVandaag(){
   document.querySelectorAll('#vSport button').forEach(b => b.onclick = () => { inv.sport = b.dataset.v==='1'; renderVandaag(); });
   document.querySelectorAll('[data-typ]').forEach(el => el.onclick = () => {
     const k = el.dataset.typ, oud = invGet(k), mi = Math.round(oud*60);
-    sheet(`<h3>${k==='gamen'?'Gamen':esc(vakNamen()[+k.slice(1)])} · ${dagKort(dag)}</h3>
+    sheet(`<h3>${({gamen:'Gamen',coderen:'Coderen',slaap:'Slaap'})[k] || esc(vakNamen()[+k.slice(1)])} · ${dagKort(dag)}</h3>
       <div class="row"><div class="grow"><label class="f">Uren</label><input id="eU" inputmode="numeric" value="${Math.floor(mi/60)}"></div>
       <div class="grow"><label class="f">Minuten</label><input id="eM" inputmode="numeric" value="${mi%60}"></div></div>
       <div style="height:12px"></div><button class="btn" id="eOk">Klaar</button><button class="btn ghost" id="eAnn">Annuleren</button>`);
@@ -414,7 +525,7 @@ function renderVandaag(){
   $('#vOpslaan').onclick = async () => {
     const btn = $('#vOpslaan'); btn.disabled = true; btn.textContent = 'Opslaan…';
     try {
-      D = await api('bewaarDag', {datum:dag, studie:inv.studie, gamen:inv.gamen, sport:inv.sport, notitie:inv.notitie});
+      D = await api('bewaarDag', {datum:dag, studie:inv.studie, gamen:inv.gamen, sport:inv.sport, notitie:inv.notitie, coderen:inv.coderen, slaap:inv.slaap});
       laadInv(); render(); toast('Dag opgeslagen ✓');
     } catch(e){ render(); }
   };
@@ -565,6 +676,7 @@ function openDienst(x){
     $('#sInfo').innerHTML = `<div class="row"><div class="grow"><div class="sub">Netto</div><div class="name">${u(nettoU(d))} u</div></div>
       <div style="text-align:right"><div class="sub">${ymNaam(ym)} wordt</div><div class="name">${u(na)} u</div></div></div>
       ${isLaat(d) ? '<div class="note">⚠︎ Eindigt laat: de ochtend erna geen zwaar studieblok of vroege sportschool.</div>' : ''}
+      ${(() => { const m = toetsweek(d.datum); return m ? `<div class="alert">📚 Toetsweekmodus: ${esc(m.t.vak)} ${m.dagen<=1?(m.dagen?'morgen':'vandaag'):'over '+m.dagen+' dagen'}. Weet je zeker dat je deze dienst wilt?</div>` : ''; })()}
       ${grensTekst(na)}`;
   };
   ['#sDatum','#sBegin','#sEind'].forEach(s => $(s).oninput = info);
@@ -587,6 +699,51 @@ function openDienst(x){
       toast('Opgeslagen ✓ ' + ymNaam(d.datum.slice(0,7)) + ': ' + u(maandInfo(d.datum.slice(0,7)).tot) + ' u');
     } catch(e){ btn.disabled = false; btn.textContent = 'Opslaan'; }
   };
+}
+
+// ================= DIENSTZOEKER =================
+/** Beoordeelt een dag voor een extra dienst. null = niet geschikt. */
+function dagAdvies(s){
+  if (dienstenOp(s).length) return null;
+  if (['12-31','01-01'].includes(s.slice(5))) return null;                         // oud & nieuw vrij
+  if (D.tentamens.some(t => t.datum === s || t.datum === plus(s,1))) return null;  // tentamen of dag ervoor
+  const w = lessenWeek(maandag(s));
+  if (w === null) return { s, laden: true };
+  const les = w && w.lessen ? w.lessen.filter(l => l.datum === s) : [];
+  const begin = les.reduce((m,l) => !m || l.begin < m ? l.begin : m, ''), eind = les.reduce((m,l) => l.eind > m ? l.eind : m, '');
+  let wat, score;
+  if (!les.length) { wat = 'hele dag vrij'; score = 3; }
+  else if (mins(eind) <= 16*60+30) { wat = 'na je les (tot ' + eind + ')'; score = 2; }
+  else if (mins(begin) >= 13*60) { wat = 'ochtend (les vanaf ' + begin + ')'; score = 1; }
+  else return null;
+  const op = [];
+  if (dt(s).getDay() === 3) { op.push("borrel 's avonds"); score -= 0.5; }
+  const m = toetsweek(s, false, Math.min(7, Number(I().toetsweekDagen) || 7));   // jouw regel: de week ervóór geen diensten
+  if (m) { op.push(m.t.vak + ' over ' + m.dagen + ' d'); score -= 2; }
+  const dl = D.deadlines.find(d => !d.klaar && (d.datum === s || d.datum === plus(s,1)));
+  if (dl) { op.push('deadline ' + (dl.datum === s ? 'vandaag' : 'morgen')); score -= 1; }
+  if (dienstenOp(plus(s,-1)).some(isLaat)) op.push('na late dienst: niet vroeg');
+  return { s, wat, op, score };
+}
+function dienstzoeker(ym, mi){
+  const nu = vandaag();
+  if (ym < nu.slice(0,7)) return '';
+  const doelU = mi.tot < mi.minimum ? mi.minimum : mi.doel;
+  if (mi.tot >= mi.doel) return '';
+  const tekort = doelU - mi.tot, diensten = Math.max(1, Math.ceil(tekort / 6));
+  const dagen = []; let s = ym + '-01'; if (s <= nu) s = plus(nu, 1);
+  for (; s.startsWith(ym); s = plus(s, 1)) { const a = dagAdvies(s); if (a) dagen.push(a); }
+  const laden = dagen.some(a => a.laden);
+  const goed = dagen.filter(a => !a.laden).sort((a,b) => b.score - a.score || a.s.localeCompare(b.s)).slice(0, 8);
+  const label = sc => sc >= 2 ? ['', 'goed'] : sc >= 1 ? ['none', 'kan'] : ['warn', 'liever niet'];
+  return `<h2>Dienstzoeker</h2><div class="card">
+    <div class="name">Nog ${u(tekort)} u tot je ${mi.tot < mi.minimum ? 'minimum' : 'doel'} (${doelU} u) · ±${diensten} ${diensten===1?'dienst':'diensten'} van 6 u</div>
+    ${mi.tot < mi.minimum && mi.doel > mi.minimum ? `<div class="sub">Tot je doel van ${mi.doel} u: nog ${u(mi.doel - mi.tot)} u</div>` : ''}
+    ${laden ? '<div class="note">Lessen laden…</div>' : ''}
+    ${goed.map(a => { const [c,l] = label(a.score); return `<div class="list-item" style="cursor:default"><div class="grow">
+      <div class="name">${dagKort(a.s)}</div><div class="sub">${esc(a.wat)}${a.op.length ? ' · ' + esc(a.op.join(' · ')) : ''}</div></div>
+      <span class="badge ${c}">${l}</span></div>`; }).join('') || (laden ? '' : '<div class="empty">Geen geschikte dagen meer deze maand.</div>')}
+    <div class="note">Kijk in de Sjiek-app welke diensten er op deze dagen open staan. Nieuwe diensten komen vanzelf in de planner.</div></div>`;
 }
 
 // ================= MAAND =================
@@ -631,6 +788,7 @@ function renderMaand(){
       <div class="row line"><div class="grow">Uitbetaald in</div><div class="name">${ymNaam(ymPlus(ym,1))}</div></div>
       <div class="note">Netto krijg je minder door belasting. Uren zijn na aftrek van onbetaalde pauze.</div>
     </div>
+    ${dienstzoeker(ym, mi)}
     <h2>Diensten in ${MAANDEN_LANG[Number(ym.slice(5))-1]}</h2>
     <div class="card" style="padding:4px 12px">${mi.ds.sort((a,b)=>(a.datum+a.begin).localeCompare(b.datum+b.begin)).map(x =>
       `<div class="list-item" data-id="${x.id}"><div class="grow">${dagKort(x.datum)} <span class="sub">· ${x.begin}–${x.eind}</span></div>
@@ -667,9 +825,11 @@ function weekTekst(ws){
   const i = I(), zo = plus(wk,6), mi = maandInfo(wk.slice(0,7));
   return [
     `Weekreflectie week ${weekNr(wk)} (${dagKort(wk)} – ${dagKort(zo)})`,
-    `Zelfstudie: ${u(ws.studie)} u (doel ${u(studieDoel())})` + (Object.keys(ws.perVak).length ? ' — ' + Object.keys(ws.perVak).map(v=>v+' '+u(ws.perVak[v])+' u').join(', ') : ''),
+    (ws.modus ? `Toetsweekmodus: ${ws.modus.t.vak} op ${dagKort(ws.modus.t.datum)}\n` : '') + `Zelfstudie: ${u(ws.studie)} u (doel ${u(ws.doel.studie)})` + (Object.keys(ws.perVak).length ? ' — ' + Object.keys(ws.perVak).map(v=>v+' '+u(ws.perVak[v])+' u').join(', ') : ''),
     `Sportschool: ${ws.sport}× (doel ${i.sportDoel})`,
     `Gamen: ${u(ws.gamen)} u (verdiend ${u(ws.verdiend)} u)`,
+    `Coderen (leerlijn): ${u(ws.coderen)} u (doel ${u(i.codeerDoel)})`,
+    ws.slaapGem !== null ? `Slaap: gemiddeld ${u(Math.round(ws.slaapGem*10)/10)} u per nacht (${ws.slaapN} nachten ingevuld)` : '',
     `Sjiek: ${u(ws.werk)} u deze week · ${ymNaam(wk.slice(0,7))} totaal ${u(mi.tot)} u (doel ${mi.doel})`,
     ws.les!==null ? `Lessen: ${u(ws.les)} u` : '',
     `Wat ging goed: ${refl.goed || '-'}`,
@@ -686,41 +846,46 @@ function renderWeek(){
   const begonnen = wk <= nu, bezig = begonnen && nu <= zo;
   const sig = [];
   if (begonnen) {
-    sig.push(ws.studie >= studieDoel() ? ['okbox','Studiedoel gehaald.']
-      : [bezig?'infobox':'alert', `Zelfstudie ${u(ws.studie)} van ${u(studieDoel())} u${bezig?` — nog ${u(studieDoel()-ws.studie)} u te gaan`:''}.`]);
-    const achter = D.vakken.filter(v => v.weekdoel && (ws.perVak[v.vak]||0) < v.weekdoel);
-    if (!bezig && achter.length) sig.push(['alert', 'Achter op: ' + achter.map(v=>`${esc(v.vak)} (${u(ws.perVak[v.vak]||0)}/${u(v.weekdoel)} u)`).join(', ') + '.']);
+    sig.push(ws.studie >= ws.doel.studie ? ['okbox','Studiedoel gehaald.']
+      : [bezig?'infobox':'alert', `Zelfstudie ${u(ws.studie)} van ${u(ws.doel.studie)} u${bezig?` — nog ${u(ws.doel.studie-ws.studie)} u te gaan`:''}.`]);
+    const achter = D.vakken.filter(v => ws.doel.perVak[v.vak] && (ws.perVak[v.vak]||0) < ws.doel.perVak[v.vak]);
+    if (!bezig && achter.length) sig.push(['alert', 'Achter op: ' + achter.map(v=>`${esc(v.vak)} (${u(ws.perVak[v.vak]||0)}/${u(ws.doel.perVak[v.vak])} u)`).join(', ') + '.']);
     sig.push(ws.sport >= i.sportDoel ? ['okbox','Sportdoel gehaald.']
       : [bezig?'infobox':'alert', `Sportschool ${ws.sport} van ${i.sportDoel}×${bezig?` — nog ${i.sportDoel-ws.sport} te gaan`:''}.`]);
     if (ws.gameOver < 0) sig.push(['alert', `${u(-ws.gameOver)} u meer gegamed dan verdiend.`]);
   }
+  if (ws.slaapGem !== null && ws.slaapN >= 3 && ws.slaapGem < i.slaapDoel - 0.5)
+    sig.push(['infobox', `Je slaapt gemiddeld ${u(Math.round(ws.slaapGem*10)/10)} u, onder je doel van ${u(i.slaapDoel)} u.`]);
   if (ws.werk > 20) sig.push(['alert', `${u(ws.werk)} u Sjiek deze week: check of studie, sport en rust niet in het gedrang komen.`]);
   if (ws.laat) sig.push(['infobox', `${ws.laat} late dienst${ws.laat>1?'en':''}: plan de ochtend erna rustig.`]);
   const dls = D.deadlines.filter(d => !d.klaar && d.datum >= wk && d.datum <= zo);
   if (dls.length) sig.push(['infobox', 'Deadlines deze week: ' + dls.map(d => esc(deadlineNaam(d)) + ' (' + dagKort(d.datum) + ')').join(', ') + '.']);
-  const t = volgendTentamen(wk);
-  if (t && dagenTot(wk, t.datum) <= 14) sig.push(['alert', `${t.vak} op ${dagKort(t.datum)}: weinig diensten, minder gamen, extra herhalen.`]);
+  if (ws.modus && ws.werk > 0) sig.push(['alert', `Toetsweekmodus en toch ${u(ws.werk)} u Sjiek: check of je genoeg studietijd overhoudt.`]);
 
   $('#main').innerHTML = `
+    ${toetsBanner(ws.modus, ws.doel)}
     <div class="daynav"><button class="nb" id="wPrev" aria-label="vorige week">‹</button>
       <div class="lbl">${dagKort(wk)} – ${dagKort(zo)}</div><button class="nb" id="wNext" aria-label="volgende week">›</button></div>
     <div class="card">
-      ${meter('<b>Zelfstudie</b>', ws.studie, studieDoel(), u(ws.studie)+' / '+u(studieDoel())+' u')}
+      ${meter('<b>Zelfstudie</b>', ws.studie, ws.doel.studie, u(ws.studie)+' / '+u(ws.doel.studie)+' u')}
       <div style="padding-left:12px;border-left:3px solid var(--line);margin:4px 0 10px">${vakMeters(ws)}</div>
       ${meter('Sportschool', ws.sport, i.sportDoel, ws.sport+' / '+i.sportDoel+'×')}
       ${meter('Gamen (van verdiend)', ws.gamen, Math.max(ws.verdiend, 0.01), u(ws.gamen)+' / '+u(ws.verdiend)+' u', true)}
-      <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Sjiek</div><div class="name">${u(ws.werk)} u</div></div>
+      ${meter('Coderen', ws.coderen, i.codeerDoel, u(ws.coderen)+' / '+u(i.codeerDoel)+' u')}
+      <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${ws.slaapGem===null?'–':u(Math.round(ws.slaapGem*10)/10)+' u'}</div></div>
+      <div class="row line"><div class="grow">Sjiek</div><div class="name">${u(ws.werk)} u</div></div>
       <div class="row line"><div class="grow">Lessen (agenda)</div><div class="name">${ws.les===null?'…':u(ws.les)+' u'}</div></div>
     </div>
     ${sig.map(([c,t]) => `<div class="${c}">${t}</div>`).join('')}
-    <div class="card"><table>
-      <tr><th>Dag</th><th>Les</th><th>Studie</th><th>Game</th><th>Sport</th><th>Sjiek</th></tr>
+    <div class="card"><div class="tabelwrap"><table>
+      <tr><th>Dag</th><th>Les</th><th>Studie</th><th>Game</th><th>Code</th><th>Sport</th><th>Sjiek</th><th>Slaap</th></tr>
       ${ws.dagen.map(d => `<tr data-d="${d.s}" style="cursor:pointer" class="${d.s===nu?'vandaag':''}">
         <td>${DAGEN[dt(d.s).getDay()]} ${dt(d.s).getDate()}</td><td>${d.les===null?'…':d.les?u(d.les):'–'}</td>
-        <td>${d.studie?u(d.studie):'–'}</td><td>${d.gamen?u(d.gamen):'–'}</td><td>${d.sport?'✓':'–'}</td>
-        <td>${d.werk?u(d.werk)+(d.laat?' ☾':''):'–'}</td></tr>`).join('')}
-      <tr class="tot"><td>Totaal</td><td>${ws.les===null?'…':u(ws.les)}</td><td>${u(ws.studie)}</td><td>${u(ws.gamen)}</td><td>${ws.sport}×</td><td>${u(ws.werk)}</td></tr>
-    </table><div class="note">Tik op een dag om hem in te vullen. ☾ = late dienst.</div></div>
+        <td>${d.studie?u(d.studie):'–'}</td><td>${d.gamen?u(d.gamen):'–'}</td><td>${d.coderen?u(d.coderen):'–'}</td><td>${d.sport?'✓':'–'}</td>
+        <td>${d.werk?u(d.werk)+(d.laat?' ☾':''):'–'}</td><td>${d.slaap?u(d.slaap):'–'}</td></tr>`).join('')}
+      <tr class="tot"><td>Totaal</td><td>${ws.les===null?'…':u(ws.les)}</td><td>${u(ws.studie)}</td><td>${u(ws.gamen)}</td><td>${u(ws.coderen)}</td><td>${ws.sport}×</td><td>${u(ws.werk)}</td>
+        <td>${ws.slaapGem===null?'–':'⌀ '+u(Math.round(ws.slaapGem*10)/10)}</td></tr>
+    </table></div><div class="note">Tik op een dag om hem in te vullen. ☾ = late dienst.</div></div>
     <h2>Reflectie</h2>
     <div class="card">
       <label class="f" style="margin-top:0">Wat ging goed?</label><textarea id="rGoed">${esc(refl.goed)}</textarea>
@@ -753,7 +918,9 @@ function renderWeek(){
 
 // ================= INSTELLINGEN =================
 const VELDEN = [
-  ['Doelen per week', [['sportDoel','Sportschool (keer)'],['verdienPer','Uur studie voor 1 uur gamen'],['gameMax','Gamen maximaal (uur)']]],
+  ['Doelen per week', [['sportDoel','Sportschool (keer)'],['verdienPer','Uur studie voor 1 uur gamen'],['gameMax','Gamen maximaal (uur)'],
+                       ['codeerDoel','Coderen (uur)'],['slaapDoel','Slaap per nacht (uur)']]],
+  ['Toetsweekmodus', [['toetsweekDagen','Aantal dagen vóór een tentamen (0 = uit)'],['toetsweekStudie','Studiedoel per week (uur)'],['toetsweekGameMax','Gamen maximaal per week (uur)']]],
   ['Sjiek', [['maandDoel','Standaard maanddoel (uur)'],['maandMinimum','Standaard minimum (uur)'],
              ['grens1','Eerste bonusgrens (uur)'],['grens2','Tweede bonusgrens (uur)'],
              ['loonBasis','Uurloon basis (€)'],['loon1','Uurloon vanaf grens 1 (€)'],['loon2','Uurloon vanaf grens 2 (€)'],
@@ -768,7 +935,12 @@ function vakRij(v){ return `<div class="row line vakrow"><input class="vNaam gro
 function openInstellingen(){
   const i = I(), tijden = leesTijden(i.herinnerTijden);
   const tent = D.tentamens.slice().sort((a,b)=>a.datum.localeCompare(b.datum));
+  const thema = opslag.get('planner-thema') || 'systeem';
   sheet(`<h3>Instellingen</h3>
+    <h2>Weergave</h2>
+    <div class="card"><div class="seg" id="iThema">${[['licht','Licht'],['donker','Donker'],['systeem','Systeem']].map(([v,l]) =>
+      `<button data-v="${v}" class="${thema===v?'on':''}">${l}</button>`).join('')}</div>
+      <div class="note">Systeem volgt de instelling van je telefoon of pc. Wordt per apparaat onthouden.</div></div>
     <h2>Vakken (zelfstudie per week)</h2>
     <div class="card" id="iVakken">${D.vakken.map(vakRij).join('')}</div>
     <button class="btn ghost" id="iVakAdd" style="padding:6px">+ Vak toevoegen</button>
@@ -832,6 +1004,10 @@ function openInstellingen(){
   vakEvents();
   $('#iVakAdd').onclick = () => { $('#iVakken').insertAdjacentHTML('beforeend', vakRij({vak:'', weekdoel:2})); vakEvents(); };
   $('#iAnn').onclick = closeSheet;
+  document.querySelectorAll('#iThema button').forEach(b => b.onclick = () => {
+    opslag.set('planner-thema', b.dataset.v); pasThemaToe();
+    document.querySelectorAll('#iThema button').forEach(y => y.classList.toggle('on', y===b));
+    render(); });
   if ($('#iOntkoppel')) $('#iOntkoppel').onclick = () => {
     const k = $('#iOntkoppel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Zeker? Tik nog een keer'; return; }
     opslag.weg(CFG_KEY); opslag.weg(CACHE_KEY); location.reload(); };
@@ -875,6 +1051,147 @@ function openInstellingen(){
     if (!t.datum || !t.vak) return toast('Vul in elk geval datum en vak in');
     D = await api('bewaarTentamen', t); render(); openInstellingen(); toast('Tentamen toegevoegd ✓');
   };
+}
+
+// ================= THEMA =================
+function pasThemaToe(){
+  const k = opslag.get('planner-thema') || 'systeem';
+  const donker = k === 'donker' || (k === 'systeem' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.thema = donker ? 'donker' : 'licht';
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = donker ? '#121718' : '#f1f4f2';
+}
+if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { pasThemaToe(); if (D) render(); }); } catch(e){} }
+pasThemaToe();
+
+// ================= GRAFIEKEN (eigen SVG, geen library) =================
+// Kleuren: gevalideerd categorisch palet, per thema eigen stappen (licht/donker).
+const PAL = { licht:['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'],
+              donker:['#3987e5','#d95926','#199e70','#c98500','#d55181','#0ca30c','#9085e9','#e66767'] };
+const ZACHT = { licht:'#86b6ef', donker:'#184f95' };   // lichtere stap van dezelfde blauwe tint (gepland)
+const donker = () => document.documentElement.dataset.thema === 'donker';
+const kleur = n => PAL[donker() ? 'donker' : 'licht'][n];
+const GRAF = {};
+function mooiMax(v){ const p = Math.pow(10, Math.floor(Math.log10(v))); for (const f of [1,2,2.5,4,5,10]) if (f*p >= v) return f*p; return 10*p; }
+function rond(x, y, w, h, r){ r = Math.min(r, h, w/2); if (h <= 0) return '';
+  return `M${x},${y+h}V${y+r}Q${x},${y} ${x+r},${y}H${x+w-r}Q${x+w},${y} ${x+w},${y+r}V${y+h}Z`; }
+function legenda(items){ return items.length < 2 && !items.some(x => x.soort) ? '' : `<div class="legenda">${items.map(x =>
+  `<span><i class="${x.soort||''}" style="${x.kleur?'background:'+x.kleur:''}"></i>${esc(x.naam)}</span>`).join('')}</div>`; }
+function tabel(kop, rijen){ return `<details><summary>Als tabel</summary><div class="tabelwrap"><table><tr>${kop.map(k=>`<th>${esc(k)}</th>`).join('')}</tr>
+  ${rijen.map(r => `<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table></div></details>`; }
+
+/** Staafgrafiek (optioneel gestapeld), met streepjes (bijv. doel per week) en referentielijnen. */
+function staven(id, o){
+  const W = 340, H = 170, L = 28, R = 6, T = 14, B = 22, pw = W-L-R, ph = H-T-B, n = o.labels.length;
+  const tot = o.labels.map((_,i) => o.series.reduce((t,s) => t + (s.waarden[i]||0), 0));
+  const max = mooiMax(Math.max(1, ...tot, ...(o.refs||[]).map(r=>r.waarde), ...(o.streep ? o.streep.waarden.filter(v=>v!=null) : [])) * 1.05);
+  const y = v => T + ph - v/max*ph, slot = pw/n, bw = Math.min(26, slot*0.6);
+  let svg = [0, max/2, max].map(v => `<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L-5}" y="${y(v)+4}" text-anchor="end">${u(v)}</text>`).join('');
+  o.labels.forEach((lab, i) => {
+    const x = L + i*slot + (slot-bw)/2; let acc = 0;
+    const seg = o.series.map(s => ({ s, v: s.waarden[i]||0 })).filter(z => z.v > 0);
+    seg.forEach((z, k) => {
+      const yb = y(acc) - (acc > 0 ? 2 : 0), yt = y(acc + z.v), h = yb - yt;       // 2px ruimte tussen segmenten
+      svg += k === seg.length-1 ? `<path d="${rond(x, yt, bw, h, 4)}" fill="${z.s.kleur}"/>` : `<rect x="${x}" y="${yt}" width="${bw}" height="${Math.max(0,h)}" fill="${z.s.kleur}"/>`;
+      acc += z.v;
+    });
+    if (o.streep && o.streep.waarden[i] != null) svg += `<line class="tick" x1="${x-3}" x2="${x+bw+3}" y1="${y(o.streep.waarden[i])}" y2="${y(o.streep.waarden[i])}"/>`;
+    if (n <= 12 || i % 2 === 0) svg += `<text class="ax" x="${x+bw/2}" y="${H-6}" text-anchor="middle">${esc(lab)}</text>`;
+    svg += `<rect data-i="${i}" x="${L+i*slot}" y="${T}" width="${slot}" height="${ph}" fill="transparent"/>`;
+  });
+  // referentielijnen; het label staat in de legenda, alleen 'inline' labels links in de grafiek
+  (o.refs||[]).forEach(r => svg += `<line class="ref" x1="${L}" x2="${W-R}" y1="${y(r.waarde)}" y2="${y(r.waarde)}"/>`
+    + (r.inline ? `<text class="ax" x="${L+4}" y="${y(r.waarde)-4}">${esc(r.label)}</text>` : ''));
+  GRAF[id] = { n, tip: i => `<b>${esc(o.labels[i])}</b>` + o.series.map(s => `<br>${esc(s.naam)}: ${u(s.waarden[i]||0)} ${o.eenheid||''}`).join('')
+    + (o.streep && o.streep.waarden[i] != null ? `<br>${esc(o.streep.naam)}: ${u(o.streep.waarden[i])} ${o.eenheid||''}` : ''), x: i => (L + (i+0.5)*slot)/W, y: i => y(tot[i])/H };
+  const leg = o.series.map(s => ({naam:s.naam, kleur:s.kleur})).concat(o.streep ? [{naam:o.streep.naam, soort:'lijn'}] : [])
+    .concat((o.refs||[]).length ? [{naam: o.refs.every(r=>r.inline) ? 'bonusgrenzen' : o.refs.map(r=>r.label).join(' / '), soort:'stip'}] : []);
+  return `<div class="card grafiek" data-g="${id}"><div class="gt">${esc(o.titel)}</div>${o.sub?`<div class="gs">${esc(o.sub)}</div>`:''}
+    ${legenda(leg)}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.titel)}">${svg}</svg><div class="tip"></div>
+    ${tabel(['', ...o.series.map(s=>s.naam), ...(o.streep?[o.streep.naam]:[])],
+      o.labels.map((l,i) => [esc(l), ...o.series.map(s => u(s.waarden[i]||0)), ...(o.streep ? [o.streep.waarden[i]==null?'–':u(o.streep.waarden[i])] : [])]))}</div>`;
+}
+
+/** Lijngrafiek met gaten waar niets is ingevuld. */
+function lijn(id, o){
+  const W = 340, H = 160, L = 28, R = 6, T = 14, B = 22, pw = W-L-R, ph = H-T-B, n = o.labels.length;
+  const vals = o.waarden.filter(v => v != null);
+  const lo = Math.max(0, Math.floor(Math.min(...vals, ...(o.refs||[]).map(r=>r.waarde)) - 1)), hi = Math.ceil(Math.max(...vals, ...(o.refs||[]).map(r=>r.waarde)) + 0.5);
+  const y = v => T + ph - (v-lo)/(hi-lo)*ph, x = i => L + (n === 1 ? pw/2 : i*pw/(n-1));
+  let svg = [lo, (lo+hi)/2, hi].map(v => `<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L-5}" y="${y(v)+4}" text-anchor="end">${u(Math.round(v*10)/10)}</text>`).join('');
+  (o.refs||[]).forEach(r => svg += `<line class="ref" x1="${L}" x2="${W-R}" y1="${y(r.waarde)}" y2="${y(r.waarde)}"/>`);
+  let pad = '', vorige = false;
+  o.waarden.forEach((v, i) => { if (v == null) { vorige = false; return; } pad += (vorige ? 'L' : 'M') + x(i) + ',' + y(v); vorige = true; });
+  svg += `<path d="${pad}" fill="none" stroke="${o.kleur}" stroke-width="2" stroke-linejoin="round"/>`;
+  o.waarden.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="${o.kleur}" stroke="var(--card)" stroke-width="2"/>`; });
+  o.labels.forEach((lab, i) => { if (i % 2 === 0 || i === n-1) svg += `<text class="ax" x="${x(i)}" y="${H-6}" text-anchor="middle">${esc(lab)}</text>`;
+    svg += `<rect data-i="${i}" x="${x(i) - pw/(2*Math.max(1,n-1))}" y="${T}" width="${pw/Math.max(1,n-1)}" height="${ph}" fill="transparent"/>`; });
+  GRAF[id] = { n, tip: i => `<b>${esc(o.labels[i])}</b><br>${o.waarden[i]==null ? 'niet ingevuld' : u(o.waarden[i]) + ' ' + (o.eenheid||'')}`,
+               x: i => x(i)/W, y: i => (o.waarden[i]==null ? T+ph/2 : y(o.waarden[i]))/H };
+  return `<div class="card grafiek" data-g="${id}"><div class="gt">${esc(o.titel)}</div>${o.sub?`<div class="gs">${esc(o.sub)}</div>`:''}
+    ${(o.refs||[]).length ? legenda([{naam:'per nacht', kleur:o.kleur}, {naam:o.refs.map(r=>r.label).join(' / '), soort:'stip'}]) : ''}
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.titel)}">${svg}</svg><div class="tip"></div>
+    ${tabel(['', o.eenheid || ''], o.labels.map((l,i) => [esc(l), o.waarden[i]==null?'–':u(o.waarden[i])]))}</div>`;
+}
+/** Tik of beweeg over een staaf/punt: waarde tonen. */
+function grafiekTips(){
+  document.querySelectorAll('.grafiek').forEach(g => {
+    const info = GRAF[g.dataset.g], tip = g.querySelector('.tip'), svg = g.querySelector('svg');
+    const toon = i => { const r = svg.getBoundingClientRect(), gr = g.getBoundingClientRect();
+      tip.innerHTML = info.tip(i); tip.style.display = 'block';
+      tip.style.left = (r.left - gr.left + info.x(i)*r.width) + 'px'; tip.style.top = (r.top - gr.top + info.y(i)*r.height - 8) + 'px'; };
+    g.querySelectorAll('[data-i]').forEach(el => { el.onpointerenter = () => toon(+el.dataset.i); el.onclick = () => toon(+el.dataset.i); });
+    svg.onpointerleave = () => tip.style.display = 'none';
+  });
+}
+
+// ================= TRENDS =================
+function weekCijfers(ma){       // zoals weekStats, maar zonder lessen op te halen
+  const perVak = {}; let gamen = 0, sport = 0, coderen = 0, studie = 0;
+  for (let i = 0; i < 7; i++) {
+    const s = plus(ma, i), r = D.dagen.find(x => x.datum === s) || {}, st = studieOp(s);
+    Object.keys(st).forEach(v => { perVak[v] = (perVak[v]||0) + st[v]; studie += st[v]; });
+    gamen += r.gamen || 0; coderen += r.coderen || 0; if (r.sport) sport++;
+  }
+  const doel = doelen(toetsweek(ma, true));
+  return { perVak, studie, gamen, sport, coderen, doel, verdiend: Math.min(doel.gameMax, studie / (I().verdienPer || 2)) };
+}
+let trendWeken = 8;
+function renderTrends(){
+  $('#title').textContent = 'Trends';
+  const i = I(), nu = vandaag();
+  const weken = []; for (let k = trendWeken-1; k >= 0; k--) weken.push(plus(maandag(nu), -7*k));
+  const wc = weken.map(weekCijfers), lab = weken.map(ma => 'wk ' + weekNr(ma));
+  // vakken: vaste volgorde = volgorde bij ⚙︎ (kleur volgt het vak, niet de rangorde); meer dan 5 → "Overig"
+  const alle = D.vakken.map(v => v.vak).concat([...new Set(wc.flatMap(w => Object.keys(w.perVak)))].filter(v => !D.vakken.some(x => x.vak === v)));
+  const eigen = alle.slice(0, 5), rest = alle.slice(5);
+  const reeksen = eigen.map((v, k) => ({ naam: v, kleur: kleur(k), waarden: wc.map(w => w.perVak[v] || 0) }));
+  if (rest.length) reeksen.push({ naam: 'Overig', kleur: kleur(7), waarden: wc.map(w => rest.reduce((t,v) => t + (w.perVak[v]||0), 0)) });
+  // Sjiek per maand: laatste 6 maanden + volgende
+  const mnd = []; for (let k = -5; k <= 1; k++) mnd.push(ymPlus(nu.slice(0,7), k));
+  const mi = mnd.map(maandInfo);
+  // slaap: laatste 14 nachten
+  const nachten = []; for (let k = 13; k >= 0; k--) nachten.push(plus(nu, -k));
+  const slaap = nachten.map(s => { const r = D.dagen.find(x => x.datum === s); return r && r.slaap ? r.slaap : null; });
+  const leeg = !wc.some(w => w.studie || w.gamen || w.sport || w.coderen);
+  $('#main').innerHTML = `
+    <div class="seg" style="margin:10px 0">${[4,8,12].map(n => `<button data-tw="${n}" class="${n===trendWeken?'on':''}">${n} weken</button>`).join('')}</div>
+    ${leeg ? '<div class="infobox">Nog weinig ingevuld. De grafieken vullen zich vanzelf als je je dagen invult.</div>' : ''}
+    ${staven('studie', { titel: 'Zelfstudie per week', sub: 'Per vak · streepje = je weekdoel (hoger in toetsweekmodus)', labels: lab, series: reeksen, eenheid: 'u',
+       streep: { naam: 'doel', waarden: wc.map(w => w.doel.studie) } })}
+    ${staven('gamen', { titel: 'Gamen per week', sub: 'Streepje = verdiende gametijd', labels: lab, eenheid: 'u',
+       series: [{ naam: 'gegamed', kleur: kleur(1), waarden: wc.map(w => w.gamen) }], streep: { naam: 'verdiend', waarden: wc.map(w => w.verdiend) } })}
+    ${staven('sport', { titel: 'Sportschool per week', labels: lab, eenheid: '×',
+       series: [{ naam: 'keer', kleur: kleur(2), waarden: wc.map(w => w.sport) }], refs: [{ waarde: i.sportDoel, label: 'doel ' + i.sportDoel + '×' }] })}
+    ${staven('coderen', { titel: 'Coderen per week', labels: lab, eenheid: 'u',
+       series: [{ naam: 'uren', kleur: kleur(6), waarden: wc.map(w => w.coderen) }], refs: [{ waarde: i.codeerDoel, label: 'doel ' + u(i.codeerDoel) + ' u' }] })}
+    ${slaap.some(v => v != null) ? lijn('slaap', { titel: 'Slaap per nacht', sub: 'Laatste 14 nachten', labels: nachten.map(s => String(dt(s).getDate())),
+       waarden: slaap, eenheid: 'u', kleur: kleur(0), refs: [{ waarde: i.slaapDoel, label: 'doel ' + u(i.slaapDoel) + ' u' }] })
+       : '<div class="card"><div class="gt">Slaap per nacht</div><div class="note">Nog niets ingevuld. Vul bij Vandaag je slaap van afgelopen nacht in.</div></div>'}
+    ${staven('sjiek', { titel: 'Sjiek-uren per maand', sub: 'Netto, na pauze', labels: mnd.map(m => MAANDEN[Number(m.slice(5))-1]), eenheid: 'u',
+       series: [{ naam: 'gewerkt', kleur: kleur(0), waarden: mi.map(x => x.gew) }, { naam: 'gepland', kleur: ZACHT[donker()?'donker':'licht'], waarden: mi.map(x => x.tot - x.gew) }],
+       refs: [{ waarde: i.grens1, label: String(i.grens1), inline: true }, { waarde: i.grens2, label: String(i.grens2), inline: true }] })}`;
+  document.querySelectorAll('[data-tw]').forEach(b => b.onclick = () => { trendWeken = +b.dataset.tw; renderTrends(); });
+  grafiekTips();
 }
 
 // ================= sheet (pop-up van onderen) =================
@@ -922,7 +1239,10 @@ function start(){
     D = d; inv = null; const l = $('#loading'); if (l) l.remove();
     if (!document.querySelector('.sheet-bg')) render();
     sjiekSync(true);
-  }).catch(() => { const l = $('#loading'); if (l) l.textContent = 'Laden lukte niet. Ververs de pagina.'; });
+    verstuurWachtrij();
+  }).catch(() => { const l = $('#loading');
+    if (l) l.textContent = 'Laden lukte niet. Ververs de pagina.';
+    else toast('Geen verbinding: je ziet de laatste stand. Invullen kan gewoon.'); });
 }
 start();
 if (!IN_GOOGLE && 'serviceWorker' in navigator && location.protocol === 'https:')
