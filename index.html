@@ -210,7 +210,6 @@
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
 let view = 'vandaag';
-const LES = {};        // lessen per week (sleutel: maandag)
 const DAGEN = ['zo','ma','di','wo','do','vr','za'];
 const DAGEN_LANG = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
 const MAANDEN = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
@@ -305,7 +304,7 @@ async function verstuurWachtrij(){
   }
   opslag.weg(WACHT_KEY);
   try { D = await roep('haalAlles', []); opslag.set(CACHE_KEY, D); inv = null;
-        if (!document.querySelector('.sheet-bg')) render(); toast('Offline wijzigingen opgeslagen ✓'); } catch(e) {}
+        achtergrondRender(); toast('Offline wijzigingen opgeslagen ✓'); } catch(e) {}
 }
 window.addEventListener('online', verstuurWachtrij);
 function api(fn, ...args){
@@ -331,17 +330,25 @@ function inWachtrij(fn, args){
 }
 function toast(t){ const el=document.createElement('div'); el.className='toast'; el.textContent=t; document.body.appendChild(el); setTimeout(()=>el.remove(),2800); }
 
-/** Lessen van een week; haalt ze één keer op uit de agenda en tekent daarna opnieuw. */
-function lessenWeek(ma){
-  if (LES[ma] === undefined) {
-    LES[ma] = null;
-    api('haalLessen', ma, plus(ma,6))
-      .then(r => { LES[ma] = r; if (!document.querySelector('.sheet-bg')) render(); })
-      .catch(() => { LES[ma] = {fout:'Lessen laden uit de agenda lukte niet.'}; render(); });
-  }
-  return LES[ma];
+/** Lessen worden alleen bij het opstarten opgehaald: 2 weken terug t/m ±2 maanden vooruit, in één keer. */
+const LES_KEY = 'planner-lessen';
+let LESSEN = null;                       // { van, tot, lessen } of { fout }
+function lesBereik(){ const ma = maandag(vandaag()); return { van: plus(ma, -14), tot: plus(ma, 9*7 - 1) }; }
+function haalLessenOp(){
+  const b = lesBereik();
+  if (!LESSEN) LESSEN = opslag.get(LES_KEY);          // laatste stand, ook zonder internet
+  return api('haalLessen', b.van, b.tot)
+    .then(r => { LESSEN = r.fout ? { fout: r.fout } : Object.assign({}, b, r); if (!r.fout) opslag.set(LES_KEY, LESSEN); achtergrondRender(); })
+    .catch(() => { if (!LESSEN) LESSEN = { fout: 'Lessen laden uit de agenda lukte niet.' }; achtergrondRender(); });
 }
-function lessenOp(s){ const w=lessenWeek(maandag(s)); if (!w || w.fout) return w; return {lessen: w.lessen.filter(l=>l.datum===s)}; }
+function lessenWeek(ma){
+  if (!LESSEN) return null;                            // nog bezig met ophalen
+  if (LESSEN.fout) return { fout: LESSEN.fout };
+  if (ma < maandag(LESSEN.van) || ma > LESSEN.tot)     // buiten wat bij het opstarten is opgehaald
+    return { lessen: [], buiten: true };
+  return { lessen: LESSEN.lessen.filter(l => l.datum >= ma && l.datum <= plus(ma, 6)) };
+}
+function lessenOp(s){ const w=lessenWeek(maandag(s)); if (!w || w.fout) return w; return {lessen: w.lessen.filter(l=>l.datum===s), buiten: w.buiten}; }
 
 function basisDoel(){ const s = D.vakken.reduce((t,v)=>t+v.weekdoel,0); return s || 15; }
 /** Toetsweekmodus: eerstvolgend tentamen binnen X dagen vanaf datum s (of in de week vanaf maandag s). */
@@ -375,7 +382,7 @@ function weekStats(ma){
     Object.keys(st).forEach(v => perVak[v] = (perVak[v]||0) + st[v]);
     return { s, studie:Object.values(st).reduce((a,b)=>a+b,0), gamen:r.gamen||0, sport:!!r.sport, coderen:r.coderen||0, slaap:r.slaap||0, bedtijd:r.bedtijd||'',
              werk: ds.reduce((t,x)=>t+nettoU(x),0),
-             les: w && w.lessen ? w.lessen.filter(l=>l.datum===s).reduce((t,l)=>t+l.uren,0) : null,
+             les: w && w.lessen && !w.buiten ? w.lessen.filter(l=>l.datum===s).reduce((t,l)=>t+l.uren,0) : null,
              laat: ds.some(isLaat) };
   });
   const som = k => dagen.reduce((t,d)=>t+(d[k]||0),0);
@@ -387,7 +394,7 @@ function weekStats(ma){
            slaapGem: slaapDagen.length ? slaapDagen.reduce((t,d)=>t+d.slaap,0) / slaapDagen.length : null, slaapN: slaapDagen.length,
            bedGem: (b => b.length ? b.reduce((t,x)=>t+bedUur(x.bedtijd),0) / b.length : null)(dagen.filter(d => d.bedtijd)),
            sport:dagen.filter(d=>d.sport).length, werk:som('werk'),
-           les: w && w.lessen ? som('les') : null, laat: dagen.filter(d=>d.laat).length };
+           les: w && w.lessen && !w.buiten ? som('les') : null, laat: dagen.filter(d=>d.laat).length };
 }
 function vakMeters(ws){
   const namen = D.vakken.map(v=>v.vak).concat(Object.keys(ws.perVak).filter(v=>!D.vakken.some(x=>x.vak===v)));
@@ -402,7 +409,10 @@ function meter(label, val, doel, txt, isMax){
 }
 
 // ================= navigatie =================
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => { view = b.dataset.v; render(); window.scrollTo(0,0); });
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  if (b.dataset.v === view) return;
+  verlaat(() => { view = b.dataset.v; render(); window.scrollTo(0,0); });
+});
 $('#gear').onclick = () => openInstellingen();
 
 function render(){
@@ -451,12 +461,20 @@ function timerKnoppen(){
 
 // ================= VANDAAG =================
 let dag = vandaag(), inv = null;
-function laadInv(){
+/** Hoe een dag er in de sheet uitziet (om te zien of er iets niet is opgeslagen). */
+function opgeslagenInv(dag){
   const r = D.dagen.find(x=>x.datum===dag);
   const studie = {}; D.vakken.forEach(v => studie[v.vak] = 0); Object.assign(studie, studieOp(dag));
-  inv = { dag, studie, gamen:r?r.gamen:0, sport:r?r.sport:false, notitie:r?(r.notitie||''):'', coderen:r?(r.coderen||0):0, slaap:r?(r.slaap||0):0,
+  return { dag, studie, gamen:r?r.gamen:0, sport:r?r.sport:false, notitie:r?(r.notitie||''):'', coderen:r?(r.coderen||0):0, slaap:r?(r.slaap||0):0,
           bedtijd:r?(r.bedtijd||''):'', opstaan:r?(r.opstaan||''):'' };
 }
+let invBasis = '';   // hoe de dag eruitzag toen je hem opende: zo zien we of je iets hebt veranderd
+function laadInv(){ inv = opgeslagenInv(dag); invBasis = JSON.stringify(inv); }
+const viesDag = () => !!(D && inv && JSON.stringify(inv) !== invBasis);
+/** Nieuwe gegevens binnen (bijv. van je andere apparaat)? Alleen overnemen als je niets aan het veranderen bent. */
+function verversInv(){ if (inv && !viesDag() && !bezig()) laadInv(); }
+const dagPayload = () => ({datum:inv.dag, studie:inv.studie, gamen:inv.gamen, sport:inv.sport, notitie:inv.notitie,
+                           coderen:inv.coderen, slaap:inv.slaap, bedtijd:inv.bedtijd, opstaan:inv.opstaan});
 const vakNamen = () => Object.keys(inv.studie);
 const LOS = ['gamen', 'coderen', 'slaap'];
 /** Slaapduur uit bedtijd en opstaan (bedtijd mag vóór of na middernacht zijn). */
@@ -496,6 +514,7 @@ function renderVandaag(){
       <input type="date" id="dDatum" value="${dag}" style="flex:1">
       <button class="nb" id="dNext" aria-label="volgende dag">›</button></div>
     ${isVandaag ? '' : '<button class="btn ghost" id="dNu" style="padding:6px">Terug naar vandaag</button>'}
+    ${viesDag() ? `<div class="infobox row"><div class="grow">Niet-opgeslagen wijzigingen voor ${dagKort(dag)}.</div><button class="btn ghost small" id="vVerwerp">Verwerpen</button></div>` : ''}
     ${gister.length ? `<div class="alert">Late dienst gisteren (tot ${gister[gister.length-1].eind}): vandaag geen zwaar studieblok en geen vroege sportschool.</div>` : ''}
     ${toetsBanner(toetsweek(dag), doelen(toetsweek(dag)))}
     ${timerHtml()}
@@ -512,6 +531,7 @@ function renderVandaag(){
     <div class="card">
       ${lo===null ? '<div class="note">Lessen laden…</div>' : ''}
       ${lo && lo.fout ? `<div class="note">${esc(lo.fout)}</div>` : ''}
+      ${lo && lo.buiten ? `<div class="note">Lessen worden opgehaald voor 2 weken terug t/m ${dagKort(LESSEN.tot)}. Deze dag valt erbuiten.</div>` : ''}
       ${agenda.map(a=>a.html).join('') || (lo && lo.lessen ? '<div class="empty">Geen lessen of diensten.</div>' : '')}
     </div>
     <h2>Invullen</h2>
@@ -537,7 +557,7 @@ function renderVandaag(){
       ${ws.slaapGem !== null ? `<div class="note">Slaap gemiddeld ${uMin(ws.slaapGem)} per nacht (doel ${uMin(i.slaapDoel)})</div>` : ''}
       <div class="note">Sjiek deze week: ${u(ws.werk)} u${ws.les!==null?' · lessen: '+u(ws.les)+' u':''}</div>
     </div>`;
-  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="vOpslaan">Dag opslaan</button></div>`;
+  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="vOpslaan">${viesDag() ? 'Dag opslaan •' : 'Dag opslaan'}</button></div>`;
 
   timerKnoppen();
   deadlineKnoppen();
@@ -545,7 +565,7 @@ function renderVandaag(){
     const k = $('#tNiet'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Zeker? Tik nog een keer'; return; }
     D = await api('verwijderTentamen', t.id); render(); toast(t.vak + ' verwijderd. Gefeliciteerd!');
   };
-  const naar = s => { if (!s) return; dag = s; render(); };
+  const naar = s => { if (!s) return; verlaat(() => { dag = s; render(); }, () => render()); };
   $('#dPrev').onclick = () => naar(plus(dag,-1));
   $('#dNext').onclick = () => naar(plus(dag,1));
   $('#dDatum').onchange = e => naar(e.target.value);
@@ -564,19 +584,22 @@ function renderVandaag(){
       if (isNaN(uu) || isNaN(mm) || uu<0 || mm<0) return toast('Vul geldige getallen in');
       invSet(k, Math.round((uu + mm/60)*100)/100); closeSheet(); renderVandaag(); toast('Aangepast. Vergeet niet op Dag opslaan te tikken.'); };
   });
-  $('#vNot').oninput = e => inv.notitie = e.target.value;
+  const markeer = () => { const b = $('#vOpslaan'); if (b && !b.disabled) b.textContent = viesDag() ? 'Dag opslaan •' : 'Dag opslaan'; };
+  $('#vNot').oninput = e => { inv.notitie = e.target.value; markeer(); };
+  if ($('#vVerwerp')) $('#vVerwerp').onclick = () => { laadInv(); opslag.weg(CONCEPT_KEY); renderVandaag(); toast('Wijzigingen verworpen'); };
   const slaapBij = () => {   // alleen de regel eronder bijwerken, zodat je niet uit het veld springt
     const ok = t => /^\d{2}:\d{2}$/.test(t);
     inv.bedtijd = ok($('#vBed').value) ? $('#vBed').value : ''; inv.opstaan = ok($('#vOp').value) ? $('#vOp').value : '';
     if (inv.bedtijd && inv.opstaan) inv.slaap = slaapUren(inv.bedtijd, inv.opstaan);
     $('#vSlaap').textContent = inv.bedtijd && inv.opstaan ? '= ' + uMin(inv.slaap) + ' slaap' : 'Vul beide tijden in, dan rekent de app je slaap uit.';
+    markeer();
   };
   $('#vBed').oninput = slaapBij; $('#vOp').oninput = slaapBij;
   $('#vOpslaan').onclick = async () => {
     const btn = $('#vOpslaan'); btn.disabled = true; btn.textContent = 'Opslaan…';
     try {
-      D = await api('bewaarDag', {datum:dag, studie:inv.studie, gamen:inv.gamen, sport:inv.sport, notitie:inv.notitie, coderen:inv.coderen, slaap:inv.slaap, bedtijd:inv.bedtijd, opstaan:inv.opstaan});
-      laadInv(); render(); toast('Dag opgeslagen ✓');
+      D = await api('bewaarDag', dagPayload());
+      laadInv(); opslag.weg(CONCEPT_KEY); render(); toast('Dag opgeslagen ✓');
     } catch(e){ render(); }
   };
 }
@@ -760,6 +783,7 @@ function dagAdvies(s){
   const w = lessenWeek(maandag(s));
   if (w === null) return { s, laden: true };
   const les = w && w.lessen ? w.lessen.filter(l => l.datum === s) : [];
+  const onbekend = !!(w && (w.buiten || w.fout));
   const begin = les.reduce((m,l) => !m || l.begin < m ? l.begin : m, ''), eind = les.reduce((m,l) => l.eind > m ? l.eind : m, '');
   let wat, score;
   if (!les.length) { wat = 'hele dag vrij'; score = 3; }
@@ -767,6 +791,7 @@ function dagAdvies(s){
   else if (mins(begin) >= 13*60) { wat = 'ochtend (les vanaf ' + begin + ')'; score = 1; }
   else return null;
   const op = [];
+  if (onbekend) { op.push('lesrooster onbekend, check het zelf'); score -= 0.5; }
   if (dt(s).getDay() === 3) { op.push("borrel 's avonds"); score -= 0.5; }
   const m = toetsweek(s, false, Math.min(7, Number(I().toetsweekDagen) || 7));   // jouw regel: de week ervóór geen diensten
   if (m) { op.push(m.t.vak + ' over ' + m.dagen + ' d'); score -= 2; }
@@ -931,7 +956,7 @@ function renderWeek(){
     <div class="card"><div class="tabelwrap"><table>
       <tr><th>Dag</th><th>Les</th><th>Studie</th><th>Game</th><th>Code</th><th>Sport</th><th>Sjiek</th><th>Slaap</th></tr>
       ${ws.dagen.map(d => `<tr data-d="${d.s}" style="cursor:pointer" class="${d.s===nu?'vandaag':''}">
-        <td>${DAGEN[dt(d.s).getDay()]} ${dt(d.s).getDate()}</td><td>${d.les===null?'…':d.les?u(d.les):'–'}</td>
+        <td>${DAGEN[dt(d.s).getDay()]} ${dt(d.s).getDate()}</td><td>${d.les===null?(LESSEN?'–':'…'):d.les?u(d.les):'–'}</td>
         <td>${d.studie?u(d.studie):'–'}</td><td>${d.gamen?u(d.gamen):'–'}</td><td>${d.coderen?u(d.coderen):'–'}</td><td>${d.sport?'✓':'–'}</td>
         <td>${d.werk?u(d.werk)+(d.laat?' ☾':''):'–'}</td><td>${d.slaap?u(d.slaap):'–'}</td></tr>`).join('')}
       <tr class="tot"><td>Totaal</td><td>${ws.les===null?'…':u(ws.les)}</td><td>${u(ws.studie)}</td><td>${u(ws.gamen)}</td><td>${u(ws.coderen)}</td><td>${ws.sport}×</td><td>${u(ws.werk)}</td>
@@ -946,9 +971,9 @@ function renderWeek(){
       <button class="btn sec" id="rKopie">Kopieer weekoverzicht voor Claude</button>
     </div>`;
   $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="rOpslaan">Reflectie opslaan</button></div>`;
-  $('#wPrev').onclick = () => { wk = plus(wk,-7); renderWeek(); };
-  $('#wNext').onclick = () => { wk = plus(wk,7); renderWeek(); };
-  document.querySelectorAll('tr[data-d]').forEach(tr => tr.onclick = () => { dag = tr.dataset.d; view = 'vandaag'; render(); window.scrollTo(0,0); });
+  $('#wPrev').onclick = () => verlaat(() => { wk = plus(wk,-7); renderWeek(); });
+  $('#wNext').onclick = () => verlaat(() => { wk = plus(wk,7); renderWeek(); });
+  document.querySelectorAll('tr[data-d]').forEach(tr => tr.onclick = () => verlaat(() => { dag = tr.dataset.d; view = 'vandaag'; render(); window.scrollTo(0,0); }));
   [['rGoed','goed'],['rBeter','beter'],['rFocus','focus']].forEach(([id,k]) => $('#'+id).oninput = e => refl[k] = e.target.value);
   $('#rKopie').onclick = async () => {
     const tekst = weekTekst(ws);
@@ -962,7 +987,7 @@ function renderWeek(){
   };
   $('#rOpslaan').onclick = async () => {
     const btn = $('#rOpslaan'); btn.disabled = true; btn.textContent = 'Opslaan…';
-    try { D = await api('bewaarReflectie', refl); render(); toast('Reflectie opgeslagen ✓'); }
+    try { D = await api('bewaarReflectie', refl); refl = null; render(); toast('Reflectie opgeslagen ✓'); }
     catch(e){ render(); }
   };
 }
@@ -1090,7 +1115,7 @@ function openInstellingen(){
     const agendaAnders = o.lesAgenda !== i.lesAgenda;
     D = await api('bewaarInstellingen', o);
     sjiekSync(false);
-    if (agendaAnders) Object.keys(LES).forEach(k => delete LES[k]);
+    if (agendaAnders) { LESSEN = null; opslag.weg(LES_KEY); haalLessenOp(); }
     inv = null; closeSheet(); render(); toast('Instellingen opgeslagen ✓');
   };
   document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
@@ -1122,7 +1147,7 @@ function maakTijdveld(el){
   el.type = 'text'; el.classList.add('tijd');
   el.setAttribute('inputmode', 'numeric'); el.setAttribute('maxlength', '5'); el.setAttribute('placeholder', '––:––');
   // telefoon/tablet: geen toetsenbord maar een kiezer (uur, dan minuten); op de pc kun je gewoon typen
-  if (window.matchMedia && matchMedia('(pointer: coarse)').matches) {
+  if (window.matchMedia && matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) {
     el.readOnly = true;
     el.addEventListener('click', () => tijdKiezer(el));
   }
@@ -1369,7 +1394,62 @@ function sheet(html){
   $('#sheetHost').innerHTML = `<div class="sheet-bg"><div class="sheet">${html}</div></div>`;
   $('.sheet-bg').onclick = e => { if (e.target.classList.contains('sheet-bg')) closeSheet(); };
 }
-function closeSheet(){ $('#sheetHost').innerHTML = ''; }
+function closeSheet(){ $('#sheetHost').innerHTML = ''; setTimeout(inhalen, 0); }
+
+// ================= NIET-OPGESLAGEN WIJZIGINGEN =================
+const CONCEPT_KEY = 'planner-concept';
+let uitgesteld = false;
+const opgeslagenRefl = w => { const r = D.reflecties.find(x => x.week === w) || {}; return {week:w, goed:r.goed||'', beter:r.beter||'', focus:r.focus||''}; };
+const viesRefl = () => !!(D && refl && JSON.stringify(refl) !== JSON.stringify(opgeslagenRefl(refl.week)));
+/** Ben je iets aan het invullen? Dan het scherm niet op de achtergrond opnieuw tekenen. */
+function bezig(){
+  if (document.querySelector('.sheet-bg, .kiezer-bg, .vraag-bg')) return true;
+  const a = document.activeElement;
+  return !!(a && $('#main') && $('#main').contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+}
+function achtergrondRender(){ if (bezig()) { uitgesteld = true; return; } uitgesteld = false; verversInv(); render(); }
+function inhalen(){ if (uitgesteld && !bezig()) { uitgesteld = false; verversInv(); render(); } }
+document.addEventListener('focusout', () => setTimeout(inhalen, 150));
+/** Weggaan van een dag/week met niet-opgeslagen wijzigingen: eerst vragen. */
+function verlaat(actie, annuleer){
+  const soort = viesDag() ? 'dag' : viesRefl() ? 'refl' : null;
+  if (!soort) return actie();
+  const bg = document.createElement('div'); bg.className = 'kiezer-bg vraag-bg';
+  bg.innerHTML = `<div class="kiezer" role="dialog"><h3 style="margin:0 0 6px">Niet opgeslagen</h3>
+    <div class="note" style="margin:0 0 14px">Je hebt wijzigingen ${soort==='dag' ? 'voor ' + dagKort(inv.dag) : 'in je weekreflectie'} nog niet opgeslagen.</div>
+    <button class="btn" data-k="ok">Opslaan</button>
+    <button class="btn danger" data-k="weg" style="margin-top:8px">Niet opslaan</button>
+    <button class="btn ghost" data-k="terug">Annuleren</button></div>`;
+  const sluit = () => { bg.remove(); setTimeout(inhalen, 0); };
+  bg.onclick = async e => {
+    const k = (e.target.closest('[data-k]') || {}).dataset?.k;
+    if (e.target === bg || k === 'terug') { sluit(); if (annuleer) annuleer(); return; }
+    if (k === 'weg') { if (soort==='dag') laadInv(); else refl = null; opslag.weg(CONCEPT_KEY); sluit(); actie(); return; }
+    if (k === 'ok') {
+      e.target.disabled = true; e.target.textContent = 'Opslaan…';
+      try {
+        if (soort === 'dag') { D = await api('bewaarDag', dagPayload()); laadInv(); opslag.weg(CONCEPT_KEY); }
+        else { D = await api('bewaarReflectie', refl); refl = null; }
+        sluit(); toast('Opgeslagen ✓'); actie();
+      } catch(err) { sluit(); }
+    }
+  };
+  document.body.appendChild(bg);
+}
+// App sluiten of naar de achtergrond: niet-opgeslagen dag bewaren als concept (op de telefoon zie je geen waarschuwing)
+function bewaarConcept(){ if (viesDag()) opslag.set(CONCEPT_KEY, {inv}); }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') bewaarConcept(); });
+window.addEventListener('pagehide', bewaarConcept);
+window.addEventListener('beforeunload', e => { bewaarConcept(); if (viesDag() || viesRefl()) { e.preventDefault(); e.returnValue = ''; } });
+/** Bij openen: was er nog een concept? Dan terugzetten zodat je kunt opslaan of verwerpen. */
+function herstelConcept(){
+  const c = opslag.get(CONCEPT_KEY);
+  if (!c || !c.inv || !D) return false;
+  if (!D.vakken || JSON.stringify(c.inv) === JSON.stringify(opgeslagenInv(c.inv.dag))) { opslag.weg(CONCEPT_KEY); return false; }
+  if (viesDag()) return false;                       // je bent al iets anders aan het invullen
+  dag = c.inv.dag; inv = c.inv; invBasis = JSON.stringify(opgeslagenInv(dag)); view = 'vandaag'; render();
+  toast('Niet-opgeslagen wijzigingen teruggezet'); return true;
+}
 
 // ================= start =================
 /** Haalt nieuwe/gewijzigde diensten uit je Sjiek-agenda (op de achtergrond). */
@@ -1377,8 +1457,8 @@ function sjiekSync(melden){
   if (I().sjiekImport !== 'aan') return;
   api('synchroniseerSjiek').then(d => {
     const n = d.sjiekInfo ? d.sjiekInfo.wijzigingen : 0;
-    D = d; inv = null;
-    if (!document.querySelector('.sheet-bg')) render();
+    D = d;
+    achtergrondRender();
     if (melden && n) toast(n + (n===1?' dienst':' diensten') + ' bijgewerkt uit je Sjiek-agenda');
   }).catch(()=>{});
 }
@@ -1404,10 +1484,12 @@ function koppelScherm(fout){
 function start(){
   if (!IN_GOOGLE && !opslag.get(CFG_KEY)) return koppelScherm();
   const cache = IN_GOOGLE ? null : opslag.get(CACHE_KEY);
-  if (cache) { D = cache; $('#loading').remove(); render(); }      // direct de laatste stand tonen
+  LESSEN = opslag.get(LES_KEY);                       // lessen van de vorige keer, tot de nieuwe binnen zijn
+  if (cache) { D = cache; $('#loading').remove(); if (!herstelConcept()) render(); }      // direct de laatste stand tonen
   api('haalAlles').then(d => {
-    D = d; inv = null; const l = $('#loading'); if (l) l.remove();
-    if (!document.querySelector('.sheet-bg')) render();
+    D = d; const l = $('#loading'); if (l) l.remove();
+    haalLessenOp();                                   // lessen: één keer, bij het opstarten
+    if (!herstelConcept()) achtergrondRender();
     sjiekSync(true);
     verstuurWachtrij();
   }).catch(() => { const l = $('#loading');
