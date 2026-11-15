@@ -208,7 +208,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.15';
+const APP_VERSIE = '2026.11.15-2';
 const SERVER_MIN = '2026.11.15';     // deze app verwacht minstens deze Code.gs-versie
 
 // ================= data & helpers =================
@@ -422,7 +422,7 @@ $('#gear').onclick = () => openInstellingen();
 function render(){
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v===view));
   $('#stickyHost').innerHTML = '';
-  if (view === 'diensten') { view = 'maand'; maandTab = 'sjiek'; }
+  if (view === 'diensten') { view = 'maand'; maandTab = 'diensten'; }
   ({vandaag:renderVandaag, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
 }
 
@@ -706,6 +706,21 @@ function sjiekKop(){
     : si.gevonden ? `<div class="note">Automatisch uit je Sjiek-agenda · bijgewerkt ${si.tijd}. Diensten die niet in de agenda staan, voeg je zelf toe.</div>`
     : '<div class="alert">Sjiek-agenda niet gevonden. Controleer de naam bij ⚙︎.</div>';
 }
+/** Alle komende diensten over alle maanden (zoals het oude Diensten-scherm), eerdere maanden ingeklapt. */
+function alleDiensten(){
+  const ymNu = vandaag().slice(0,7), per = {};
+  D.diensten.forEach(x => (per[x.datum.slice(0,7)] = per[x.datum.slice(0,7)] || []).push(x));
+  const maanden = Object.keys(per).sort();
+  const blok = m => { const mi = maandInfo(m);
+    return `<h2>${ymNaam(m)} · ${u(mi.tot)} u</h2><div class="card" style="padding:4px 12px">
+      ${per[m].sort((a,b)=>(a.datum+a.begin).localeCompare(b.datum+b.begin)).map(dienstItem).join('')}</div>`; };
+  const komend = maanden.filter(m => m >= ymNu), eerder = maanden.filter(m => m < ymNu).reverse();
+  $('#maandInhoud').innerHTML = sjiekKop() + (komend.map(blok).join('') || '<div class="empty">Nog geen diensten gepland.</div>')
+    + (eerder.length ? `<details><summary>Eerdere maanden (${eerder.length})</summary>${eerder.map(blok).join('')}</details>` : '');
+  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="dNieuw">+ Dienst</button></div>`;
+  $('#dNieuw').onclick = () => openDienst(null);
+  dienstKnoppen();
+}
 function dienstKnoppen(){
   document.querySelectorAll('.list-item[data-id]').forEach(el => el.onclick = () =>
     openDienst(Object.assign({}, D.diensten.find(x=>x.id===el.dataset.id))));
@@ -847,16 +862,17 @@ function renderMaand(){
   $('#title').textContent = 'Maand';
   const mi = maandInfo(ym), i = I();
   $('#main').innerHTML = `
-    <div class="daynav"><button class="nb" id="mPrev" aria-label="vorige maand">‹</button>
+    <div class="daynav" style="${maandTab==='diensten'?'display:none':''}"><button class="nb" id="mPrev" aria-label="vorige maand">‹</button>
       <div class="lbl">${ymNaam(ym)}</div><button class="nb" id="mNext" aria-label="volgende maand">›</button></div>
     <div class="seg" style="margin:8px 0 4px">
       <button data-mt="overzicht" class="${maandTab==='overzicht'?'on':''}">Overzicht</button>
-      <button data-mt="sjiek" class="${maandTab==='sjiek'?'on':''}">Sjiek · ${u(mi.tot)} u</button></div>
+      <button data-mt="sjiek" class="${maandTab==='sjiek'?'on':''}">Sjiek · ${u(mi.tot)} u</button>
+      <button data-mt="diensten" class="${maandTab==='diensten'?'on':''}">Diensten</button></div>
     <div id="maandInhoud"></div>`;
   $('#mPrev').onclick = () => { ym = ymPlus(ym,-1); renderMaand(); };
   $('#mNext').onclick = () => { ym = ymPlus(ym,1); renderMaand(); };
   document.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => { maandTab = b.dataset.mt; renderMaand(); });
-  if (maandTab === 'sjiek') maandSjiek(mi); else maandOverzicht(mi);
+  if (maandTab === 'sjiek') maandSjiek(mi); else if (maandTab === 'diensten') alleDiensten(); else maandOverzicht(mi);
 }
 function maandOverzicht(mi){
   const i = I(), mc = maandCijfers(ym), nu = vandaag(), lopend = ym === nu.slice(0,7);
