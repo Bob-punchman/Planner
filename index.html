@@ -466,7 +466,12 @@ function opgeslagenInv(dag){
   const r = D.dagen.find(x=>x.datum===dag);
   const studie = {}; D.vakken.forEach(v => studie[v.vak] = 0); Object.assign(studie, studieOp(dag));
   return { dag, studie, gamen:r?r.gamen:0, sport:r?r.sport:false, notitie:r?(r.notitie||''):'', coderen:r?(r.coderen||0):0, slaap:r?(r.slaap||0):0,
-          bedtijd:r?(r.bedtijd||''):'', opstaan:r?(r.opstaan||''):'' };
+          bedtijd:r?(tijdOfLeeg(r.bedtijd)):'', opstaan:r?(tijdOfLeeg(r.opstaan)):'' };
+}
+/** "23:59", "23:59:00" of een volledige datum-tijd → "23:59"; iets onherkenbaars → "" */
+function tijdOfLeeg(v){
+  const s = String(v || ''); const m = s.match(/(\d{1,2}):(\d{2})/);
+  return m ? pad(+m[1]) + ':' + m[2] : '';
 }
 let invBasis = '';   // hoe de dag eruitzag toen je hem opende: zo zien we of je iets hebt veranderd
 function laadInv(){ inv = opgeslagenInv(dag); invBasis = JSON.stringify(inv); }
