@@ -157,6 +157,11 @@
   .tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;padding:6px 9px;border-radius:8px;
     white-space:nowrap;transform:translate(-50%,-100%);display:none;z-index:3;line-height:1.35}
   input.tijd{font-variant-numeric:tabular-nums;text-align:center}
+  .datumveld{display:flex;gap:6px;align-items:stretch;position:relative;min-width:0}
+  .datumveld input.datum{flex:1;min-width:0;font-variant-numeric:tabular-nums}
+  .datumveld input.datum.fout{border-color:var(--warn);background:var(--warn-soft)}
+  .datumveld .kal{flex:none;width:46px;border:1px solid var(--line);border-radius:10px;background:var(--field);color:var(--ink);font-size:18px;cursor:pointer}
+  .datumveld input.native{position:absolute;right:0;bottom:0;width:46px;height:100%;opacity:0;pointer-events:none}
   input.tijd.fout{border-color:var(--warn);background:var(--warn-soft)}
   .x{border:0;background:none;color:var(--warn);font-size:20px;padding:4px 8px;cursor:pointer}
 </style>
@@ -1107,8 +1112,50 @@ function maakTijdveld(el){
     else if (n !== el.value) { el.value = n; el.dispatchEvent(new Event('input')); }
   });
 }
-new MutationObserver(() => document.querySelectorAll('input[type="time"]').forEach(maakTijdveld))
-  .observe(document.body, { childList: true, subtree: true });
+// Datums: altijd dd-mm-jjjj op het scherm. Het originele veld wordt verborgen en houdt de waarde als jjjj-mm-dd,
+// zodat de rest van de code gewoon .value kan blijven lezen.
+const isoNaarNL = s => /^\d{4}-\d{2}-\d{2}$/.test(s||'') ? s.slice(8,10) + '-' + s.slice(5,7) + '-' + s.slice(0,4) : '';
+function nlNaarIso(v){
+  const s = String(v || '').trim(); if (!s) return '';
+  let d, m, y;
+  const a = s.match(/^(\d{1,2})[-/. ](\d{1,2})(?:[-/. ](\d{2}|\d{4}))?$/), b = s.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (a) { d = +a[1]; m = +a[2]; y = a[3] ? +a[3] : new Date().getFullYear(); if (y < 100) y += 2000; }
+  else if (b) { d = +b[1]; m = +b[2]; y = +b[3]; }
+  else return null;
+  const t = new Date(y, m-1, d);
+  if (t.getFullYear() !== y || t.getMonth() !== m-1 || t.getDate() !== d) return null;   // bijv. 31-02 bestaat niet
+  return y + '-' + pad(m) + '-' + pad(d);
+}
+function maakDatumveld(el){
+  const wrap = document.createElement('div'); wrap.className = 'datumveld';
+  if (el.getAttribute('style')) wrap.setAttribute('style', el.getAttribute('style'));
+  const tekst = document.createElement('input');
+  tekst.className = 'datum'; tekst.setAttribute('inputmode', 'numeric'); tekst.setAttribute('placeholder', 'dd-mm-jjjj');
+  tekst.setAttribute('maxlength', '10'); tekst.setAttribute('autocomplete', 'off'); tekst.value = isoNaarNL(el.value);
+  const knop = document.createElement('button'); knop.type = 'button'; knop.className = 'kal'; knop.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'; knop.setAttribute('aria-label', 'kalender');
+  const nat = document.createElement('input'); nat.type = 'date'; nat.className = 'native'; nat.dataset.native = '1'; nat.tabIndex = -1; nat.value = el.value;
+  el.parentNode.insertBefore(wrap, el); wrap.append(tekst, knop, nat, el);
+  el.type = 'hidden';
+  const zet = iso => { if (iso === el.value) return; el.value = iso; nat.value = iso;
+    el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); };
+  tekst.addEventListener('input', () => {
+    tekst.classList.remove('fout');
+    const c = tekst.value.replace(/\D/g, '');
+    if (/^\d{8}$/.test(tekst.value)) tekst.value = c.slice(0,2) + '-' + c.slice(2,4) + '-' + c.slice(4);   // 28112026 → 28-11-2026
+    const iso = nlNaarIso(tekst.value); if (iso && tekst.value.length >= 8) zet(iso);
+  });
+  tekst.addEventListener('blur', () => {
+    const iso = nlNaarIso(tekst.value);
+    if (iso === null) { tekst.classList.add('fout'); toast('Ongeldige datum: gebruik dd-mm-jjjj'); tekst.value = isoNaarNL(el.value); return; }
+    tekst.value = isoNaarNL(iso); zet(iso);
+  });
+  knop.onclick = () => { try { nat.showPicker(); } catch(e) { tekst.focus(); } };
+  nat.addEventListener('change', () => { if (nat.value) { tekst.value = isoNaarNL(nat.value); tekst.classList.remove('fout'); zet(nat.value); } });
+}
+new MutationObserver(() => {
+  document.querySelectorAll('input[type="time"]').forEach(maakTijdveld);
+  document.querySelectorAll('input[type="date"]:not([data-native])').forEach(maakDatumveld);
+}).observe(document.body, { childList: true, subtree: true });
 
 // ================= THEMA =================
 function pasThemaToe(){
