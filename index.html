@@ -129,6 +129,13 @@
   .chip.game{color:var(--game)}
   .big.neg{color:var(--warn)}
   .timer{border-color:var(--accent);background:var(--hl)}
+  /* knoppen voelen ingedrukt aan; .bezig = wacht nog op de server */
+  .btn,.chip,.nb,.step button,.vink,.seg button{transition:transform .08s ease,opacity .15s}
+  .btn:active,.chip:active,.nb:active,.step button:active,.vink:active,.seg button:active{transform:scale(.94)}
+  .bezig{opacity:.55;pointer-events:none}
+  .timer.pauze{border-style:dashed}
+  .timer.pauze #tKlok{animation:knipper 1.4s ease-in-out infinite}
+  @keyframes knipper{50%{opacity:.35}}
   .vakrow input{width:auto}
   .list-item.vervallen .name{text-decoration:line-through;color:var(--muted)}
   .badge.warn{background:var(--warn-soft);color:var(--warn)}
@@ -208,8 +215,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.15-3';
-const SERVER_MIN = '2026.11.15';     // deze app verwacht minstens deze Code.gs-versie
+const APP_VERSIE = '2026.11.15-4';
+const SERVER_MIN = '2026.11.15-4';   // deze app verwacht minstens deze Code.gs-versie (pauze bij de timer)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -435,31 +442,57 @@ function render(){
 }
 
 // ================= TIMER =================
-function klok(t){ const sec = Math.max(0, Math.floor((Date.now()-t.start)/1000));
+// De timer staat op de server (zodat telefoon en pc dezelfde timer zien), maar de server doet er soms een paar
+// seconden over. Daarom past de app de timer eerst meteen op het scherm aan en stuurt hij het daarna pas door.
+// Pauzes: pauzeStart = sinds wanneer hij stilstaat, pauzeMs = alle eerdere pauzes bij elkaar.
+let timerBezig = false;
+function verstreken(t){ return Math.max(0, (t.pauzeStart || Date.now()) - t.start - (Number(t.pauzeMs) || 0)); }
+function klok(t){ const sec = Math.floor(verstreken(t)/1000);
   return Math.floor(sec/3600)+':'+pad(Math.floor(sec/60)%60)+':'+pad(sec%60); }
 setInterval(() => { const el = document.getElementById('tKlok'); if (el && D && D.timer) el.textContent = klok(D.timer); }, 1000);
+const tril = () => { try { navigator.vibrate && navigator.vibrate(15); } catch(e){} };   // korte tik op Android
 function timerHtml(){
   const t = D.timer;
-  if (t) return `<div class="card timer"><div class="row"><div class="grow">
-      <div class="sub">Timer loopt · ${t.soort==='studie' ? 'studie '+esc(t.vak) : esc(t.soort)}</div><div class="big" id="tKlok">${klok(t)}</div></div>
+  if (t) { const p = !!t.pauzeStart;
+    return `<div class="card timer ${p?'pauze':''}"><div class="row"><div class="grow">
+      <div class="sub">${p ? 'Gepauzeerd' : 'Timer loopt'} · ${t.soort==='studie' ? 'studie '+esc(t.vak) : esc(t.soort)}${timerBezig ? ' · opslaan…' : ''}</div>
+      <div class="big" id="tKlok">${klok(t)}</div></div>
+      <button class="btn small sec" id="tPauze">${p ? '▶ Verder' : '⏸ Pauze'}</button>
       <button class="btn small" id="tStop">■ Stop</button></div>
-      <button class="btn ghost" id="tAnn" style="padding:6px;margin-top:4px">Timer annuleren</button></div>`;
-  return `<div class="card"><div class="sub" style="margin-bottom:8px">Timer starten</div><div class="chips">
+      <button class="btn ghost" id="tAnn" style="padding:6px;margin-top:4px">Timer annuleren</button></div>`; }
+  return `<div class="card"><div class="sub" style="margin-bottom:8px">Timer starten${timerBezig ? ' · opslaan…' : ''}</div><div class="chips">
     ${D.vakken.map(v=>`<button class="chip" data-tv="${esc(v.vak)}">▶ ${esc(v.vak)}</button>`).join('')}
     <button class="chip game" data-tg="gamen">▶ Gamen</button><button class="chip code" data-tg="coderen">▶ Coderen</button></div></div>`;
 }
+/** Timer meteen op het scherm aanpassen, daarna naar de server. Lukt dat niet, dan terug naar hoe het was. */
+async function timerActie(knop, nieuweTimer, melding, fn, ...args){
+  if (timerBezig) return;
+  tril(); if (knop) knop.classList.add('bezig');
+  const oud = D.timer;
+  timerBezig = true; D.timer = nieuweTimer; render(); if (melding) toast(melding);
+  try { D = await api(fn, ...args); }
+  catch(e){ D.timer = oud; }            // api() heeft de foutmelding al getoond
+  finally { timerBezig = false; achtergrondRender(); }
+}
 function timerKnoppen(){
-  document.querySelectorAll('[data-tv]').forEach(b => b.onclick = async () => {
-    D = await api('startTimer', 'studie', b.dataset.tv); render(); toast('Timer gestart: ' + b.dataset.tv); });
-  document.querySelectorAll('[data-tg]').forEach(g => g.onclick = async () => {
-    D = await api('startTimer', g.dataset.tg, ''); render(); toast('Timer gestart: ' + g.dataset.tg); });
-  if ($('#tAnn')) $('#tAnn').onclick = async () => {
+  const start = (soort, vak, knop) => { const nu = Date.now();
+    timerActie(knop, {soort, vak, start: nu, pauzeMs: 0}, 'Timer gestart: ' + (vak || soort), 'startTimer', soort, vak, nu); };
+  document.querySelectorAll('[data-tv]').forEach(b => b.onclick = () => start('studie', b.dataset.tv, b));
+  document.querySelectorAll('[data-tg]').forEach(g => g.onclick = () => start(g.dataset.tg, '', g));
+  if ($('#tPauze')) $('#tPauze').onclick = e => {
+    const t = D.timer, nu = Date.now();
+    if (t.pauzeStart) timerActie(e.currentTarget, Object.assign({}, t, {pauzeMs: (Number(t.pauzeMs)||0) + (nu - t.pauzeStart), pauzeStart: 0}),
+                                 '', 'hervatTimer', nu);
+    else timerActie(e.currentTarget, Object.assign({}, t, {pauzeStart: nu}), '', 'pauzeerTimer', nu);
+  };
+  if ($('#tAnn')) $('#tAnn').onclick = () => {
     const k = $('#tAnn'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer: tijd niet opslaan'; return; }
-    D = await api('annuleerTimer'); render(); toast('Timer geannuleerd'); };
+    timerActie(k, null, 'Timer geannuleerd', 'annuleerTimer'); };
   if ($('#tStop')) $('#tStop').onclick = () => {
-    const t = D.timer, minuten = Math.round((Date.now()-t.start)/60000);
+    tril();
+    const t = D.timer, minuten = Math.round(verstreken(t)/60000);
     sheet(`<h3>Timer stoppen</h3>
-      <div class="sub">${t.soort==='studie' ? 'Studie '+esc(t.vak) : t.soort==='coderen' ? 'Coderen' : 'Gamen'} · gemeten ${Math.floor(minuten/60)} u ${minuten%60} min</div>
+      <div class="sub">${t.soort==='studie' ? 'Studie '+esc(t.vak) : t.soort==='coderen' ? 'Coderen' : 'Gamen'} · gemeten ${Math.floor(minuten/60)} u ${minuten%60} min${t.pauzeMs || t.pauzeStart ? ' (zonder pauzes)' : ''}</div>
       <label class="f">Opslaan als (minuten)</label><input id="tMin" inputmode="numeric" value="${minuten}">
       ${minuten > 240 ? '<div class="alert">Dat is lang. Vergeten te stoppen? Pas de minuten aan.</div>' : ''}
       <div class="note">Wordt opgeteld bij de dag waarop de timer startte.</div>
@@ -467,7 +500,9 @@ function timerKnoppen(){
     $('#tTerug').onclick = closeSheet;
     $('#tOk').onclick = async () => {
       const m = num($('#tMin').value); if (isNaN(m) || m < 0) return toast('Vul minuten in');
-      D = await api('stopTimer', m); closeSheet(); laadInv(); render(); toast('Opgeslagen ✓ ' + u(m/60) + ' u');
+      const btn = $('#tOk'); btn.disabled = true; btn.textContent = 'Opslaan…'; tril();
+      try { D = await api('stopTimer', m); closeSheet(); laadInv(); render(); toast('Opgeslagen ✓ ' + u(m/60) + ' u'); }
+      catch(e){ btn.disabled = false; btn.textContent = 'Opslaan'; }
     };
   };
 }
