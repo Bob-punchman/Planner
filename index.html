@@ -199,14 +199,18 @@
 <div id="stickyHost"></div>
 <nav id="nav">
   <button data-v="vandaag"><span class="i">✓</span>Vandaag</button>
-  <button data-v="diensten"><span class="i">€</span>Diensten</button>
-  <button data-v="maand"><span class="i">▤</span>Maand</button>
   <button data-v="week"><span class="i">◷</span>Week</button>
+  <button data-v="maand"><span class="i">▤</span>Maand</button>
   <button data-v="trends"><span class="i">↗</span>Trends</button>
 </nav>
 <div id="sheetHost"></div>
 
 <script>
+// ================= versie =================
+// Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
+const APP_VERSIE = '2026.11.15';
+const SERVER_MIN = '2026.11.15';     // deze app verwacht minstens deze Code.gs-versie
+
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
 let view = 'vandaag';
@@ -418,7 +422,8 @@ $('#gear').onclick = () => openInstellingen();
 function render(){
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v===view));
   $('#stickyHost').innerHTML = '';
-  ({vandaag:renderVandaag, diensten:renderDiensten, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
+  if (view === 'diensten') { view = 'maand'; maandTab = 'sjiek'; }
+  ({vandaag:renderVandaag, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
 }
 
 // ================= TIMER =================
@@ -685,34 +690,23 @@ function openDeadline(d, terugNaarLijst){
   };
 }
 
-// ================= DIENSTEN =================
-function renderDiensten(){
-  $('#title').textContent = 'Diensten';
-  const nu = vandaag(), ymNu = nu.slice(0,7);
-  const per = {};
-  D.diensten.forEach(x => (per[x.datum.slice(0,7)] = per[x.datum.slice(0,7)] || []).push(x));
-  const maanden = Object.keys(per).sort();
-  const item = x => {
-    const verv = x.status === 'vervallen';
-    const open = !verv && x.datum < nu && x.status !== 'gewerkt';
-    return `<div class="list-item ${verv?'vervallen':''}" data-id="${x.id}"><div class="grow">
-      <div class="name">${dagKort(x.datum)} · ${x.begin}–${x.eind}</div>
-      <div class="sub">${esc(x.waar||'Sjiek')} · ${u(nettoU(x))} u netto${x.toeslag>100?' · '+x.toeslag+'%':''}${isLaat(x)?' · laat':''}${x.sjiekId?' · uit agenda':' · handmatig'}</div></div>
-      ${verv ? '<span class="badge warn">vervallen</span>' : open ? `<button class="btn sec small" data-ok="${x.id}">Gewerkt?</button>`
-             : `<span class="badge ${x.status==='gewerkt'?'':'none'}">${x.status}</span>`}</div>`;
-  };
-  const blok = ym => { const mi = maandInfo(ym);
-    return `<h2>${ymNaam(ym)} · ${u(mi.tot)} u</h2><div class="card" style="padding:4px 12px">
-      ${per[ym].sort((a,b)=>(a.datum+a.begin).localeCompare(b.datum+b.begin)).map(item).join('')}</div>`; };
-  const komend = maanden.filter(m=>m>=ymNu), eerder = maanden.filter(m=>m<ymNu).reverse();
+// ================= DIENSTEN (onderdeel van Maand → Sjiek) =================
+function dienstItem(x){
+  const nu = vandaag(), verv = x.status === 'vervallen';
+  const open = !verv && x.datum < nu && x.status !== 'gewerkt';
+  return `<div class="list-item ${verv?'vervallen':''}" data-id="${x.id}"><div class="grow">
+    <div class="name">${dagKort(x.datum)} · ${x.begin}–${x.eind}</div>
+    <div class="sub">${esc(x.waar||'Sjiek')} · ${u(nettoU(x))} u netto${x.toeslag>100?' · '+x.toeslag+'%':''}${isLaat(x)?' · laat':''}${x.sjiekId?' · uit agenda':' · handmatig'}</div></div>
+    ${verv ? '<span class="badge warn">vervallen</span>' : open ? `<button class="btn sec small" data-ok="${x.id}">Gewerkt?</button>`
+           : `<span class="badge ${x.status==='gewerkt'?'':'none'}">${x.status}</span>`}</div>`;
+}
+function sjiekKop(){
   const si = D.sjiekInfo;
-  const kop = I().sjiekImport !== 'aan' ? '' : !si ? '<div class="note">Sjiek-agenda bijwerken…</div>'
+  return I().sjiekImport !== 'aan' ? '' : !si ? '<div class="note">Sjiek-agenda bijwerken…</div>'
     : si.gevonden ? `<div class="note">Automatisch uit je Sjiek-agenda · bijgewerkt ${si.tijd}. Diensten die niet in de agenda staan, voeg je zelf toe.</div>`
     : '<div class="alert">Sjiek-agenda niet gevonden. Controleer de naam bij ⚙︎.</div>';
-  $('#main').innerHTML = kop + (komend.map(blok).join('') || '<div class="empty">Nog geen diensten gepland.</div>')
-    + (eerder.length ? `<details><summary>Eerdere maanden (${eerder.length})</summary>${eerder.map(blok).join('')}</details>` : '');
-  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="dNieuw">+ Dienst</button></div>`;
-  $('#dNieuw').onclick = () => openDienst(null);
+}
+function dienstKnoppen(){
   document.querySelectorAll('.list-item[data-id]').forEach(el => el.onclick = () =>
     openDienst(Object.assign({}, D.diensten.find(x=>x.id===el.dataset.id))));
   document.querySelectorAll('[data-ok]').forEach(el => el.onclick = async e => {
@@ -830,10 +824,89 @@ function dienstzoeker(ym, mi){
 }
 
 // ================= MAAND =================
-let ym = vandaag().slice(0,7);
+let ym = vandaag().slice(0,7), maandTab = 'overzicht';
+/** Cijfers van een maand, met doelen naar rato van het aantal dagen (weekdoel ÷ 7 per dag, toetsweekmodus meegerekend). */
+function maandCijfers(ym){
+  const i = I(), nu = vandaag(), perVak = {}, doelVak = {};
+  let studie = 0, gamen = 0, coderen = 0, sport = 0, dagen = 0, dagenTotNu = 0, dStudie = 0, dGame = 0, slaap = [], bed = [];
+  for (let s = ym + '-01'; s.startsWith(ym); s = plus(s, 1)) {
+    dagen++; if (s <= nu) dagenTotNu++;
+    const r = D.dagen.find(x => x.datum === s) || {}, st = studieOp(s), dl = doelen(toetsweek(maandag(s), true));
+    Object.keys(st).forEach(v => { perVak[v] = (perVak[v]||0) + st[v]; studie += st[v]; });
+    Object.keys(dl.perVak).forEach(v => doelVak[v] = (doelVak[v]||0) + dl.perVak[v] / 7);
+    dStudie += dl.studie / 7; dGame += dl.gameMax / 7;
+    gamen += r.gamen || 0; coderen += r.coderen || 0; if (r.sport) sport++;
+    if (r.slaap) slaap.push(r.slaap); if (r.bedtijd) bed.push(bedUur(r.bedtijd));
+  }
+  const gem = a => a.length ? a.reduce((t,x)=>t+x,0) / a.length : null;
+  return { dagen, dagenTotNu, perVak, doelVak, studie, gamen, coderen, sport,
+           doelStudie: dStudie, doelSport: i.sportDoel / 7 * dagen, doelCode: i.codeerDoel / 7 * dagen,
+           verdiend: Math.min(dGame, studie / (i.verdienPer || 2)), slaapGem: gem(slaap), slaapN: slaap.length, bedGem: gem(bed) };
+}
 function renderMaand(){
   $('#title').textContent = 'Maand';
-  const mi = maandInfo(ym), i = I(), g1 = i.grens1, g2 = i.grens2;
+  const mi = maandInfo(ym), i = I();
+  $('#main').innerHTML = `
+    <div class="daynav"><button class="nb" id="mPrev" aria-label="vorige maand">‹</button>
+      <div class="lbl">${ymNaam(ym)}</div><button class="nb" id="mNext" aria-label="volgende maand">›</button></div>
+    <div class="seg" style="margin:8px 0 4px">
+      <button data-mt="overzicht" class="${maandTab==='overzicht'?'on':''}">Overzicht</button>
+      <button data-mt="sjiek" class="${maandTab==='sjiek'?'on':''}">Sjiek · ${u(mi.tot)} u</button></div>
+    <div id="maandInhoud"></div>`;
+  $('#mPrev').onclick = () => { ym = ymPlus(ym,-1); renderMaand(); };
+  $('#mNext').onclick = () => { ym = ymPlus(ym,1); renderMaand(); };
+  document.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => { maandTab = b.dataset.mt; renderMaand(); });
+  if (maandTab === 'sjiek') maandSjiek(mi); else maandOverzicht(mi);
+}
+function maandOverzicht(mi){
+  const i = I(), mc = maandCijfers(ym), nu = vandaag(), lopend = ym === nu.slice(0,7);
+  const pro = v => lopend ? ` <span class="sub">(tot vandaag ±${u(Math.round(v / mc.dagen * mc.dagenTotNu * 2) / 2)})</span>` : '';
+  const namen = D.vakken.map(v => v.vak).concat(Object.keys(mc.perVak).filter(v => !D.vakken.some(x => x.vak === v)));
+  const vakMeterM = namen.map(v => { const d = mc.doelVak[v] || 0, val = mc.perVak[v] || 0;
+    return meter(esc(v), val, d || val || 1, u(Math.round(val*4)/4) + (d ? ' / ' + u(Math.round(d)) : '') + ' u'); }).join('');
+  // weken die in deze maand vallen
+  const weken = []; for (let ma = maandag(ym + '-01'); ma.slice(0,7) <= ym; ma = plus(ma, 7)) weken.push(ma);
+  const wc = weken.map(ma => ({ ma, w: weekCijfers(ma), werk: [...Array(7)].reduce((t,_,k) => t + dienstenOp(plus(ma,k)).reduce((a,x)=>a+nettoU(x),0), 0) }));
+  // belangrijke data
+  const data = D.tentamens.filter(t => t.datum.startsWith(ym)).map(t => ({ s: t.datum, wat: '📚 ' + t.vak + (t.tijd ? ' · ' + t.tijd : ''), sub: t.opmerking || 'tentamen' }))
+    .concat(D.deadlines.filter(d => d.datum.startsWith(ym)).map(d => ({ s: d.datum, wat: (d.klaar ? '✓ ' : '⏰ ') + deadlineNaam(d), sub: (d.tijd || '') + (d.klaar ? ' · klaar' : '') })))
+    .sort((a,b) => a.s.localeCompare(b.s));
+  const sig = [];
+  if (!lopend && ym < nu.slice(0,7)) {
+    if (mc.studie < mc.doelStudie) sig.push(['alert', `Zelfstudie ${u(Math.round(mc.studie))} van ±${u(Math.round(mc.doelStudie))} u.`]);
+    if (mc.gamen > mc.verdiend) sig.push(['alert', `${u(Math.round((mc.gamen - mc.verdiend)*2)/2)} u meer gegamed dan verdiend.`]);
+  } else if (lopend) {
+    const verwacht = mc.doelStudie / mc.dagen * mc.dagenTotNu;
+    if (mc.studie < verwacht - 2) sig.push(['infobox', `Je loopt ±${u(Math.round((verwacht - mc.studie)*2)/2)} u achter op je studie voor deze maand.`]);
+  }
+  $('#maandInhoud').innerHTML = `
+    ${sig.map(([c,t]) => `<div class="${c}">${t}</div>`).join('')}
+    <div class="card">
+      ${meter('<b>Zelfstudie</b>', mc.studie, mc.doelStudie, u(Math.round(mc.studie*4)/4) + ' / ' + u(Math.round(mc.doelStudie)) + ' u') + pro(mc.doelStudie)}
+      <div style="padding-left:12px;border-left:3px solid var(--line);margin:4px 0 10px">${vakMeterM}</div>
+      ${meter('Sportschool', mc.sport, mc.doelSport, mc.sport + ' / ' + Math.round(mc.doelSport) + '×') + pro(mc.doelSport)}
+      ${meter('Gamen (van verdiend)', mc.gamen, Math.max(mc.verdiend, 0.01), u(Math.round(mc.gamen*4)/4) + ' / ' + u(Math.round(mc.verdiend*2)/2) + ' u', true)}
+      ${meter('Coderen', mc.coderen, mc.doelCode, u(Math.round(mc.coderen*4)/4) + ' / ' + u(Math.round(mc.doelCode*2)/2) + ' u')}
+      <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${mc.slaapGem===null?'–':uMin(mc.slaapGem)}</div></div>
+      <div class="row line"><div class="grow">Gemiddeld naar bed</div><div class="name">${mc.bedGem===null?'–':uurTekst(mc.bedGem)}</div></div>
+      <div class="row line"><div class="grow">Sjiek</div><div class="name">${u(mi.tot)} u</div></div>
+      <div class="note">Doelen zijn je weekdoelen omgerekend naar ${mc.dagen} dagen (inclusief toetsweekmodus).</div>
+    </div>
+    <h2>Per week</h2>
+    <div class="card"><div class="tabelwrap"><table>
+      <tr><th>Week</th><th>Studie</th><th>Game</th><th>Code</th><th>Sport</th><th>Sjiek</th></tr>
+      ${wc.map(({ma, w, werk}) => `<tr data-wk="${ma}" style="cursor:pointer" class="${ma===maandag(nu)?'vandaag':''}">
+        <td>wk ${weekNr(ma)} <span class="sub">${dt(ma).getDate()}/${dt(ma).getMonth()+1}</span></td>
+        <td>${w.studie?u(w.studie):'–'}</td><td>${w.gamen?u(w.gamen):'–'}</td><td>${w.coderen?u(w.coderen):'–'}</td><td>${w.sport?w.sport+'×':'–'}</td><td>${werk?u(werk):'–'}</td></tr>`).join('')}
+    </table></div><div class="note">Hele weken (ook de dagen buiten deze maand). Tik op een week om hem te openen.</div></div>
+    <h2>Belangrijke data</h2>
+    <div class="card" style="padding:4px 12px">${data.map(x => `<div class="list-item" style="cursor:default"><div class="grow">
+      <div class="name">${esc(x.wat)}</div><div class="sub">${dagKort(x.s)}${x.sub ? ' · ' + esc(x.sub) : ''}</div></div></div>`).join('')
+      || '<div class="empty">Geen tentamens of deadlines deze maand.</div>'}</div>`;
+  document.querySelectorAll('tr[data-wk]').forEach(tr => tr.onclick = () => { wk = tr.dataset.wk; view = 'week'; render(); window.scrollTo(0,0); });
+}
+function maandSjiek(mi){
+  const i = I(), g1 = i.grens1, g2 = i.grens2;
   const gepland = mi.tot - mi.gew;
   const schaal = Math.max(70, mi.tot+5, mi.doel+5);
   const pos = v => Math.min(100, v/schaal*100);
@@ -845,19 +918,16 @@ function renderMaand(){
     const g = mi.tot>=g2 ? g2 : mi.tot>=g1 ? g1 : null;
     status = `<div class="okbox">Doel gehaald.${g ? ` Buffer boven de ${g}-grens: ${u(mi.tot-g)} u${mi.tot-g<2?' (krap: een dienst kan korter uitvallen)':''}.` : ''}</div>`;
   } else status = `<div class="infobox">Nog ${u(mi.doel-mi.tot)} u tot je doel van ${mi.doel} u (minimum ${mi.minimum} u gehaald).</div>`;
-  const marks = [[g1,''],[g2,'']];
   const doelOpGrens = mi.doel===g1 || mi.doel===g2;
-  const markHtml = marks.map(([v]) => `<span class="mark" style="left:${pos(v)}%"><b>${v}${mi.doel===v?' · doel':''}</b></span>`).join('')
+  const markHtml = [g1,g2].map(v => `<span class="mark" style="left:${pos(v)}%"><b>${v}${mi.doel===v?' · doel':''}</b></span>`).join('')
     + (doelOpGrens ? '' : `<span class="mark doel" style="left:${pos(mi.doel)}%"><b>doel ${mi.doel}</b></span>`);
-
   // jaaroverzicht
   const alle = [...new Set(D.diensten.map(x=>x.datum.slice(0,7)).concat(D.maanddoelen.map(m=>m.maand)).concat([vandaag().slice(0,7)]))].sort();
   const lijst = []; for (let m = alle[0]; m <= alle[alle.length-1]; m = ymPlus(m,1)) lijst.push(m);
   const maxU = Math.max(70, ...lijst.map(m=>maandInfo(m).tot));
-
-  $('#main').innerHTML = `
-    <div class="daynav"><button class="nb" id="mPrev" aria-label="vorige maand">‹</button>
-      <div class="lbl">${ymNaam(ym)}</div><button class="nb" id="mNext" aria-label="volgende maand">›</button></div>
+  const alleDiensten = D.diensten.filter(x => x.datum.startsWith(ym + '-')).sort((a,b)=>(a.datum+a.begin).localeCompare(b.datum+b.begin));
+  $('#maandInhoud').innerHTML = `
+    ${sjiekKop()}
     <div class="card">
       <div class="row"><div class="grow"><div class="sub">Sjiek-uren (netto)</div><div class="big">${u(mi.tot)}<span class="unit">u</span></div></div>
         <button class="btn sec small" id="mDoel">Doel ${mi.doel} u</button></div>
@@ -865,28 +935,24 @@ function renderMaand(){
       <div class="legend"><span>gewerkt ${u(mi.gew)} u</span><span class="p">gepland ${u(gepland)} u</span></div>
       ${status}
     </div>
+    <h2>Diensten</h2>
+    <div class="card" style="padding:4px 12px">${alleDiensten.map(dienstItem).join('') || '<div class="empty">Nog geen diensten deze maand.</div>'}</div>
+    ${dienstzoeker(ym, mi)}
     <div class="card">
       <div class="row line"><div class="grow">Uurloon bij deze uren</div><div class="name">${euroC(mi.tarief)}</div></div>
       <div class="row line"><div class="grow">Bruto (indicatie)</div><div class="name">≈ ${euro(mi.bruto)}</div></div>
       <div class="row line"><div class="grow">Uitbetaald in</div><div class="name">${ymNaam(ymPlus(ym,1))}</div></div>
       <div class="note">Netto krijg je minder door belasting. Uren zijn na aftrek van onbetaalde pauze.</div>
     </div>
-    ${dienstzoeker(ym, mi)}
-    <h2>Diensten in ${MAANDEN_LANG[Number(ym.slice(5))-1]}</h2>
-    <div class="card" style="padding:4px 12px">${mi.ds.sort((a,b)=>(a.datum+a.begin).localeCompare(b.datum+b.begin)).map(x =>
-      `<div class="list-item" data-id="${x.id}"><div class="grow">${dagKort(x.datum)} <span class="sub">· ${x.begin}–${x.eind}</span></div>
-       <div class="name">${u(nettoU(x))} u</div><span class="badge ${x.status==='gewerkt'?'':'none'}">${x.status}</span></div>`).join('')
-      || '<div class="empty">Nog geen diensten.</div>'}</div>
-    <h2>Overzicht</h2>
+    <details><summary>Alle maanden</summary>
     <div class="card"><table><tr><th>Maand</th><th></th><th>Uren</th><th>Doel</th><th>Bruto</th></tr>
       ${lijst.map(m => { const x = maandInfo(m); return `<tr data-m="${m}" style="cursor:pointer" class="${m===ym?'vandaag':''}">
         <td>${MAANDEN[Number(m.slice(5))-1]} ${m.slice(2,4)}</td><td><span class="mini"><i style="width:${x.tot/maxU*100}%"></i></span></td>
-        <td>${u(x.tot)}</td><td>${x.doel}</td><td>${euro(x.bruto)}</td></tr>`; }).join('')}</table></div>`;
-  $('#mPrev').onclick = () => { ym = ymPlus(ym,-1); renderMaand(); };
-  $('#mNext').onclick = () => { ym = ymPlus(ym,1); renderMaand(); };
+        <td>${u(x.tot)}</td><td>${x.doel}</td><td>${euro(x.bruto)}</td></tr>`; }).join('')}</table></div></details>`;
+  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="dNieuw">+ Dienst</button></div>`;
+  $('#dNieuw').onclick = () => openDienst({ datum: ym === vandaag().slice(0,7) ? vandaag() : ym + '-01' });
   document.querySelectorAll('tr[data-m]').forEach(tr => tr.onclick = () => { ym = tr.dataset.m; renderMaand(); window.scrollTo(0,0); });
-  document.querySelectorAll('.list-item[data-id]').forEach(el => el.onclick = () =>
-    openDienst(Object.assign({}, D.diensten.find(x=>x.id===el.dataset.id))));
+  dienstKnoppen();
   $('#mDoel').onclick = () => {
     sheet(`<h3>Urendoel ${ymNaam(ym)}</h3>
       <div class="row"><div class="grow"><label class="f">Doel (uur)</label><input id="gDoel" inputmode="decimal" value="${mi.doel}"></div>
@@ -1076,7 +1142,30 @@ function openInstellingen(){
       <label class="f">Opmerking</label><input id="tOpm" placeholder="bijv. alleen indien nodig">
       <div style="height:10px"></div><button class="btn sec" id="tAdd">+ Tentamen toevoegen</button>
     </div>
+    <h2>Versie</h2>
+    <div class="card">
+      <div class="row line"><div class="grow">App <span class="sub">(index.html)</span></div><div class="name">${APP_VERSIE}</div></div>
+      <div class="row line"><div class="grow">Server <span class="sub">(Code.gs)</span></div><div class="name">${esc(D.versie || 'ouder dan 2026.11.15')}</div></div>
+      ${(D.versie || '') < SERVER_MIN ? `<div class="alert">Code.gs is ouder dan deze app verwacht (${SERVER_MIN}). Plak de nieuwste Code.gs en kies Implementeren → Implementaties beheren → Nieuwe versie.</div>` : ''}
+      ${IN_GOOGLE ? '' : '<button class="btn sec" id="iUpdate" style="margin-top:8px">Controleer op update</button><div class="note" id="iUpdateInfo"></div>'}
+    </div>
     <button class="btn ghost" id="iAnn">Sluiten</button>`);
+  if ($('#iUpdate')) $('#iUpdate').onclick = async () => {
+    const info = $('#iUpdateInfo'); info.textContent = 'Kijken op GitHub…';
+    try {
+      const html = await fetch('index.html', { cache: 'no-store' }).then(r => r.text());
+      const nieuw = (html.match(/APP_VERSIE = '([^']+)'/) || [])[1];
+      if (!nieuw) { info.textContent = 'Kon de versie op GitHub niet lezen.'; return; }
+      if (nieuw === APP_VERSIE) { info.textContent = '✓ Je hebt de nieuwste versie (' + nieuw + ').'; return; }
+      info.innerHTML = 'Nieuwe versie gevonden: <b>' + esc(nieuw) + '</b>.';
+      const b = $('#iUpdate'); b.textContent = 'Nu bijwerken';
+      b.onclick = async () => {
+        if (viesDag()) bewaarConcept();
+        try { const reg = await navigator.serviceWorker?.getRegistration(); if (reg) await reg.update(); } catch(e){}
+        location.reload();
+      };
+    } catch(e) { info.textContent = 'Geen verbinding met GitHub.'; }
+  };
   const keuze = {herinneringen:i.herinneringen, sjiekImport:i.sjiekImport, overslaanBijAfspraak:i.overslaanBijAfspraak};
   [['iHer','herinneringen'],['iSjiek','sjiekImport'],['iAfspraak','overslaanBijAfspraak']].forEach(([id,k]) =>
     document.querySelectorAll('#'+id+' button').forEach(b => b.onclick = () => { keuze[k] = b.dataset.v;
