@@ -58,6 +58,8 @@
   .btn.small{width:auto;padding:7px 11px;font-size:14px}
   .sticky{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));padding:10px 14px;
     background:linear-gradient(transparent,var(--bg) 30%);z-index:4}
+  .autostatus{font-weight:400;margin-left:6px}
+  .autostatus.fout{color:#c0392b;text-decoration:underline;cursor:pointer}
   .sticky .btn{max-width:652px;margin:0 auto;display:block;box-shadow:0 4px 14px rgba(44,110,106,.3)}
   h2{font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 4px 6px;font-weight:600}
   .name{font-weight:600}
@@ -215,7 +217,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.15-4';
+const APP_VERSIE = '2026.11.15-5';
 const SERVER_MIN = '2026.11.15-4';   // deze app verwacht minstens deze Code.gs-versie (pauze bij de timer)
 
 // ================= data & helpers =================
@@ -567,7 +569,6 @@ function renderVandaag(){
       <input type="date" id="dDatum" value="${dag}" style="flex:1">
       <button class="nb" id="dNext" aria-label="volgende dag">›</button></div>
     ${isVandaag ? '' : '<button class="btn ghost" id="dNu" style="padding:6px">Terug naar vandaag</button>'}
-    ${viesDag() ? `<div class="infobox row"><div class="grow">Niet-opgeslagen wijzigingen voor ${dagKort(dag)}.</div><button class="btn ghost small" id="vVerwerp">Verwerpen</button></div>` : ''}
     ${gister.length ? `<div class="alert">Late dienst gisteren (tot ${gister[gister.length-1].eind}): vandaag geen zwaar studieblok en geen vroege sportschool.</div>` : ''}
     ${toetsBanner(toetsweek(dag), doelen(toetsweek(dag)))}
     ${timerHtml()}
@@ -587,7 +588,7 @@ function renderVandaag(){
       ${lo && lo.buiten ? `<div class="note">Lessen worden opgehaald voor 2 weken terug t/m ${dagKort(LESSEN.tot)}. Deze dag valt erbuiten.</div>` : ''}
       ${agenda.map(a=>a.html).join('') || (lo && lo.lessen ? '<div class="empty">Geen lessen of diensten.</div>' : '')}
     </div>
-    <h2>Invullen</h2>
+    <h2>Invullen <span id="vStatus" class="sub autostatus ${autoStatus}">${STATUS_TEKST[autoStatus] || ''}</span></h2>
     <div class="card">
       ${vakNamen().map((v,n) => stepper('s'+n, esc(v))).join('') || '<div class="note">Voeg vakken toe bij ⚙︎.</div>'}
       ${stepper('gamen','Gamen')}
@@ -599,7 +600,7 @@ function renderVandaag(){
       <div class="note" id="vSlaap">${inv.bedtijd && inv.opstaan ? '= ' + uMin(inv.slaap) + ' slaap' : inv.slaap ? uMin(inv.slaap) + ' slaap (zonder tijden ingevuld)' : 'Vul beide tijden in, dan rekent de app je slaap uit.'}</div>
       <div class="row line"><div class="grow">Sportschool</div>
         <div class="seg small" id="vSport"><button data-v="0" class="${!inv.sport?'on':''}">Nee</button><button data-v="1" class="${inv.sport?'on':''}">Ja</button></div></div>
-      <div class="note">Tik op een getal om het precies in te typen. Opslaan overschrijft deze dag; je kunt altijd terug om iets te wijzigen.</div>
+      <div class="note">Tik op een getal om het precies in te typen. Wijzigingen worden vanzelf opgeslagen, een paar seconden nadat je klaar bent.</div>
       <label class="f">Notitie</label><input id="vNot" value="${esc(inv.notitie)}" placeholder="bijv. moe na dienst">
     </div>
     <h2>Week ${weekNr(dag)}</h2>
@@ -610,7 +611,6 @@ function renderVandaag(){
       ${ws.slaapGem !== null ? `<div class="note">Slaap gemiddeld ${uMin(ws.slaapGem)} per nacht (doel ${uMin(i.slaapDoel)})</div>` : ''}
       <div class="note">Sjiek deze week: ${u(ws.werk)} u${ws.les!==null?' · lessen: '+u(ws.les)+' u':''}</div>
     </div>`;
-  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="vOpslaan">${viesDag() ? 'Dag opslaan •' : 'Dag opslaan'}</button></div>`;
 
   timerKnoppen();
   deadlineKnoppen();
@@ -624,8 +624,8 @@ function renderVandaag(){
   $('#dDatum').onchange = e => naar(e.target.value);
   if ($('#dNu')) $('#dNu').onclick = () => naar(vandaag());
   document.querySelectorAll('.step button').forEach(b => b.onclick = () => {
-    invSet(b.dataset.k, Math.max(0, Math.round((invGet(b.dataset.k) + Number(b.dataset.d))*2)/2)); renderVandaag(); });
-  document.querySelectorAll('#vSport button').forEach(b => b.onclick = () => { inv.sport = b.dataset.v==='1'; renderVandaag(); });
+    invSet(b.dataset.k, Math.max(0, Math.round((invGet(b.dataset.k) + Number(b.dataset.d))*2)/2)); renderVandaag(); planAuto(); });
+  document.querySelectorAll('#vSport button').forEach(b => b.onclick = () => { inv.sport = b.dataset.v==='1'; renderVandaag(); planAuto(); });
   document.querySelectorAll('[data-typ]').forEach(el => el.onclick = () => {
     const k = el.dataset.typ, oud = invGet(k), mi = Math.round(oud*60);
     sheet(`<h3>${({gamen:'Gamen',coderen:'Coderen',slaap:'Slaap'})[k] || esc(vakNamen()[+k.slice(1)])} · ${dagKort(dag)}</h3>
@@ -635,29 +635,18 @@ function renderVandaag(){
     $('#eAnn').onclick = closeSheet;
     $('#eOk').onclick = () => { const uu = num($('#eU').value||0), mm = num($('#eM').value||0);
       if (isNaN(uu) || isNaN(mm) || uu<0 || mm<0) return toast('Vul geldige getallen in');
-      invSet(k, Math.round((uu + mm/60)*100)/100); closeSheet(); renderVandaag(); toast('Aangepast. Vergeet niet op Dag opslaan te tikken.'); };
+      invSet(k, Math.round((uu + mm/60)*100)/100); closeSheet(); renderVandaag(); planAuto(); };
   });
-  const markeer = () => { const b = $('#vOpslaan'); if (b && !b.disabled) b.textContent = viesDag() ? 'Dag opslaan •' : 'Dag opslaan'; };
-  $('#vNot').oninput = e => { inv.notitie = e.target.value; markeer(); };
-  if ($('#vVerwerp')) $('#vVerwerp').onclick = () => { laadInv(); opslag.weg(CONCEPT_KEY); renderVandaag(); toast('Wijzigingen verworpen'); };
+  $('#vNot').oninput = e => { inv.notitie = e.target.value; planAuto(); };
+  $('#vStatus').onclick = () => { if (autoStatus === 'fout') nuOpslaan(); };
   const slaapBij = () => {   // alleen de regel eronder bijwerken, zodat je niet uit het veld springt
     const ok = t => /^\d{2}:\d{2}$/.test(t);
     inv.bedtijd = ok($('#vBed').value) ? $('#vBed').value : ''; inv.opstaan = ok($('#vOp').value) ? $('#vOp').value : '';
     if (inv.bedtijd && inv.opstaan) inv.slaap = slaapUren(inv.bedtijd, inv.opstaan);
     $('#vSlaap').textContent = inv.bedtijd && inv.opstaan ? '= ' + uMin(inv.slaap) + ' slaap' : 'Vul beide tijden in, dan rekent de app je slaap uit.';
-    markeer();
+    planAuto();
   };
   $('#vBed').oninput = slaapBij; $('#vOp').oninput = slaapBij;
-  $('#vOpslaan').onclick = () => {
-    if (opslaanBezig) return;
-    const btn = $('#vOpslaan'); btn.disabled = true; btn.textContent = 'Opslaan…';
-    opslaanBezig = (async () => {
-      try {
-        D = await api('bewaarDag', dagPayload());
-        laadInv(); opslag.weg(CONCEPT_KEY); toast('Dag opgeslagen ✓');
-      } catch(e){}
-    })().finally(() => { opslaanBezig = null; if (!wachtend) render(); });
-  };
 }
 
 // ================= DEADLINES =================
@@ -1570,10 +1559,16 @@ function inhalen(){ if (uitgesteld && !bezig()) { uitgesteld = false; verversInv
 document.addEventListener('focusout', () => setTimeout(inhalen, 150));
 /** Weggaan van een dag/week met niet-opgeslagen wijzigingen: eerst vragen. */
 let opslaanBezig = null, wachtend = false;   // loopt er een opslag? dan eerst daarop wachten
-function verlaat(actie, annuleer){
+function verlaat(actie, annuleer, naFout){
   if (opslaanBezig) {
     wachtend = true; toast('Even wachten, wordt opgeslagen…');
-    opslaanBezig.then(() => { wachtend = false; verlaat(actie, annuleer); });
+    opslaanBezig.then(() => { wachtend = false; verlaat(actie, annuleer, naFout); });
+    return;
+  }
+  // dag gewijzigd: niet vragen, gewoon meteen opslaan. Lukt dat niet, dan alsnog de vraag hieronder.
+  if (viesDag() && !naFout) {
+    wachtend = true;
+    nuOpslaan().then(ok => { wachtend = false; verlaat(actie, annuleer, !ok); });
     return;
   }
   const soort = viesDag() ? 'dag' : viesRefl() ? 'refl' : null;
@@ -1602,7 +1597,11 @@ function verlaat(actie, annuleer){
 }
 // App sluiten of naar de achtergrond: niet-opgeslagen dag bewaren als concept (op de telefoon zie je geen waarschuwing)
 function bewaarConcept(){ if (viesDag()) opslag.set(CONCEPT_KEY, {inv}); }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') bewaarConcept(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden') return;
+  bewaarConcept();                    // eerst lokaal bewaren (vangnet als de app meteen wordt afgesloten)
+  if (viesDag()) nuOpslaan();         // en meteen proberen op te slaan, niet wachten op de timer
+});
 window.addEventListener('pagehide', bewaarConcept);
 window.addEventListener('beforeunload', e => { bewaarConcept(); if (viesDag() || viesRefl()) { e.preventDefault(); e.returnValue = ''; } });
 /** Bij openen: was er nog een concept? Dan terugzetten zodat je kunt opslaan of verwerpen. */
@@ -1612,7 +1611,46 @@ function herstelConcept(){
   if (!D.vakken || JSON.stringify(c.inv) === JSON.stringify(opgeslagenInv(c.inv.dag))) { opslag.weg(CONCEPT_KEY); return false; }
   if (viesDag()) return false;                       // je bent al iets anders aan het invullen
   dag = c.inv.dag; inv = c.inv; invBasis = JSON.stringify(opgeslagenInv(dag)); view = 'vandaag'; render();
-  toast('Niet-opgeslagen wijzigingen teruggezet'); return true;
+  toast('Niet-opgeslagen wijzigingen teruggezet, worden nu opgeslagen'); planAuto(); return true;
+}
+
+// ================= AUTOMATISCH OPSLAAN (Vandaag) =================
+// Na elke wijziging wachten we even (debounce): tik je binnen AUTO_MS nog iets, dan begint het wachten opnieuw.
+// Zo worden tien tikken op + één verzoek naar de server in plaats van tien.
+const AUTO_MS = 2500;
+let autoTimer = null, autoStatus = '';
+const STATUS_TEKST = { wacht: '· slaat zo op', bezig: '· opslaan…', ok: '· opgeslagen ✓',
+                       offline: '· offline bewaard', fout: '· niet opgeslagen, tik om opnieuw' };
+function toonStatus(s){
+  autoStatus = s;
+  const el = $('#vStatus');
+  if (el) { el.textContent = STATUS_TEKST[s] || ''; el.className = 'sub autostatus ' + s; }
+}
+/** Na elke wijziging aanroepen: start (of herstart) het wachten. */
+function planAuto(){
+  clearTimeout(autoTimer);
+  if (!viesDag()) { if (autoStatus === 'wacht') toonStatus(''); return; }
+  toonStatus('wacht');
+  autoTimer = setTimeout(nuOpslaan, AUTO_MS);
+}
+/** Meteen opslaan. Geeft een Promise die true (gelukt of offline bewaard) of false (fout) oplevert. */
+function nuOpslaan(){
+  clearTimeout(autoTimer);
+  if (opslaanBezig) return opslaanBezig.then(() => viesDag() ? nuOpslaan() : true);   // één verzoek tegelijk
+  if (!viesDag()) return Promise.resolve(true);
+  const verstuurd = JSON.stringify(inv), welkeDag = inv.dag;
+  toonStatus('bezig');
+  opslaanBezig = api('bewaarDag', dagPayload()).then(d => {
+    D = d;
+    if (inv && inv.dag === welkeDag) {
+      if (JSON.stringify(inv) === verstuurd) { laadInv(); opslag.weg(CONCEPT_KEY); }
+      else invBasis = verstuurd;      // je tikte verder tijdens het opslaan: dat gaat in de volgende ronde mee
+    }
+    toonStatus((opslag.get(WACHT_KEY) || []).length ? 'offline' : 'ok');
+    return true;
+  }).catch(() => { bewaarConcept(); toonStatus('fout'); return false; })   // niet steeds opnieuw proberen: wacht op een tik of een nieuwe wijziging
+    .then(ok => { opslaanBezig = null; if (ok && viesDag()) planAuto(); if (!wachtend) achtergrondRender(); return ok; });
+  return opslaanBezig;
 }
 
 // ================= start =================
