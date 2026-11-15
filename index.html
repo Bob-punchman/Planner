@@ -600,12 +600,15 @@ function renderVandaag(){
     markeer();
   };
   $('#vBed').oninput = slaapBij; $('#vOp').oninput = slaapBij;
-  $('#vOpslaan').onclick = async () => {
+  $('#vOpslaan').onclick = () => {
+    if (opslaanBezig) return;
     const btn = $('#vOpslaan'); btn.disabled = true; btn.textContent = 'Opslaan…';
-    try {
-      D = await api('bewaarDag', dagPayload());
-      laadInv(); opslag.weg(CONCEPT_KEY); render(); toast('Dag opgeslagen ✓');
-    } catch(e){ render(); }
+    opslaanBezig = (async () => {
+      try {
+        D = await api('bewaarDag', dagPayload());
+        laadInv(); opslag.weg(CONCEPT_KEY); toast('Dag opgeslagen ✓');
+      } catch(e){}
+    })().finally(() => { opslaanBezig = null; if (!wachtend) render(); });
   };
 }
 
@@ -990,10 +993,12 @@ function renderWeek(){
       $('#kTekst').select(); $('#kDicht').onclick = closeSheet;
     }
   };
-  $('#rOpslaan').onclick = async () => {
+  $('#rOpslaan').onclick = () => {
+    if (opslaanBezig) return;
     const btn = $('#rOpslaan'); btn.disabled = true; btn.textContent = 'Opslaan…';
-    try { D = await api('bewaarReflectie', refl); refl = null; render(); toast('Reflectie opgeslagen ✓'); }
-    catch(e){ render(); }
+    opslaanBezig = (async () => {
+      try { D = await api('bewaarReflectie', refl); refl = null; toast('Reflectie opgeslagen ✓'); } catch(e){}
+    })().finally(() => { opslaanBezig = null; if (!wachtend) render(); });
   };
 }
 
@@ -1416,7 +1421,13 @@ function achtergrondRender(){ if (bezig()) { uitgesteld = true; return; } uitges
 function inhalen(){ if (uitgesteld && !bezig()) { uitgesteld = false; verversInv(); render(); } }
 document.addEventListener('focusout', () => setTimeout(inhalen, 150));
 /** Weggaan van een dag/week met niet-opgeslagen wijzigingen: eerst vragen. */
+let opslaanBezig = null, wachtend = false;   // loopt er een opslag? dan eerst daarop wachten
 function verlaat(actie, annuleer){
+  if (opslaanBezig) {
+    wachtend = true; toast('Even wachten, wordt opgeslagen…');
+    opslaanBezig.then(() => { wachtend = false; verlaat(actie, annuleer); });
+    return;
+  }
   const soort = viesDag() ? 'dag' : viesRefl() ? 'refl' : null;
   if (!soort) return actie();
   const bg = document.createElement('div'); bg.className = 'kiezer-bg vraag-bg';
