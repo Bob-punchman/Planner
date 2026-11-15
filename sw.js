@@ -1,5 +1,5 @@
 // Planner – service worker: de app zelf werkt ook zonder internet (je gegevens komen uit de laatste stand).
-const VERSIE = 'planner-v1';
+const VERSIE = 'planner-v2';
 const BESTANDEN = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -14,6 +14,8 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || url.origin !== location.origin) return; // Google-verkeer nooit cachen
   // eerst internet (zodat updates meteen binnenkomen), anders de bewaarde versie
   e.respondWith(fetch(e.request).then(r => {
-    const kopie = r.clone(); caches.open(VERSIE).then(c => c.put(e.request, kopie)); return r;
+    // alleen goede antwoorden bewaren: een foutpagina van GitHub mag de werkende versie niet overschrijven
+    if (r.ok) { const kopie = r.clone(); caches.open(VERSIE).then(c => c.put(e.request, kopie)); }
+    return r;
   }).catch(() => caches.match(e.request).then(r => r || caches.match('index.html'))));
 });
