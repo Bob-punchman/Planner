@@ -156,6 +156,8 @@
   .legenda i.stip{height:0;border-top:2px dashed var(--muted);border-radius:0;width:12px}
   .tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;padding:6px 9px;border-radius:8px;
     white-space:nowrap;transform:translate(-50%,-100%);display:none;z-index:3;line-height:1.35}
+  input.tijd{font-variant-numeric:tabular-nums;text-align:center}
+  input.tijd.fout{border-color:var(--warn);background:var(--warn-soft)}
   .x{border:0;background:none;color:var(--warn);font-size:20px;padding:4px 8px;cursor:pointer}
 </style>
 <script>
@@ -539,7 +541,8 @@ function renderVandaag(){
   });
   $('#vNot').oninput = e => inv.notitie = e.target.value;
   const slaapBij = () => {   // alleen de regel eronder bijwerken, zodat je niet uit het veld springt
-    inv.bedtijd = $('#vBed').value; inv.opstaan = $('#vOp').value;
+    const ok = t => /^\d{2}:\d{2}$/.test(t);
+    inv.bedtijd = ok($('#vBed').value) ? $('#vBed').value : ''; inv.opstaan = ok($('#vOp').value) ? $('#vOp').value : '';
     if (inv.bedtijd && inv.opstaan) inv.slaap = slaapUren(inv.bedtijd, inv.opstaan);
     $('#vSlaap').textContent = inv.bedtijd && inv.opstaan ? '= ' + u(inv.slaap) + ' u slaap' : 'Vul beide tijden in, dan rekent de app je slaap uit.';
   };
@@ -690,7 +693,7 @@ function openDienst(x){
   const huidig = () => ({datum:$('#sDatum').value, begin:$('#sBegin').value, eind:$('#sEind').value, pauze:Number($('#sPauze').value)||0});
   const info = () => {
     const d = huidig();
-    if (!d.begin || !d.eind || !d.datum) { $('#sInfo').innerHTML = '<div class="note">Vul datum, begin- en eindtijd in.</div>'; return; }
+    if (!/^\d{2}:\d{2}$/.test(d.begin) || !/^\d{2}:\d{2}$/.test(d.eind) || !d.datum) { $('#sInfo').innerHTML = '<div class="note">Vul datum, begin- en eindtijd in (uu:mm).</div>'; return; }
     if (pauzeAuto) { d.pauze = stdPauze(brutoU(d)); $('#sPauze').value = d.pauze; }
     const ym = d.datum.slice(0,7), mi = maandInfo(ym);
     const zonder = !nieuw && x.datum.startsWith(ym) ? nettoU(x) : 0;
@@ -713,7 +716,7 @@ function openDienst(x){
     D = await api('verwijderDienst', x.id); closeSheet(); render(); toast('Dienst verwijderd'); };
   $('#sOk').onclick = async () => {
     const d = huidig();
-    if (!d.datum || !d.begin || !d.eind) return toast('Vul datum, begin- en eindtijd in');
+    if (!d.datum || !/^\d{2}:\d{2}$/.test(d.begin) || !/^\d{2}:\d{2}$/.test(d.eind)) return toast('Vul datum, begin- en eindtijd in (uu:mm)');
     const btn = $('#sOk'); btn.disabled = true; btn.textContent = 'Opslaan…';
     try {
       D = await api('bewaarDienst', Object.assign({id:x.id, waar:$('#sWaar').value.trim(), opmerking:$('#sOpm').value.trim()}, d, st));
@@ -1075,6 +1078,37 @@ function openInstellingen(){
     D = await api('bewaarTentamen', t); render(); openInstellingen(); toast('Tentamen toegevoegd ✓');
   };
 }
+
+// ================= 24-UURS TIJDVELDEN =================
+// <input type="time"> volgt de taal van het apparaat (soms AM/PM). Daarom maken we er tekstvelden van
+// die altijd 24 uur gebruiken: typ 2340, 23:40 of 9 (= 09:00).
+function normTijd(v){
+  const s = String(v || '').trim(); if (!s) return '';
+  let h, m;
+  const d = s.match(/^(\d{1,2})[:.,h ]?(\d{2})?$/);
+  if (d) { h = +d[1]; m = d[2] ? +d[2] : 0; }
+  else if (/^\d{3}$/.test(s)) { h = +s[0]; m = +s.slice(1); }
+  else return null;
+  if (s.length === 3 && /^\d{3}$/.test(s)) { h = +s[0]; m = +s.slice(1); }
+  if (h > 23 || m > 59) return null;
+  return pad(h) + ':' + pad(m);
+}
+function maakTijdveld(el){
+  el.type = 'text'; el.classList.add('tijd');
+  el.setAttribute('inputmode', 'numeric'); el.setAttribute('maxlength', '5'); el.setAttribute('placeholder', 'uu:mm');
+  el.setAttribute('autocomplete', 'off');
+  el.addEventListener('input', () => {
+    el.classList.remove('fout');
+    if (/^\d{4}$/.test(el.value)) { el.value = el.value.slice(0,2) + ':' + el.value.slice(2); el.dispatchEvent(new Event('input')); }  // 2340 → 23:40
+  });
+  el.addEventListener('blur', () => {
+    const n = normTijd(el.value);
+    if (n === null) { el.classList.add('fout'); toast('Ongeldige tijd: gebruik uu:mm, bijv. 23:40'); el.value = ''; }
+    else if (n !== el.value) { el.value = n; el.dispatchEvent(new Event('input')); }
+  });
+}
+new MutationObserver(() => document.querySelectorAll('input[type="time"]').forEach(maakTijdveld))
+  .observe(document.body, { childList: true, subtree: true });
 
 // ================= THEMA =================
 function pasThemaToe(){
