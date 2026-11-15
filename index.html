@@ -257,8 +257,9 @@ function lokaal(fn, a){             // laat de wijziging meteen zien, ook zonder
   const d = JSON.parse(JSON.stringify(D));
   if (fn === 'bewaarDag') {
     d.dagen = d.dagen.filter(x => x.datum !== a.datum);
-    if (Number(a.gamen) || a.sport || a.notitie || Number(a.coderen) || Number(a.slaap))
-      d.dagen.push({datum:a.datum, gamen:Number(a.gamen)||0, sport:!!a.sport, notitie:a.notitie||'', coderen:Number(a.coderen)||0, slaap:Number(a.slaap)||0});
+    if (Number(a.gamen) || a.sport || a.notitie || Number(a.coderen) || Number(a.slaap) || a.bedtijd || a.opstaan)
+      d.dagen.push({datum:a.datum, gamen:Number(a.gamen)||0, sport:!!a.sport, notitie:a.notitie||'', coderen:Number(a.coderen)||0,
+                    slaap:Number(a.slaap)||0, bedtijd:a.bedtijd||'', opstaan:a.opstaan||''});
     const vakken = Object.keys(a.studie || {});
     d.studie = d.studie.filter(x => !(x.datum === a.datum && vakken.includes(x.vak)));
     vakken.forEach(v => { if (Number(a.studie[v]) > 0) d.studie.push({id:a.datum+'|'+v, datum:a.datum, vak:v, uren:Number(a.studie[v])}); });
@@ -347,7 +348,7 @@ function weekStats(ma){
   const dagen = [...Array(7)].map((_,i) => {
     const s = plus(ma,i), r = D.dagen.find(x=>x.datum===s) || {}, ds = dienstenOp(s), st = studieOp(s);
     Object.keys(st).forEach(v => perVak[v] = (perVak[v]||0) + st[v]);
-    return { s, studie:Object.values(st).reduce((a,b)=>a+b,0), gamen:r.gamen||0, sport:!!r.sport, coderen:r.coderen||0, slaap:r.slaap||0,
+    return { s, studie:Object.values(st).reduce((a,b)=>a+b,0), gamen:r.gamen||0, sport:!!r.sport, coderen:r.coderen||0, slaap:r.slaap||0, bedtijd:r.bedtijd||'',
              werk: ds.reduce((t,x)=>t+nettoU(x),0),
              les: w && w.lessen ? w.lessen.filter(l=>l.datum===s).reduce((t,l)=>t+l.uren,0) : null,
              laat: ds.some(isLaat) };
@@ -359,6 +360,7 @@ function weekStats(ma){
   const slaapDagen = dagen.filter(d => d.slaap > 0);
   return { dagen, perVak, studie, gamen, verdiend, gameOver: verdiend - gamen, modus, doel, coderen: som('coderen'),
            slaapGem: slaapDagen.length ? slaapDagen.reduce((t,d)=>t+d.slaap,0) / slaapDagen.length : null, slaapN: slaapDagen.length,
+           bedGem: (b => b.length ? b.reduce((t,x)=>t+bedUur(x.bedtijd),0) / b.length : null)(dagen.filter(d => d.bedtijd)),
            sport:dagen.filter(d=>d.sport).length, werk:som('werk'),
            les: w && w.lessen ? som('les') : null, laat: dagen.filter(d=>d.laat).length };
 }
@@ -427,10 +429,20 @@ let dag = vandaag(), inv = null;
 function laadInv(){
   const r = D.dagen.find(x=>x.datum===dag);
   const studie = {}; D.vakken.forEach(v => studie[v.vak] = 0); Object.assign(studie, studieOp(dag));
-  inv = { dag, studie, gamen:r?r.gamen:0, sport:r?r.sport:false, notitie:r?(r.notitie||''):'', coderen:r?(r.coderen||0):0, slaap:r?(r.slaap||0):0 };
+  inv = { dag, studie, gamen:r?r.gamen:0, sport:r?r.sport:false, notitie:r?(r.notitie||''):'', coderen:r?(r.coderen||0):0, slaap:r?(r.slaap||0):0,
+          bedtijd:r?(r.bedtijd||''):'', opstaan:r?(r.opstaan||''):'' };
 }
 const vakNamen = () => Object.keys(inv.studie);
-const LOS = ['gamen', 'coderen', 'slaap'];   // velden die niet bij een vak horen
+const LOS = ['gamen', 'coderen', 'slaap'];
+/** Slaapduur uit bedtijd en opstaan (bedtijd mag vóór of na middernacht zijn). */
+function slaapUren(bed, op){
+  if (!bed || !op) return 0;
+  let m = mins(op) - mins(bed); if (m <= 0) m += 1440;
+  return Math.round(m / 60 * 100) / 100;
+}
+/** Bedtijd als getal voor gemiddelden en grafieken: na middernacht telt door (00:30 → 24,5). */
+const bedUur = t => { const m = mins(t); return (m < 12*60 ? m + 1440 : m) / 60; };
+const uurTekst = h => { const m = Math.round(h*60) % 1440; return pad(Math.floor(m/60)) + ':' + pad(m%60); };   // velden die niet bij een vak horen
 const invGet = k => LOS.includes(k) ? inv[k] : inv.studie[vakNamen()[+k.slice(1)]];
 const invSet = (k,v) => { if (LOS.includes(k)) inv[k] = v; else inv.studie[vakNamen()[+k.slice(1)]] = v; };
 function stepper(k, label){
@@ -480,7 +492,11 @@ function renderVandaag(){
       ${vakNamen().map((v,n) => stepper('s'+n, esc(v))).join('') || '<div class="note">Voeg vakken toe bij ⚙︎.</div>'}
       ${stepper('gamen','Gamen')}
       ${stepper('coderen','Coderen <span class="sub">(leerlijn)</span>')}
-      ${stepper('slaap','Slaap afgelopen nacht')}
+      <div class="row line"><div class="grow">Naar bed <span class="sub">(gisteravond)</span></div>
+        <input type="time" id="vBed" value="${inv.bedtijd}" style="width:150px"></div>
+      <div class="row line"><div class="grow">Wakker geworden</div>
+        <input type="time" id="vOp" value="${inv.opstaan}" style="width:150px"></div>
+      <div class="note" id="vSlaap">${inv.bedtijd && inv.opstaan ? '= ' + u(inv.slaap) + ' u slaap' : inv.slaap ? u(inv.slaap) + ' u slaap (zonder tijden ingevuld)' : 'Vul beide tijden in, dan rekent de app je slaap uit.'}</div>
       <div class="row line"><div class="grow">Sportschool</div>
         <div class="seg small" id="vSport"><button data-v="0" class="${!inv.sport?'on':''}">Nee</button><button data-v="1" class="${inv.sport?'on':''}">Ja</button></div></div>
       <div class="note">Tik op een getal om het precies in te typen. Opslaan overschrijft deze dag; je kunt altijd terug om iets te wijzigen.</div>
@@ -522,10 +538,16 @@ function renderVandaag(){
       invSet(k, Math.round((uu + mm/60)*100)/100); closeSheet(); renderVandaag(); toast('Aangepast. Vergeet niet op Dag opslaan te tikken.'); };
   });
   $('#vNot').oninput = e => inv.notitie = e.target.value;
+  const slaapBij = () => {   // alleen de regel eronder bijwerken, zodat je niet uit het veld springt
+    inv.bedtijd = $('#vBed').value; inv.opstaan = $('#vOp').value;
+    if (inv.bedtijd && inv.opstaan) inv.slaap = slaapUren(inv.bedtijd, inv.opstaan);
+    $('#vSlaap').textContent = inv.bedtijd && inv.opstaan ? '= ' + u(inv.slaap) + ' u slaap' : 'Vul beide tijden in, dan rekent de app je slaap uit.';
+  };
+  $('#vBed').oninput = slaapBij; $('#vOp').oninput = slaapBij;
   $('#vOpslaan').onclick = async () => {
     const btn = $('#vOpslaan'); btn.disabled = true; btn.textContent = 'Opslaan…';
     try {
-      D = await api('bewaarDag', {datum:dag, studie:inv.studie, gamen:inv.gamen, sport:inv.sport, notitie:inv.notitie, coderen:inv.coderen, slaap:inv.slaap});
+      D = await api('bewaarDag', {datum:dag, studie:inv.studie, gamen:inv.gamen, sport:inv.sport, notitie:inv.notitie, coderen:inv.coderen, slaap:inv.slaap, bedtijd:inv.bedtijd, opstaan:inv.opstaan});
       laadInv(); render(); toast('Dag opgeslagen ✓');
     } catch(e){ render(); }
   };
@@ -829,7 +851,7 @@ function weekTekst(ws){
     `Sportschool: ${ws.sport}× (doel ${i.sportDoel})`,
     `Gamen: ${u(ws.gamen)} u (verdiend ${u(ws.verdiend)} u)`,
     `Coderen (leerlijn): ${u(ws.coderen)} u (doel ${u(i.codeerDoel)})`,
-    ws.slaapGem !== null ? `Slaap: gemiddeld ${u(Math.round(ws.slaapGem*10)/10)} u per nacht (${ws.slaapN} nachten ingevuld)` : '',
+    ws.slaapGem !== null ? `Slaap: gemiddeld ${u(Math.round(ws.slaapGem*10)/10)} u per nacht (${ws.slaapN} nachten ingevuld)` + (ws.bedGem!==null ? `, gemiddeld naar bed om ${uurTekst(ws.bedGem)}` : '') : '',
     `Sjiek: ${u(ws.werk)} u deze week · ${ymNaam(wk.slice(0,7))} totaal ${u(mi.tot)} u (doel ${mi.doel})`,
     ws.les!==null ? `Lessen: ${u(ws.les)} u` : '',
     `Wat ging goed: ${refl.goed || '-'}`,
@@ -873,6 +895,7 @@ function renderWeek(){
       ${meter('Gamen (van verdiend)', ws.gamen, Math.max(ws.verdiend, 0.01), u(ws.gamen)+' / '+u(ws.verdiend)+' u', true)}
       ${meter('Coderen', ws.coderen, i.codeerDoel, u(ws.coderen)+' / '+u(i.codeerDoel)+' u')}
       <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${ws.slaapGem===null?'–':u(Math.round(ws.slaapGem*10)/10)+' u'}</div></div>
+      <div class="row line"><div class="grow">Gemiddeld naar bed</div><div class="name">${ws.bedGem===null?'–':uurTekst(ws.bedGem)}</div></div>
       <div class="row line"><div class="grow">Sjiek</div><div class="name">${u(ws.werk)} u</div></div>
       <div class="row line"><div class="grow">Lessen (agenda)</div><div class="name">${ws.les===null?'…':u(ws.les)+' u'}</div></div>
     </div>
@@ -1117,7 +1140,7 @@ function lijn(id, o){
   const vals = o.waarden.filter(v => v != null);
   const lo = Math.max(0, Math.floor(Math.min(...vals, ...(o.refs||[]).map(r=>r.waarde)) - 1)), hi = Math.ceil(Math.max(...vals, ...(o.refs||[]).map(r=>r.waarde)) + 0.5);
   const y = v => T + ph - (v-lo)/(hi-lo)*ph, x = i => L + (n === 1 ? pw/2 : i*pw/(n-1));
-  let svg = [lo, (lo+hi)/2, hi].map(v => `<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L-5}" y="${y(v)+4}" text-anchor="end">${u(Math.round(v*10)/10)}</text>`).join('');
+  let svg = [lo, (lo+hi)/2, hi].map(v => `<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L-5}" y="${y(v)+4}" text-anchor="end">${o.fmt ? o.fmt(v) : u(Math.round(v*10)/10)}</text>`).join('');
   (o.refs||[]).forEach(r => svg += `<line class="ref" x1="${L}" x2="${W-R}" y1="${y(r.waarde)}" y2="${y(r.waarde)}"/>`);
   let pad = '', vorige = false;
   o.waarden.forEach((v, i) => { if (v == null) { vorige = false; return; } pad += (vorige ? 'L' : 'M') + x(i) + ',' + y(v); vorige = true; });
@@ -1125,12 +1148,13 @@ function lijn(id, o){
   o.waarden.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="${o.kleur}" stroke="var(--card)" stroke-width="2"/>`; });
   o.labels.forEach((lab, i) => { if (i % 2 === 0 || i === n-1) svg += `<text class="ax" x="${x(i)}" y="${H-6}" text-anchor="middle">${esc(lab)}</text>`;
     svg += `<rect data-i="${i}" x="${x(i) - pw/(2*Math.max(1,n-1))}" y="${T}" width="${pw/Math.max(1,n-1)}" height="${ph}" fill="transparent"/>`; });
-  GRAF[id] = { n, tip: i => `<b>${esc(o.labels[i])}</b><br>${o.waarden[i]==null ? 'niet ingevuld' : u(o.waarden[i]) + ' ' + (o.eenheid||'')}`,
+  const toon = v => o.fmt ? o.fmt(v) : u(v) + ' ' + (o.eenheid||'');
+  GRAF[id] = { n, tip: i => `<b>${esc(o.labels[i])}</b><br>${o.waarden[i]==null ? 'niet ingevuld' : toon(o.waarden[i])}`,
                x: i => x(i)/W, y: i => (o.waarden[i]==null ? T+ph/2 : y(o.waarden[i]))/H };
   return `<div class="card grafiek" data-g="${id}"><div class="gt">${esc(o.titel)}</div>${o.sub?`<div class="gs">${esc(o.sub)}</div>`:''}
-    ${(o.refs||[]).length ? legenda([{naam:'per nacht', kleur:o.kleur}, {naam:o.refs.map(r=>r.label).join(' / '), soort:'stip'}]) : ''}
+    ${(o.refs||[]).length ? legenda([{naam:o.reeks||'per nacht', kleur:o.kleur}, {naam:o.refs.map(r=>r.label).join(' / '), soort:'stip'}]) : ''}
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.titel)}">${svg}</svg><div class="tip"></div>
-    ${tabel(['', o.eenheid || ''], o.labels.map((l,i) => [esc(l), o.waarden[i]==null?'–':u(o.waarden[i])]))}</div>`;
+    ${tabel(['', o.eenheid || ''], o.labels.map((l,i) => [esc(l), o.waarden[i]==null?'–':(o.fmt ? o.fmt(o.waarden[i]) : u(o.waarden[i]))]))}</div>`;
 }
 /** Tik of beweeg over een staaf/punt: waarde tonen. */
 function grafiekTips(){
@@ -1172,6 +1196,7 @@ function renderTrends(){
   // slaap: laatste 14 nachten
   const nachten = []; for (let k = 13; k >= 0; k--) nachten.push(plus(nu, -k));
   const slaap = nachten.map(s => { const r = D.dagen.find(x => x.datum === s); return r && r.slaap ? r.slaap : null; });
+  const bed = nachten.map(s => { const r = D.dagen.find(x => x.datum === s); return r && r.bedtijd ? bedUur(r.bedtijd) : null; });
   const leeg = !wc.some(w => w.studie || w.gamen || w.sport || w.coderen);
   $('#main').innerHTML = `
     <div class="seg" style="margin:10px 0">${[4,8,12].map(n => `<button data-tw="${n}" class="${n===trendWeken?'on':''}">${n} weken</button>`).join('')}</div>
@@ -1186,7 +1211,9 @@ function renderTrends(){
        series: [{ naam: 'uren', kleur: kleur(6), waarden: wc.map(w => w.coderen) }], refs: [{ waarde: i.codeerDoel, label: 'doel ' + u(i.codeerDoel) + ' u' }] })}
     ${slaap.some(v => v != null) ? lijn('slaap', { titel: 'Slaap per nacht', sub: 'Laatste 14 nachten', labels: nachten.map(s => String(dt(s).getDate())),
        waarden: slaap, eenheid: 'u', kleur: kleur(0), refs: [{ waarde: i.slaapDoel, label: 'doel ' + u(i.slaapDoel) + ' u' }] })
-       : '<div class="card"><div class="gt">Slaap per nacht</div><div class="note">Nog niets ingevuld. Vul bij Vandaag je slaap van afgelopen nacht in.</div></div>'}
+       : '<div class="card"><div class="gt">Slaap per nacht</div><div class="note">Nog niets ingevuld. Vul bij Vandaag in hoe laat je naar bed ging en wakker werd.</div></div>'}
+    ${bed.some(v => v != null) ? lijn('bed', { titel: 'Hoe laat naar bed', sub: 'Laatste 14 nachten (datum = de ochtend erna)', labels: nachten.map(s => String(dt(s).getDate())),
+       waarden: bed, kleur: kleur(6), fmt: uurTekst }) : ''}
     ${staven('sjiek', { titel: 'Sjiek-uren per maand', sub: 'Netto, na pauze', labels: mnd.map(m => MAANDEN[Number(m.slice(5))-1]), eenheid: 'u',
        series: [{ naam: 'gewerkt', kleur: kleur(0), waarden: mi.map(x => x.gew) }, { naam: 'gepland', kleur: ZACHT[donker()?'donker':'licht'], waarden: mi.map(x => x.tot - x.gew) }],
        refs: [{ waarde: i.grens1, label: String(i.grens1), inline: true }, { waarde: i.grens2, label: String(i.grens2), inline: true }] })}`;
