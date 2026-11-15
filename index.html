@@ -208,7 +208,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.15-2';
+const APP_VERSIE = '2026.11.15-3';
 const SERVER_MIN = '2026.11.15';     // deze app verwacht minstens deze Code.gs-versie
 
 // ================= data & helpers =================
@@ -279,7 +279,7 @@ function roep(fn, args, cfg){
     .then(r => r.json()).then(j => { if (!j.ok) throw new Error(j.fout || 'Onbekende fout'); return j.data; });
 }
 // Offline: deze schrijfacties worden bewaard en later verstuurd als er geen verbinding is.
-const OFFLINE_FN = ['bewaarDag', 'bewaarReflectie', 'bewaarDeadline'], WACHT_KEY = 'planner-wachtrij';
+const OFFLINE_FN = ['bewaarDag', 'bewaarReflectie', 'bewaarDeadline', 'bewaarDienst'], WACHT_KEY = 'planner-wachtrij';
 const isNetwerkFout = e => /Failed to fetch|NetworkError|Load failed|network/i.test(e && e.message || String(e));
 function lokaal(fn, a){             // laat de wijziging meteen zien, ook zonder verbinding
   const d = JSON.parse(JSON.stringify(D));
@@ -296,6 +296,10 @@ function lokaal(fn, a){             // laat de wijziging meteen zien, ook zonder
   } else if (fn === 'bewaarDeadline') {
     const x = Object.assign({}, a, {id: a.id || 'nieuw-' + Date.now()});
     d.deadlines = d.deadlines.filter(y => y.id !== x.id).concat([x]);
+  } else if (fn === 'bewaarDienst') {   // bijv. "Gewerkt?" afvinken op locatie zonder bereik
+    const oud = d.diensten.find(y => y.id === a.id) || {};
+    const x = Object.assign({}, oud, a, {pauze: Number(a.pauze) || 0, toeslag: Number(a.toeslag) || 100, status: a.status || 'gepland'});
+    d.diensten = d.diensten.filter(y => y.id !== x.id).concat([x]);
   }
   return d;
 }
@@ -326,6 +330,10 @@ function api(fn, ...args){
   });
 }
 function inWachtrij(fn, args){
+  // nieuw item zonder id: nu al een tijdelijk id geven, dat ook naar de server gaat.
+  // Anders krijgt hij lokaal een ander id dan op de server, en komt hij na nog een wijziging dubbel in de sheet.
+  if ((fn === 'bewaarDeadline' || fn === 'bewaarDienst') && args[0] && !args[0].id)
+    args = [Object.assign({}, args[0], {id: 'nieuw-' + Date.now()})].concat(args.slice(1));
   const rij = opslag.get(WACHT_KEY) || []; rij.push({fn, args}); opslag.set(WACHT_KEY, rij);
   const d = lokaal(fn, args[0]); opslag.set(CACHE_KEY, d);
   setTimeout(() => toast('Offline bewaard. Wordt verstuurd zodra je verbinding hebt.'), 2900);
