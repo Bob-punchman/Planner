@@ -156,7 +156,25 @@
   .legenda i.stip{height:0;border-top:2px dashed var(--muted);border-radius:0;width:12px}
   .tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;padding:6px 9px;border-radius:8px;
     white-space:nowrap;transform:translate(-50%,-100%);display:none;z-index:3;line-height:1.35}
-  input.tijd{font-variant-numeric:tabular-nums;text-align:center}
+  input.tijd{font-variant-numeric:tabular-nums;text-align:center;cursor:pointer}
+  input.tijd::placeholder, input.datum::placeholder{color:var(--muted);opacity:.7;letter-spacing:.08em}
+  .kiezer-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:40;display:flex;align-items:flex-end}
+  .kiezer{background:var(--bg);width:100%;max-width:680px;margin:0 auto;border-radius:20px 20px 0 0;
+    padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+  .kiezer .kop{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+  .kiezer .groot{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .kiezer .groot span{display:inline-block;min-width:1.25em;text-align:center;border-bottom:3px solid transparent;cursor:pointer}
+  .kiezer .groot span.leeg{color:var(--muted);opacity:.5}
+  .kiezer .groot span.actief{border-bottom-color:var(--accent)}
+  .kiezer .rooster.m60{grid-template-columns:repeat(10,1fr);gap:4px}
+  .kiezer .rooster.m60 button{padding:8px 0;font-size:14px}
+  .kiezer .rooster{display:grid;gap:6px;margin:8px 0 12px}
+  .kiezer .rooster.u{grid-template-columns:repeat(6,1fr)}
+  .kiezer .rooster.m{grid-template-columns:repeat(6,1fr)}
+  .kiezer .rooster button{border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:10px;padding:11px 0;
+    font:inherit;font-size:16px;font-variant-numeric:tabular-nums;cursor:pointer}
+  .kiezer .rooster button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+  .kiezer .lbl{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
   .datumveld{display:flex;gap:6px;align-items:stretch;position:relative;min-width:0}
   .datumveld input.datum{flex:1;min-width:0;font-variant-numeric:tabular-nums}
   .datumveld input.datum.fout{border-color:var(--warn);background:var(--warn-soft)}
@@ -449,6 +467,8 @@ function slaapUren(bed, op){
 }
 /** Bedtijd als getal voor gemiddelden en grafieken: na middernacht telt door (00:30 → 24,5). */
 const bedUur = t => { const m = mins(t); return (m < 12*60 ? m + 1440 : m) / 60; };
+/** 7,0333 → "7 u 2 min" (voor slaap leest dat beter dan decimalen) */
+const uMin = h => { const m = Math.round(h * 60); return Math.floor(m/60) + ' u' + (m % 60 ? ' ' + (m % 60) + ' min' : ''); };
 const uurTekst = h => { const m = Math.round(h*60) % 1440; return pad(Math.floor(m/60)) + ':' + pad(m%60); };   // velden die niet bij een vak horen
 const invGet = k => LOS.includes(k) ? inv[k] : inv.studie[vakNamen()[+k.slice(1)]];
 const invSet = (k,v) => { if (LOS.includes(k)) inv[k] = v; else inv.studie[vakNamen()[+k.slice(1)]] = v; };
@@ -503,7 +523,7 @@ function renderVandaag(){
         <input type="time" id="vBed" value="${inv.bedtijd}" style="width:150px"></div>
       <div class="row line"><div class="grow">Wakker geworden</div>
         <input type="time" id="vOp" value="${inv.opstaan}" style="width:150px"></div>
-      <div class="note" id="vSlaap">${inv.bedtijd && inv.opstaan ? '= ' + u(inv.slaap) + ' u slaap' : inv.slaap ? u(inv.slaap) + ' u slaap (zonder tijden ingevuld)' : 'Vul beide tijden in, dan rekent de app je slaap uit.'}</div>
+      <div class="note" id="vSlaap">${inv.bedtijd && inv.opstaan ? '= ' + uMin(inv.slaap) + ' slaap' : inv.slaap ? uMin(inv.slaap) + ' slaap (zonder tijden ingevuld)' : 'Vul beide tijden in, dan rekent de app je slaap uit.'}</div>
       <div class="row line"><div class="grow">Sportschool</div>
         <div class="seg small" id="vSport"><button data-v="0" class="${!inv.sport?'on':''}">Nee</button><button data-v="1" class="${inv.sport?'on':''}">Ja</button></div></div>
       <div class="note">Tik op een getal om het precies in te typen. Opslaan overschrijft deze dag; je kunt altijd terug om iets te wijzigen.</div>
@@ -514,7 +534,7 @@ function renderVandaag(){
       ${meter('Zelfstudie totaal', ws.studie, ws.doel.studie, u(ws.studie)+' / '+u(ws.doel.studie)+' u')}
       ${meter('Sportschool', ws.sport, i.sportDoel, ws.sport+' / '+i.sportDoel+'×')}
       ${meter('Coderen', ws.coderen, i.codeerDoel, u(ws.coderen)+' / '+u(i.codeerDoel)+' u')}
-      ${ws.slaapGem !== null ? `<div class="note">Slaap gemiddeld ${u(Math.round(ws.slaapGem*10)/10)} u per nacht (doel ${u(i.slaapDoel)} u)</div>` : ''}
+      ${ws.slaapGem !== null ? `<div class="note">Slaap gemiddeld ${uMin(ws.slaapGem)} per nacht (doel ${uMin(i.slaapDoel)})</div>` : ''}
       <div class="note">Sjiek deze week: ${u(ws.werk)} u${ws.les!==null?' · lessen: '+u(ws.les)+' u':''}</div>
     </div>`;
   $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="vOpslaan">Dag opslaan</button></div>`;
@@ -549,7 +569,7 @@ function renderVandaag(){
     const ok = t => /^\d{2}:\d{2}$/.test(t);
     inv.bedtijd = ok($('#vBed').value) ? $('#vBed').value : ''; inv.opstaan = ok($('#vOp').value) ? $('#vOp').value : '';
     if (inv.bedtijd && inv.opstaan) inv.slaap = slaapUren(inv.bedtijd, inv.opstaan);
-    $('#vSlaap').textContent = inv.bedtijd && inv.opstaan ? '= ' + u(inv.slaap) + ' u slaap' : 'Vul beide tijden in, dan rekent de app je slaap uit.';
+    $('#vSlaap').textContent = inv.bedtijd && inv.opstaan ? '= ' + uMin(inv.slaap) + ' slaap' : 'Vul beide tijden in, dan rekent de app je slaap uit.';
   };
   $('#vBed').oninput = slaapBij; $('#vOp').oninput = slaapBij;
   $('#vOpslaan').onclick = async () => {
@@ -859,7 +879,7 @@ function weekTekst(ws){
     `Sportschool: ${ws.sport}× (doel ${i.sportDoel})`,
     `Gamen: ${u(ws.gamen)} u (verdiend ${u(ws.verdiend)} u)`,
     `Coderen (leerlijn): ${u(ws.coderen)} u (doel ${u(i.codeerDoel)})`,
-    ws.slaapGem !== null ? `Slaap: gemiddeld ${u(Math.round(ws.slaapGem*10)/10)} u per nacht (${ws.slaapN} nachten ingevuld)` + (ws.bedGem!==null ? `, gemiddeld naar bed om ${uurTekst(ws.bedGem)}` : '') : '',
+    ws.slaapGem !== null ? `Slaap: gemiddeld ${uMin(ws.slaapGem)} per nacht (${ws.slaapN} nachten ingevuld)` + (ws.bedGem!==null ? `, gemiddeld naar bed om ${uurTekst(ws.bedGem)}` : '') : '',
     `Sjiek: ${u(ws.werk)} u deze week · ${ymNaam(wk.slice(0,7))} totaal ${u(mi.tot)} u (doel ${mi.doel})`,
     ws.les!==null ? `Lessen: ${u(ws.les)} u` : '',
     `Wat ging goed: ${refl.goed || '-'}`,
@@ -885,7 +905,7 @@ function renderWeek(){
     if (ws.gameOver < 0) sig.push(['alert', `${u(-ws.gameOver)} u meer gegamed dan verdiend.`]);
   }
   if (ws.slaapGem !== null && ws.slaapN >= 3 && ws.slaapGem < i.slaapDoel - 0.5)
-    sig.push(['infobox', `Je slaapt gemiddeld ${u(Math.round(ws.slaapGem*10)/10)} u, onder je doel van ${u(i.slaapDoel)} u.`]);
+    sig.push(['infobox', `Je slaapt gemiddeld ${uMin(ws.slaapGem)}, onder je doel van ${uMin(i.slaapDoel)}.`]);
   if (ws.werk > 20) sig.push(['alert', `${u(ws.werk)} u Sjiek deze week: check of studie, sport en rust niet in het gedrang komen.`]);
   if (ws.laat) sig.push(['infobox', `${ws.laat} late dienst${ws.laat>1?'en':''}: plan de ochtend erna rustig.`]);
   const dls = D.deadlines.filter(d => !d.klaar && d.datum >= wk && d.datum <= zo);
@@ -902,7 +922,7 @@ function renderWeek(){
       ${meter('Sportschool', ws.sport, i.sportDoel, ws.sport+' / '+i.sportDoel+'×')}
       ${meter('Gamen (van verdiend)', ws.gamen, Math.max(ws.verdiend, 0.01), u(ws.gamen)+' / '+u(ws.verdiend)+' u', true)}
       ${meter('Coderen', ws.coderen, i.codeerDoel, u(ws.coderen)+' / '+u(i.codeerDoel)+' u')}
-      <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${ws.slaapGem===null?'–':u(Math.round(ws.slaapGem*10)/10)+' u'}</div></div>
+      <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${ws.slaapGem===null?'–':uMin(ws.slaapGem)}</div></div>
       <div class="row line"><div class="grow">Gemiddeld naar bed</div><div class="name">${ws.bedGem===null?'–':uurTekst(ws.bedGem)}</div></div>
       <div class="row line"><div class="grow">Sjiek</div><div class="name">${u(ws.werk)} u</div></div>
       <div class="row line"><div class="grow">Lessen (agenda)</div><div class="name">${ws.les===null?'…':u(ws.les)+' u'}</div></div>
@@ -1100,7 +1120,12 @@ function normTijd(v){
 }
 function maakTijdveld(el){
   el.type = 'text'; el.classList.add('tijd');
-  el.setAttribute('inputmode', 'numeric'); el.setAttribute('maxlength', '5'); el.setAttribute('placeholder', 'uu:mm');
+  el.setAttribute('inputmode', 'numeric'); el.setAttribute('maxlength', '5'); el.setAttribute('placeholder', '––:––');
+  // telefoon/tablet: geen toetsenbord maar een kiezer (uur, dan minuten); op de pc kun je gewoon typen
+  if (window.matchMedia && matchMedia('(pointer: coarse)').matches) {
+    el.readOnly = true;
+    el.addEventListener('click', () => tijdKiezer(el));
+  }
   el.setAttribute('autocomplete', 'off');
   el.addEventListener('input', () => {
     el.classList.remove('fout');
@@ -1112,6 +1137,43 @@ function maakTijdveld(el){
     else if (n !== el.value) { el.value = n; el.dispatchEvent(new Event('input')); }
   });
 }
+/** Kiezer: eerst het uur, dan de minuten (per 5). Ligt boven een eventueel open venster. */
+function tijdKiezer(el){
+  const oud = normTijd(el.value) || '';
+  let uur = oud ? +oud.slice(0,2) : null, min = oud ? +oud.slice(3) : null, stap = 'uur', precies = min !== null && min % 5 !== 0;
+  const bg = document.createElement('div'); bg.className = 'kiezer-bg';
+  const teken = () => {
+    const mm = min === null ? null : Math.round(min/5)*5 % 60;
+    bg.innerHTML = `<div class="kiezer" role="dialog" aria-label="Tijd kiezen">
+      <div class="kop"><div class="groot"><span class="${stap==='uur'?'actief':''} ${uur===null?'leeg':''}" data-stap="uur">${uur===null?'--':pad(uur)}</span>:<span class="${stap==='min'?'actief':''} ${min===null?'leeg':''}" data-stap="min">${min===null?'--':pad(min)}</span></div>
+        <button class="btn ghost small" data-k="wis">Wissen</button></div>
+      <div class="row"><div class="lbl grow">${stap==='uur' ? 'Kies het uur' : 'Kies de minuten'}</div>
+        ${stap==='min' ? `<button class="btn ghost small" data-k="precies">${precies ? 'Per 5 minuten' : 'Op de minuut'}</button>` : ''}</div>
+      ${stap==='uur'
+        ? `<div class="rooster u">${[...Array(24)].map((_,i)=>`<button data-u="${i}" class="${i===uur?'on':''}">${pad(i)}</button>`).join('')}</div>`
+        : precies
+          ? `<div class="rooster m60">${[...Array(60)].map((_,i)=>`<button data-m="${i}" class="${i===min?'on':''}">${pad(i)}</button>`).join('')}</div>`
+          : `<div class="rooster m">${[...Array(12)].map((_,i)=>`<button data-m="${i*5}" class="${i*5===mm?'on':''}">:${pad(i*5)}</button>`).join('')}</div>`}
+      <div class="row"><button class="btn ghost" data-k="annuleer">Annuleren</button><button class="btn" data-k="ok" ${uur===null?'disabled':''}>Klaar</button></div></div>`;
+  };
+  const sluit = () => bg.remove();
+  const kies = () => { el.value = pad(uur) + ':' + pad(min === null ? 0 : min); el.classList.remove('fout');
+    el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); sluit(); };
+  bg.addEventListener('click', e => {
+    const t = e.target.closest('button,[data-stap]');
+    if (e.target === bg) return sluit();
+    if (!t) return;
+    if (t.dataset.stap) { stap = t.dataset.stap === 'min' && uur !== null ? 'min' : 'uur'; return teken(); }
+    if (t.dataset.u !== undefined) { uur = +t.dataset.u; stap = 'min'; return teken(); }
+    if (t.dataset.m !== undefined) { min = +t.dataset.m; return kies(); }          // na de minuten meteen klaar
+    if (t.dataset.k === 'wis') { el.value = ''; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); return sluit(); }
+    if (t.dataset.k === 'annuleer') return sluit();
+    if (t.dataset.k === 'precies') { precies = !precies; return teken(); }
+    if (t.dataset.k === 'ok' && uur !== null) return kies();
+  });
+  teken(); document.body.appendChild(bg);
+}
+
 // Datums: altijd dd-mm-jjjj op het scherm. Het originele veld wordt verborgen en houdt de waarde als jjjj-mm-dd,
 // zodat de rest van de code gewoon .value kan blijven lezen.
 const isoNaarNL = s => /^\d{4}-\d{2}-\d{2}$/.test(s||'') ? s.slice(8,10) + '-' + s.slice(5,7) + '-' + s.slice(0,4) : '';
@@ -1229,13 +1291,13 @@ function lijn(id, o){
   o.waarden.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="${o.kleur}" stroke="var(--card)" stroke-width="2"/>`; });
   o.labels.forEach((lab, i) => { if (i % 2 === 0 || i === n-1) svg += `<text class="ax" x="${x(i)}" y="${H-6}" text-anchor="middle">${esc(lab)}</text>`;
     svg += `<rect data-i="${i}" x="${x(i) - pw/(2*Math.max(1,n-1))}" y="${T}" width="${pw/Math.max(1,n-1)}" height="${ph}" fill="transparent"/>`; });
-  const toon = v => o.fmt ? o.fmt(v) : u(v) + ' ' + (o.eenheid||'');
+  const toon = v => o.tipFmt ? o.tipFmt(v) : o.fmt ? o.fmt(v) : u(v) + ' ' + (o.eenheid||'');
   GRAF[id] = { n, tip: i => `<b>${esc(o.labels[i])}</b><br>${o.waarden[i]==null ? 'niet ingevuld' : toon(o.waarden[i])}`,
                x: i => x(i)/W, y: i => (o.waarden[i]==null ? T+ph/2 : y(o.waarden[i]))/H };
   return `<div class="card grafiek" data-g="${id}"><div class="gt">${esc(o.titel)}</div>${o.sub?`<div class="gs">${esc(o.sub)}</div>`:''}
     ${(o.refs||[]).length ? legenda([{naam:o.reeks||'per nacht', kleur:o.kleur}, {naam:o.refs.map(r=>r.label).join(' / '), soort:'stip'}]) : ''}
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.titel)}">${svg}</svg><div class="tip"></div>
-    ${tabel(['', o.eenheid || ''], o.labels.map((l,i) => [esc(l), o.waarden[i]==null?'–':(o.fmt ? o.fmt(o.waarden[i]) : u(o.waarden[i]))]))}</div>`;
+    ${tabel(['', o.eenheid || ''], o.labels.map((l,i) => [esc(l), o.waarden[i]==null?'–':(o.tipFmt ? o.tipFmt(o.waarden[i]) : o.fmt ? o.fmt(o.waarden[i]) : u(o.waarden[i]))]))}</div>`;
 }
 /** Tik of beweeg over een staaf/punt: waarde tonen. */
 function grafiekTips(){
@@ -1291,7 +1353,7 @@ function renderTrends(){
     ${staven('coderen', { titel: 'Coderen per week', labels: lab, eenheid: 'u',
        series: [{ naam: 'uren', kleur: kleur(6), waarden: wc.map(w => w.coderen) }], refs: [{ waarde: i.codeerDoel, label: 'doel ' + u(i.codeerDoel) + ' u' }] })}
     ${slaap.some(v => v != null) ? lijn('slaap', { titel: 'Slaap per nacht', sub: 'Laatste 14 nachten', labels: nachten.map(s => String(dt(s).getDate())),
-       waarden: slaap, eenheid: 'u', kleur: kleur(0), refs: [{ waarde: i.slaapDoel, label: 'doel ' + u(i.slaapDoel) + ' u' }] })
+       waarden: slaap, eenheid: 'u', kleur: kleur(0), tipFmt: uMin, refs: [{ waarde: i.slaapDoel, label: 'doel ' + u(i.slaapDoel) + ' u' }] })
        : '<div class="card"><div class="gt">Slaap per nacht</div><div class="note">Nog niets ingevuld. Vul bij Vandaag in hoe laat je naar bed ging en wakker werd.</div></div>'}
     ${bed.some(v => v != null) ? lijn('bed', { titel: 'Hoe laat naar bed', sub: 'Laatste 14 nachten (datum = de ochtend erna)', labels: nachten.map(s => String(dt(s).getDate())),
        waarden: bed, kleur: kleur(6), fmt: uurTekst }) : ''}
