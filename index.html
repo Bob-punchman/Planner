@@ -217,7 +217,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.15-5';
+const APP_VERSIE = '2026.11.16-7';
 const SERVER_MIN = '2026.11.15-4';   // deze app verwacht minstens deze Code.gs-versie (pauze bij de timer)
 
 // ================= data & helpers =================
@@ -372,16 +372,19 @@ function lessenWeek(ma){
 function lessenOp(s){ const w=lessenWeek(maandag(s)); if (!w || w.fout) return w; return {lessen: w.lessen.filter(l=>l.datum===s), buiten: w.buiten}; }
 
 function basisDoel(){ const s = D.vakken.reduce((t,v)=>t+v.weekdoel,0); return s || 15; }
-/** Toetsweekmodus: eerstvolgend tentamen binnen X dagen vanaf datum s (of in de week vanaf maandag s). */
+/**
+ * Toetsweekmodus: eerstvolgend tentamen binnen X dagen ná datum s (of na maandag s, voor een hele week).
+ * De dag van het tentamen zelf telt niet: het gaat om de dagen ervóór.
+ */
 function toetsweek(s, weekVanaf, dagen){
   const n = dagen || Number(I().toetsweekDagen) || 0; if (!n) return null;
   const eind = weekVanaf ? plus(s, 6) : s;
   // "alleen indien nodig" telt niet mee: haal hem weg met "Niet nodig", of pas de opmerking aan als je hem wél moet maken
-  const t = D.tentamens.filter(t => !/indien nodig/i.test(t.opmerking||'') && t.datum >= s && dagenTot(eind, t.datum) <= n)
+  const t = D.tentamens.filter(t => !/indien nodig/i.test(t.opmerking||'') && t.datum > s && dagenTot(eind, t.datum) <= n)
     .sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd))[0];
   return t ? { t, dagen: dagenTot(s, t.datum) } : null;
 }
-/** Doelen voor een week: in toetsweekmodus hoger studiedoel (extra uren naar het tentamenvak) en minder gamen. */
+/** Weekdoelen (basis voor dagDoel): in toetsweekmodus hoger studiedoel (extra uren naar het tentamenvak) en minder gamen. */
 function doelen(modus){
   const i = I(), basis = basisDoel(), perVak = {};
   D.vakken.forEach(v => perVak[v.vak] = v.weekdoel);
@@ -391,8 +394,31 @@ function doelen(modus){
   raak.forEach(v => perVak[v.vak] += extra / raak.length);
   return { studie, perVak, gameMax: Math.min(i.gameMax, Number(i.toetsweekGameMax) || i.gameMax) };
 }
-function toetsBanner(m, d){
-  return m ? `<div class="infobox">📚 <b>Toetsweekmodus</b>: ${esc(m.t.vak)} op ${dagKort(m.t.datum)}. Studiedoel ${u(d.studie)} u, max ${u(d.gameMax)} u gamen. Liefst geen diensten.</div>` : '';
+/**
+ * Doelen voor één dag: het weekdoel gedeeld door 7. Valt de dag binnen de toetsweekmodus
+ * (vóór een tentamen, niet de tentamendag zelf), dan het toetsweekdoel gedeeld door 7.
+ */
+function dagDoel(s){
+  const m = toetsweek(s), d = doelen(m), perVak = {};
+  Object.keys(d.perVak).forEach(v => perVak[v] = d.perVak[v] / 7);
+  return { studie: d.studie / 7, gameMax: d.gameMax / 7, perVak, modus: m };
+}
+/** Doelen voor een reeks dagen (week of maand) = de optelsom van de dagdoelen. */
+function doelenVoor(van, aantal){
+  const som = { studie: 0, gameMax: 0, perVak: {}, modus: null, modusDagen: 0, dagen: aantal };
+  for (let n = 0; n < aantal; n++) {
+    const d = dagDoel(plus(van, n));
+    som.studie += d.studie; som.gameMax += d.gameMax;
+    Object.keys(d.perVak).forEach(v => som.perVak[v] = (som.perVak[v] || 0) + d.perVak[v]);
+    if (d.modus) { som.modusDagen++; if (!som.modus) som.modus = d.modus; }
+  }
+  return som;
+}
+/** Melding bovenaan. wat = 'vandaag' of 'deze week'; d.modusDagen/d.dagen alleen bij een week. */
+function toetsBanner(m, d, wat){
+  if (!m) return '';
+  const deel = d.dagen > 1 && d.modusDagen < d.dagen ? ` (${d.modusDagen} van de ${d.dagen} dagen toetsweek)` : '';
+  return `<div class="infobox">📚 <b>Toetsweekmodus</b>: ${esc(m.t.vak)} op ${dagKort(m.t.datum)}. Studiedoel ${wat} ${u(d.studie)} u, max ${u(d.gameMax)} u gamen${deel}. Liefst geen diensten.</div>`;
 }
 function studieOp(s){ const o={}; D.studie.filter(x=>x.datum===s).forEach(x=>o[x.vak]=(o[x.vak]||0)+x.uren); return o; }
 function weekStats(ma){
@@ -408,7 +434,7 @@ function weekStats(ma){
   });
   const som = k => dagen.reduce((t,d)=>t+(d[k]||0),0);
   const studie = som('studie'), gamen = som('gamen');
-  const modus = toetsweek(ma, true), doel = doelen(modus);
+  const doel = doelenVoor(ma, 7), modus = doel.modus;   // weekdoel = optelsom van 7 dagdoelen
   const verdiend = Math.min(doel.gameMax, studie / (I().verdienPer || 2));
   const slaapDagen = dagen.filter(d => d.slaap > 0);
   return { dagen, perVak, studie, gamen, verdiend, gameOver: verdiend - gamen, modus, doel, coderen: som('coderen'),
@@ -570,7 +596,7 @@ function renderVandaag(){
       <button class="nb" id="dNext" aria-label="volgende dag">›</button></div>
     ${isVandaag ? '' : '<button class="btn ghost" id="dNu" style="padding:6px">Terug naar vandaag</button>'}
     ${gister.length ? `<div class="alert">Late dienst gisteren (tot ${gister[gister.length-1].eind}): vandaag geen zwaar studieblok en geen vroege sportschool.</div>` : ''}
-    ${toetsBanner(toetsweek(dag), doelen(toetsweek(dag)))}
+    ${(d => toetsBanner(d.modus, d, 'vandaag'))(dagDoel(dag))}
     ${timerHtml()}
     <div class="card count"><div class="grow"><div class="sub">Gametijd deze week</div>
       <div class="sub">verdiend ${u(ws.verdiend)} u · gebruikt ${u(ws.gamen)} u</div>
@@ -798,7 +824,7 @@ function openDienst(x){
     $('#sInfo').innerHTML = `<div class="row"><div class="grow"><div class="sub">Netto</div><div class="name">${u(nettoU(d))} u</div></div>
       <div style="text-align:right"><div class="sub">${ymNaam(ym)} wordt</div><div class="name">${u(na)} u</div></div></div>
       ${isLaat(d) ? '<div class="note">⚠︎ Eindigt laat: de ochtend erna geen zwaar studieblok of vroege sportschool.</div>' : ''}
-      ${(() => { const m = toetsweek(d.datum); return m ? `<div class="alert">📚 Toetsweekmodus: ${esc(m.t.vak)} ${m.dagen<=1?(m.dagen?'morgen':'vandaag'):'over '+m.dagen+' dagen'}. Weet je zeker dat je deze dienst wilt?</div>` : ''; })()}
+      ${(() => { const m = toetsweek(d.datum); return m ? `<div class="alert">📚 Toetsweekmodus: ${esc(m.t.vak)} ${m.dagen===1?'morgen':'over '+m.dagen+' dagen'}. Weet je zeker dat je deze dienst wilt?</div>` : ''; })()}
       ${grensTekst(na)}`;
   };
   ['#sDatum','#sBegin','#sEind'].forEach(s => $(s).oninput = info);
@@ -872,16 +898,16 @@ function dienstzoeker(ym, mi){
 
 // ================= MAAND =================
 let ym = vandaag().slice(0,7), maandTab = 'overzicht';
-/** Cijfers van een maand, met doelen naar rato van het aantal dagen (weekdoel ÷ 7 per dag, toetsweekmodus meegerekend). */
+/** Cijfers van een maand; de doelen zijn de optelsom van de dagdoelen (toetsweekmodus per dag meegerekend). */
 function maandCijfers(ym){
   const i = I(), nu = vandaag(), perVak = {}, doelVak = {};
   let studie = 0, gamen = 0, coderen = 0, sport = 0, dagen = 0, dagenTotNu = 0, dStudie = 0, dGame = 0, slaap = [], bed = [];
   for (let s = ym + '-01'; s.startsWith(ym); s = plus(s, 1)) {
     dagen++; if (s <= nu) dagenTotNu++;
-    const r = D.dagen.find(x => x.datum === s) || {}, st = studieOp(s), dl = doelen(toetsweek(maandag(s), true));
+    const r = D.dagen.find(x => x.datum === s) || {}, st = studieOp(s), dl = dagDoel(s);   // maanddoel = optelsom van de dagdoelen
     Object.keys(st).forEach(v => { perVak[v] = (perVak[v]||0) + st[v]; studie += st[v]; });
-    Object.keys(dl.perVak).forEach(v => doelVak[v] = (doelVak[v]||0) + dl.perVak[v] / 7);
-    dStudie += dl.studie / 7; dGame += dl.gameMax / 7;
+    Object.keys(dl.perVak).forEach(v => doelVak[v] = (doelVak[v]||0) + dl.perVak[v]);
+    dStudie += dl.studie; dGame += dl.gameMax;
     gamen += r.gamen || 0; coderen += r.coderen || 0; if (r.sport) sport++;
     if (r.slaap) slaap.push(r.slaap); if (r.bedtijd) bed.push(bedUur(r.bedtijd));
   }
@@ -1060,7 +1086,7 @@ function renderWeek(){
   if (ws.modus && ws.werk > 0) sig.push(['alert', `Toetsweekmodus en toch ${u(ws.werk)} u Sjiek: check of je genoeg studietijd overhoudt.`]);
 
   $('#main').innerHTML = `
-    ${toetsBanner(ws.modus, ws.doel)}
+    ${toetsBanner(ws.modus, ws.doel, 'deze week')}
     <div class="daynav"><button class="nb" id="wPrev" aria-label="vorige week">‹</button>
       <div class="lbl">${dagKort(wk)} – ${dagKort(zo)}</div><button class="nb" id="wNext" aria-label="volgende week">›</button></div>
     <div class="card">
@@ -1491,7 +1517,7 @@ function weekCijfers(ma){       // zoals weekStats, maar zonder lessen op te hal
     Object.keys(st).forEach(v => { perVak[v] = (perVak[v]||0) + st[v]; studie += st[v]; });
     gamen += r.gamen || 0; coderen += r.coderen || 0; if (r.sport) sport++;
   }
-  const doel = doelen(toetsweek(ma, true));
+  const doel = doelenVoor(ma, 7);
   return { perVak, studie, gamen, sport, coderen, doel, verdiend: Math.min(doel.gameMax, studie / (I().verdienPer || 2)) };
 }
 let trendWeken = 8;
