@@ -217,8 +217,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.16-7';
-const SERVER_MIN = '2026.11.15-4';   // deze app verwacht minstens deze Code.gs-versie (pauze bij de timer)
+const APP_VERSIE = '2026.11.16-11';
+const SERVER_MIN = '2026.11.16-5';   // deze app verwacht minstens deze Code.gs-versie (vak hernoemen)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -269,9 +269,13 @@ function grensTekst(uren){
     return `<div class="alert">Net onder de ${g}-grens: nog ${u(g-uren)} u en je krijgt een hoger uurloon over álle uren.</div>`;
   return '';
 }
-function volgendTentamen(vanaf){
-  return D.tentamens.filter(t=>t.datum>=vanaf).sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd))[0];
+/** Komende tentamens vanaf een datum, op volgorde. Vandaag telt een tentamen niet meer mee zodra de begintijd voorbij is. */
+function komendeTentamens(vanaf){
+  const nu = new Date(), nuMin = nu.getHours()*60 + nu.getMinutes();
+  const voorbij = t => t.datum === vandaag() && t.tijd && mins(t.tijd) <= nuMin;
+  return D.tentamens.filter(t => t.datum >= vanaf && !voorbij(t)).sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd));
 }
+function volgendTentamen(vanaf){ return komendeTentamens(vanaf)[0]; }
 
 // Werkt op twee manieren: binnen Google (google.script.run) of als losse app (fetch met geheime sleutel).
 const IN_GOOGLE = !!(window.google && google.script && google.script.run);
@@ -373,16 +377,18 @@ function lessenOp(s){ const w=lessenWeek(maandag(s)); if (!w || w.fout) return w
 
 function basisDoel(){ const s = D.vakken.reduce((t,v)=>t+v.weekdoel,0); return s || 15; }
 /**
- * Toetsweekmodus: eerstvolgend tentamen binnen X dagen ná datum s (of na maandag s, voor een hele week).
- * De dag van het tentamen zelf telt niet: het gaat om de dagen ervóór.
+ * Toetsweekmodus voor dag s: alle tentamens binnen X dagen ná s (de tentamendag zelf telt niet).
+ * Geeft { t, dagen } van het eerstvolgende (voor meldingen) en { alle } met elk tentamen en zijn afstand in dagen.
  */
 function toetsweek(s, weekVanaf, dagen){
   const n = dagen || Number(I().toetsweekDagen) || 0; if (!n) return null;
   const eind = weekVanaf ? plus(s, 6) : s;
   // "alleen indien nodig" telt niet mee: haal hem weg met "Niet nodig", of pas de opmerking aan als je hem wél moet maken
-  const t = D.tentamens.filter(t => !/indien nodig/i.test(t.opmerking||'') && t.datum > s && dagenTot(eind, t.datum) <= n)
-    .sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd))[0];
-  return t ? { t, dagen: dagenTot(s, t.datum) } : null;
+  const lijst = D.tentamens.filter(t => !/indien nodig/i.test(t.opmerking||'') && t.datum > s && dagenTot(eind, t.datum) <= n)
+    .sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd));
+  if (!lijst.length) return null;
+  const alle = lijst.map(t => ({ t, dagen: dagenTot(s, t.datum) }));
+  return { t: alle[0].t, dagen: alle[0].dagen, alle };
 }
 /** Weekdoelen (basis voor dagDoel): in toetsweekmodus hoger studiedoel (extra uren naar het tentamenvak) en minder gamen. */
 function doelen(modus){
@@ -390,8 +396,13 @@ function doelen(modus){
   D.vakken.forEach(v => perVak[v.vak] = v.weekdoel);
   if (!modus) return { studie: basis, perVak, gameMax: i.gameMax };
   const studie = Math.max(basis, Number(i.toetsweekStudie) || basis), extra = studie - basis;
-  const raak = D.vakken.filter(v => modus.t.vak.toLowerCase().includes(v.vak.toLowerCase()));
-  raak.forEach(v => perVak[v.vak] += extra / raak.length);
+  // extra tijd verdelen over alle komende tentamens: gewicht = 1 ÷ dagen tot het tentamen (dichterbij = meer)
+  const totGewicht = modus.alle.reduce((t, x) => t + 1 / x.dagen, 0);
+  modus.alle.forEach(x => {
+    const deel = extra * (1 / x.dagen) / totGewicht;
+    const raak = D.vakken.filter(v => x.t.vak.toLowerCase().includes(v.vak.toLowerCase()));
+    raak.forEach(v => perVak[v.vak] += deel / raak.length);
+  });
   return { studie, perVak, gameMax: Math.min(i.gameMax, Number(i.toetsweekGameMax) || i.gameMax) };
 }
 /**
@@ -401,24 +412,29 @@ function doelen(modus){
 function dagDoel(s){
   const m = toetsweek(s), d = doelen(m), perVak = {};
   Object.keys(d.perVak).forEach(v => perVak[v] = d.perVak[v] / 7);
-  return { studie: d.studie / 7, gameMax: d.gameMax / 7, perVak, modus: m };
+  return { studie: d.studie / 7, gameMax: d.gameMax / 7, perVak, modus: m, tentamens: m ? m.alle.map(x => x.t) : [] };
 }
 /** Doelen voor een reeks dagen (week of maand) = de optelsom van de dagdoelen. */
 function doelenVoor(van, aantal){
-  const som = { studie: 0, gameMax: 0, perVak: {}, modus: null, modusDagen: 0, dagen: aantal };
+  const som = { studie: 0, gameMax: 0, perVak: {}, modus: null, modusDagen: 0, dagen: aantal, tentamens: [] };
   for (let n = 0; n < aantal; n++) {
     const d = dagDoel(plus(van, n));
     som.studie += d.studie; som.gameMax += d.gameMax;
     Object.keys(d.perVak).forEach(v => som.perVak[v] = (som.perVak[v] || 0) + d.perVak[v]);
-    if (d.modus) { som.modusDagen++; if (!som.modus) som.modus = d.modus; }
+    if (d.modus) {
+      som.modusDagen++; if (!som.modus) som.modus = d.modus;
+      d.modus.alle.forEach(x => { if (!som.tentamens.includes(x.t)) som.tentamens.push(x.t); });
+    }
   }
   return som;
 }
+/** Alle tentamens als tekst: "FYC11 (ma 19 jan), ORC11 (di 20 jan)". */
+const tentamenTekst = lijst => lijst.map(t => t.vak + ' (' + dagKort(t.datum) + ')').join(', ');
 /** Melding bovenaan. wat = 'vandaag' of 'deze week'; d.modusDagen/d.dagen alleen bij een week. */
 function toetsBanner(m, d, wat){
   if (!m) return '';
   const deel = d.dagen > 1 && d.modusDagen < d.dagen ? ` (${d.modusDagen} van de ${d.dagen} dagen toetsweek)` : '';
-  return `<div class="infobox">📚 <b>Toetsweekmodus</b>: ${esc(m.t.vak)} op ${dagKort(m.t.datum)}. Studiedoel ${wat} ${u(d.studie)} u, max ${u(d.gameMax)} u gamen${deel}. Liefst geen diensten.</div>`;
+  return `<div class="infobox">📚 <b>Toetsweekmodus</b>: ${esc(tentamenTekst(d.tentamens))}. Studiedoel ${wat} ${uD(d.studie)}, max ${uD(d.gameMax)} gamen${deel}. Liefst geen diensten.</div>`;
 }
 function studieOp(s){ const o={}; D.studie.filter(x=>x.datum===s).forEach(x=>o[x.vak]=(o[x.vak]||0)+x.uren); return o; }
 function weekStats(ma){
@@ -446,7 +462,7 @@ function weekStats(ma){
 function vakMeters(ws){
   const namen = D.vakken.map(v=>v.vak).concat(Object.keys(ws.perVak).filter(v=>!D.vakken.some(x=>x.vak===v)));
   return namen.map(v => { const doel = ws.doel.perVak[v] || 0, val = ws.perVak[v]||0;
-    return meter(esc(v), val, doel || val || 1, u(val)+(doel?' / '+u(doel):'')+' u'); }).join('');
+    return meter(esc(v), val, doel || val || 1, uMin(val)+(doel?' / '+uD(doel):'')); }).join('');
 }
 function meter(label, val, doel, txt, isMax){
   const pct = Math.min(100, doel ? val/doel*100 : 0);
@@ -463,9 +479,13 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
 $('#gear').onclick = () => openInstellingen();
 
 function render(){
+  if (view === 'diensten') { view = 'maand'; maandTab = 'diensten'; }
+  if (view !== laatsteView) {        // onthouden waar je vandaan kwam, voor de terugknop
+    if (!terugBezig && laatsteView) viewStapel = viewStapel.concat(laatsteView).slice(-20);
+    laatsteView = view; terugBezig = false;
+  }
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v===view));
   $('#stickyHost').innerHTML = '';
-  if (view === 'diensten') { view = 'maand'; maandTab = 'diensten'; }
   ({vandaag:renderVandaag, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
 }
 
@@ -529,7 +549,7 @@ function timerKnoppen(){
     $('#tOk').onclick = async () => {
       const m = num($('#tMin').value); if (isNaN(m) || m < 0) return toast('Vul minuten in');
       const btn = $('#tOk'); btn.disabled = true; btn.textContent = 'Opslaan…'; tril();
-      try { D = await api('stopTimer', m); closeSheet(); laadInv(); render(); toast('Opgeslagen ✓ ' + u(m/60) + ' u'); }
+      try { D = await api('stopTimer', m); closeSheet(); laadInv(); render(); toast('Opgeslagen ✓ ' + uMin(m/60)); }
       catch(e){ btn.disabled = false; btn.textContent = 'Opslaan'; }
     };
   };
@@ -567,13 +587,20 @@ function slaapUren(bed, op){
 /** Bedtijd als getal voor gemiddelden en grafieken: na middernacht telt door (00:30 → 24,5). */
 const bedUur = t => { const m = mins(t); return (m < 12*60 ? m + 1440 : m) / 60; };
 /** 7,0333 → "7 u 2 min" (voor slaap leest dat beter dan decimalen) */
-const uMin = h => { const m = Math.round(h * 60); return Math.floor(m/60) + ' u' + (m % 60 ? ' ' + (m % 60) + ' min' : ''); };
+/** Uren als "2 u 50 min", "35 min" of "3 u" (afgerond op hele minuten). */
+const uMin = h => {
+  const m = Math.round(Math.abs(Number(h) || 0) * 60), teken = h < 0 && m ? '−' : '';
+  if (m < 60) return teken + (m ? m + ' min' : '0 u');
+  return teken + Math.floor(m/60) + ' u' + (m % 60 ? ' ' + (m % 60) + ' min' : '');
+};
+/** Doelen: afgerond op 5 minuten, zodat er geen "2 u 51 min" staat. */
+const uD = h => uMin(Math.round((Number(h) || 0) * 12) / 12);
 const uurTekst = h => { const m = Math.round(h*60) % 1440; return pad(Math.floor(m/60)) + ':' + pad(m%60); };   // velden die niet bij een vak horen
 const invGet = k => LOS.includes(k) ? inv[k] : inv.studie[vakNamen()[+k.slice(1)]];
 const invSet = (k,v) => { if (LOS.includes(k)) inv[k] = v; else inv.studie[vakNamen()[+k.slice(1)]] = v; };
 function stepper(k, label){
   return `<div class="row line"><div class="grow">${label}</div><div class="step">
-    <button data-k="${k}" data-d="-0.5" aria-label="minder">−</button><span class="sv" data-typ="${k}" style="cursor:pointer;text-decoration:underline dotted">${u(invGet(k))} u</span>
+    <button data-k="${k}" data-d="-0.5" aria-label="minder">−</button><span class="sv" data-typ="${k}" style="cursor:pointer;text-decoration:underline dotted">${uMin(invGet(k))}</span>
     <button data-k="${k}" data-d="0.5" aria-label="meer">+</button></div></div>`;
 }
 function renderVandaag(){
@@ -589,7 +616,8 @@ function renderVandaag(){
     `<div class="ag werk"><span class="tijd">${x.begin}–${x.eind}</span><span class="grow">Sjiek${x.waar?' · '+esc(x.waar):''}</span><span class="sub">${u(nettoU(x))} u</span></div>`}));
   agenda.sort((a,b)=>a.t.localeCompare(b.t));
   const ws = weekStats(maandag(dag)), i = I();
-  const t = volgendTentamen(dag);
+  const komend = komendeTentamens(dag), t = komend[0];
+  const zelfdeDag = t ? komend.filter(x => x.datum === t.datum).length - 1 : 0;   // nog meer tentamens op die dag
   $('#main').innerHTML = `
     <div class="daynav"><button class="nb" id="dPrev" aria-label="vorige dag">‹</button>
       <input type="date" id="dDatum" value="${dag}" style="flex:1">
@@ -599,10 +627,10 @@ function renderVandaag(){
     ${(d => toetsBanner(d.modus, d, 'vandaag'))(dagDoel(dag))}
     ${timerHtml()}
     <div class="card count"><div class="grow"><div class="sub">Gametijd deze week</div>
-      <div class="sub">verdiend ${u(ws.verdiend)} u · gebruikt ${u(ws.gamen)} u</div>
-      <div class="note" style="margin:4px 0 0">Elke ${u(i.verdienPer)} u studie = 1 u gamen (max ${u(ws.doel.gameMax)} u/week)</div></div>
-      <div class="big ${ws.gameOver<0?'neg':''}">${u(ws.gameOver)}<span class="unit">u over</span></div></div>
-    ${t ? `<div class="card count"><div class="grow"><div class="sub">Volgende tentamen</div><div class="name">${esc(t.vak)}</div>
+      <div class="sub">verdiend ${uMin(ws.verdiend)} · gebruikt ${uMin(ws.gamen)}</div>
+      <div class="note" style="margin:4px 0 0">Elke ${u(i.verdienPer)} u studie = 1 u gamen (max ${uD(ws.doel.gameMax)} per week)</div></div>
+      <div class="big ${ws.gameOver<0?'neg':''}">${uMin(ws.gameOver)}<span class="unit">over</span></div></div>
+    ${t ? `<div class="card count"><div class="grow"><div class="sub">Volgende tentamen</div><div class="name">${esc(t.vak)}${zelfdeDag ? ` <span class="sub">+${zelfdeDag} op dezelfde dag</span>` : ''}</div>
       <div class="sub">${dagKort(t.datum)}${t.tijd?' · '+t.tijd:''}${t.opmerking?' · '+esc(t.opmerking):''}</div>
       ${/indien nodig|her(toets|kansing)/i.test(t.vak+' '+t.opmerking) ? `<button class="btn sec small" id="tNiet" style="margin-top:8px">Niet nodig ✓</button>` : ''}</div>
       <div class="big">${dagenTot(dag,t.datum)}<span class="unit">${dagenTot(dag,t.datum)===1?'dag':'dagen'}</span></div></div>` : ''}
@@ -631,9 +659,9 @@ function renderVandaag(){
     </div>
     <h2>Week ${weekNr(dag)}</h2>
     <div class="card">
-      ${meter('Zelfstudie totaal', ws.studie, ws.doel.studie, u(ws.studie)+' / '+u(ws.doel.studie)+' u')}
+      ${meter('Zelfstudie totaal', ws.studie, ws.doel.studie, uMin(ws.studie)+' / '+uD(ws.doel.studie))}
       ${meter('Sportschool', ws.sport, i.sportDoel, ws.sport+' / '+i.sportDoel+'×')}
-      ${meter('Coderen', ws.coderen, i.codeerDoel, u(ws.coderen)+' / '+u(i.codeerDoel)+' u')}
+      ${meter('Coderen', ws.coderen, i.codeerDoel, uMin(ws.coderen)+' / '+uD(i.codeerDoel))}
       ${ws.slaapGem !== null ? `<div class="note">Slaap gemiddeld ${uMin(ws.slaapGem)} per nacht (doel ${uMin(i.slaapDoel)})</div>` : ''}
       <div class="note">Sjiek deze week: ${u(ws.werk)} u${ws.les!==null?' · lessen: '+u(ws.les)+' u':''}</div>
     </div>`;
@@ -934,10 +962,10 @@ function renderMaand(){
 }
 function maandOverzicht(mi){
   const i = I(), mc = maandCijfers(ym), nu = vandaag(), lopend = ym === nu.slice(0,7);
-  const pro = v => lopend ? ` <span class="sub">(tot vandaag ±${u(Math.round(v / mc.dagen * mc.dagenTotNu * 2) / 2)})</span>` : '';
+  const pro = v => lopend ? ` <span class="sub">(tot vandaag ±${uD(v / mc.dagen * mc.dagenTotNu)})</span>` : '';
   const namen = D.vakken.map(v => v.vak).concat(Object.keys(mc.perVak).filter(v => !D.vakken.some(x => x.vak === v)));
   const vakMeterM = namen.map(v => { const d = mc.doelVak[v] || 0, val = mc.perVak[v] || 0;
-    return meter(esc(v), val, d || val || 1, u(Math.round(val*4)/4) + (d ? ' / ' + u(Math.round(d)) : '') + ' u'); }).join('');
+    return meter(esc(v), val, d || val || 1, uMin(val) + (d ? ' / ' + uD(d) : '')); }).join('');
   // weken die in deze maand vallen
   const weken = []; for (let ma = maandag(ym + '-01'); ma.slice(0,7) <= ym; ma = plus(ma, 7)) weken.push(ma);
   const wc = weken.map(ma => ({ ma, w: weekCijfers(ma), werk: [...Array(7)].reduce((t,_,k) => t + dienstenOp(plus(ma,k)).reduce((a,x)=>a+nettoU(x),0), 0) }));
@@ -947,20 +975,20 @@ function maandOverzicht(mi){
     .sort((a,b) => a.s.localeCompare(b.s));
   const sig = [];
   if (!lopend && ym < nu.slice(0,7)) {
-    if (mc.studie < mc.doelStudie) sig.push(['alert', `Zelfstudie ${u(Math.round(mc.studie))} van ±${u(Math.round(mc.doelStudie))} u.`]);
-    if (mc.gamen > mc.verdiend) sig.push(['alert', `${u(Math.round((mc.gamen - mc.verdiend)*2)/2)} u meer gegamed dan verdiend.`]);
+    if (mc.studie < mc.doelStudie) sig.push(['alert', `Zelfstudie ${uMin(mc.studie)} van ±${uD(mc.doelStudie)}.`]);
+    if (mc.gamen > mc.verdiend) sig.push(['alert', `${uD(mc.gamen - mc.verdiend)} meer gegamed dan verdiend.`]);
   } else if (lopend) {
     const verwacht = mc.doelStudie / mc.dagen * mc.dagenTotNu;
-    if (mc.studie < verwacht - 2) sig.push(['infobox', `Je loopt ±${u(Math.round((verwacht - mc.studie)*2)/2)} u achter op je studie voor deze maand.`]);
+    if (mc.studie < verwacht - 2) sig.push(['infobox', `Je loopt ±${uD(verwacht - mc.studie)} achter op je studie voor deze maand.`]);
   }
   $('#maandInhoud').innerHTML = `
     ${sig.map(([c,t]) => `<div class="${c}">${t}</div>`).join('')}
     <div class="card">
-      ${meter('<b>Zelfstudie</b>', mc.studie, mc.doelStudie, u(Math.round(mc.studie*4)/4) + ' / ' + u(Math.round(mc.doelStudie)) + ' u') + pro(mc.doelStudie)}
+      ${meter('<b>Zelfstudie</b>', mc.studie, mc.doelStudie, uMin(mc.studie) + ' / ' + uD(mc.doelStudie)) + pro(mc.doelStudie)}
       <div style="padding-left:12px;border-left:3px solid var(--line);margin:4px 0 10px">${vakMeterM}</div>
       ${meter('Sportschool', mc.sport, mc.doelSport, mc.sport + ' / ' + Math.round(mc.doelSport) + '×') + pro(mc.doelSport)}
-      ${meter('Gamen (van verdiend)', mc.gamen, Math.max(mc.verdiend, 0.01), u(Math.round(mc.gamen*4)/4) + ' / ' + u(Math.round(mc.verdiend*2)/2) + ' u', true)}
-      ${meter('Coderen', mc.coderen, mc.doelCode, u(Math.round(mc.coderen*4)/4) + ' / ' + u(Math.round(mc.doelCode*2)/2) + ' u')}
+      ${meter('Gamen (van verdiend)', mc.gamen, Math.max(mc.verdiend, 0.01), uMin(mc.gamen) + ' / ' + uD(mc.verdiend), true)}
+      ${meter('Coderen', mc.coderen, mc.doelCode, uMin(mc.coderen) + ' / ' + uD(mc.doelCode))}
       <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${mc.slaapGem===null?'–':uMin(mc.slaapGem)}</div></div>
       <div class="row line"><div class="grow">Gemiddeld naar bed</div><div class="name">${mc.bedGem===null?'–':uurTekst(mc.bedGem)}</div></div>
       <div class="row line"><div class="grow">Sjiek</div><div class="name">${u(mi.tot)} u</div></div>
@@ -1048,10 +1076,10 @@ function weekTekst(ws){
   const i = I(), zo = plus(wk,6), mi = maandInfo(wk.slice(0,7));
   return [
     `Weekreflectie week ${weekNr(wk)} (${dagKort(wk)} – ${dagKort(zo)})`,
-    (ws.modus ? `Toetsweekmodus: ${ws.modus.t.vak} op ${dagKort(ws.modus.t.datum)}\n` : '') + `Zelfstudie: ${u(ws.studie)} u (doel ${u(ws.doel.studie)})` + (Object.keys(ws.perVak).length ? ' — ' + Object.keys(ws.perVak).map(v=>v+' '+u(ws.perVak[v])+' u').join(', ') : ''),
+    (ws.modus ? `Toetsweekmodus: ${tentamenTekst(ws.doel.tentamens)}\n` : '') + `Zelfstudie: ${uMin(ws.studie)} (doel ${uD(ws.doel.studie)})` + (Object.keys(ws.perVak).length ? ' — ' + Object.keys(ws.perVak).map(v=>v+' '+uMin(ws.perVak[v])).join(', ') : ''),
     `Sportschool: ${ws.sport}× (doel ${i.sportDoel})`,
-    `Gamen: ${u(ws.gamen)} u (verdiend ${u(ws.verdiend)} u)`,
-    `Coderen (leerlijn): ${u(ws.coderen)} u (doel ${u(i.codeerDoel)})`,
+    `Gamen: ${uMin(ws.gamen)} (verdiend ${uMin(ws.verdiend)})`,
+    `Coderen (leerlijn): ${uMin(ws.coderen)} (doel ${uD(i.codeerDoel)})`,
     ws.slaapGem !== null ? `Slaap: gemiddeld ${uMin(ws.slaapGem)} per nacht (${ws.slaapN} nachten ingevuld)` + (ws.bedGem!==null ? `, gemiddeld naar bed om ${uurTekst(ws.bedGem)}` : '') : '',
     `Sjiek: ${u(ws.werk)} u deze week · ${ymNaam(wk.slice(0,7))} totaal ${u(mi.tot)} u (doel ${mi.doel})`,
     ws.les!==null ? `Lessen: ${u(ws.les)} u` : '',
@@ -1070,12 +1098,12 @@ function renderWeek(){
   const sig = [];
   if (begonnen) {
     sig.push(ws.studie >= ws.doel.studie ? ['okbox','Studiedoel gehaald.']
-      : [bezig?'infobox':'alert', `Zelfstudie ${u(ws.studie)} van ${u(ws.doel.studie)} u${bezig?` — nog ${u(ws.doel.studie-ws.studie)} u te gaan`:''}.`]);
+      : [bezig?'infobox':'alert', `Zelfstudie ${uMin(ws.studie)} van ${uD(ws.doel.studie)}${bezig?` — nog ${uD(ws.doel.studie-ws.studie)} te gaan`:''}.`]);
     const achter = D.vakken.filter(v => ws.doel.perVak[v.vak] && (ws.perVak[v.vak]||0) < ws.doel.perVak[v.vak]);
-    if (!bezig && achter.length) sig.push(['alert', 'Achter op: ' + achter.map(v=>`${esc(v.vak)} (${u(ws.perVak[v.vak]||0)}/${u(ws.doel.perVak[v.vak])} u)`).join(', ') + '.']);
+    if (!bezig && achter.length) sig.push(['alert', 'Achter op: ' + achter.map(v=>`${esc(v.vak)} (${uMin(ws.perVak[v.vak]||0)} / ${uD(ws.doel.perVak[v.vak])})`).join(', ') + '.']);
     sig.push(ws.sport >= i.sportDoel ? ['okbox','Sportdoel gehaald.']
       : [bezig?'infobox':'alert', `Sportschool ${ws.sport} van ${i.sportDoel}×${bezig?` — nog ${i.sportDoel-ws.sport} te gaan`:''}.`]);
-    if (ws.gameOver < 0) sig.push(['alert', `${u(-ws.gameOver)} u meer gegamed dan verdiend.`]);
+    if (ws.gameOver < 0) sig.push(['alert', `${uMin(-ws.gameOver)} meer gegamed dan verdiend.`]);
   }
   if (ws.slaapGem !== null && ws.slaapN >= 3 && ws.slaapGem < i.slaapDoel - 0.5)
     sig.push(['infobox', `Je slaapt gemiddeld ${uMin(ws.slaapGem)}, onder je doel van ${uMin(i.slaapDoel)}.`]);
@@ -1090,11 +1118,11 @@ function renderWeek(){
     <div class="daynav"><button class="nb" id="wPrev" aria-label="vorige week">‹</button>
       <div class="lbl">${dagKort(wk)} – ${dagKort(zo)}</div><button class="nb" id="wNext" aria-label="volgende week">›</button></div>
     <div class="card">
-      ${meter('<b>Zelfstudie</b>', ws.studie, ws.doel.studie, u(ws.studie)+' / '+u(ws.doel.studie)+' u')}
+      ${meter('<b>Zelfstudie</b>', ws.studie, ws.doel.studie, uMin(ws.studie)+' / '+uD(ws.doel.studie))}
       <div style="padding-left:12px;border-left:3px solid var(--line);margin:4px 0 10px">${vakMeters(ws)}</div>
       ${meter('Sportschool', ws.sport, i.sportDoel, ws.sport+' / '+i.sportDoel+'×')}
-      ${meter('Gamen (van verdiend)', ws.gamen, Math.max(ws.verdiend, 0.01), u(ws.gamen)+' / '+u(ws.verdiend)+' u', true)}
-      ${meter('Coderen', ws.coderen, i.codeerDoel, u(ws.coderen)+' / '+u(i.codeerDoel)+' u')}
+      ${meter('Gamen (van verdiend)', ws.gamen, Math.max(ws.verdiend, 0.01), uMin(ws.gamen)+' / '+uMin(ws.verdiend), true)}
+      ${meter('Coderen', ws.coderen, i.codeerDoel, uMin(ws.coderen)+' / '+uD(i.codeerDoel))}
       <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${ws.slaapGem===null?'–':uMin(ws.slaapGem)}</div></div>
       <div class="row line"><div class="grow">Gemiddeld naar bed</div><div class="name">${ws.bedGem===null?'–':uurTekst(ws.bedGem)}</div></div>
       <div class="row line"><div class="grow">Sjiek</div><div class="name">${u(ws.werk)} u</div></div>
@@ -1155,7 +1183,7 @@ const VELDEN = [
 const WEEKDAGEN = ['ma','di','wo','do','vr','za','zo'];
 const DAG_NAAM = {ma:'maandag',di:'dinsdag',wo:'woensdag',do:'donderdag',vr:'vrijdag',za:'zaterdag',zo:'zondag'};
 function leesTijden(str){ const o={}; String(str).split(';').forEach(p=>{ const [d,t]=p.split('='); if (d) o[d.trim()]=(t||'').trim(); }); return o; }
-function vakRij(v){ return `<div class="row line vakrow"><input class="vNaam grow" value="${esc(v.vak)}" placeholder="vak">
+function vakRij(v){ return `<div class="row line vakrow" data-oud="${esc(v.vak)}"><input class="vNaam grow" value="${esc(v.vak)}" placeholder="vak">
   <input class="vDoel" inputmode="decimal" value="${String(v.weekdoel).replace('.',',')}" style="width:64px;text-align:right"><span class="sub">u/wk</span>
   <button class="x vDel" aria-label="verwijderen">×</button></div>`; }
 function openInstellingen(){
@@ -1285,6 +1313,10 @@ function openInstellingen(){
     o.vakken = [...document.querySelectorAll('.vakrow')].map(r => ({vak: r.querySelector('.vNaam').value.trim(), weekdoel: num(r.querySelector('.vDoel').value) || 0}))
       .filter(v => v.vak);
     if (new Set(o.vakken.map(v=>v.vak.toLowerCase())).size !== o.vakken.length) return toast('Een vak staat er dubbel in');
+    // hernoemde vakken: de server zet je oude uren, deadlines en tentamens over naar de nieuwe naam
+    o.hernoem = [...document.querySelectorAll('.vakrow')]
+      .map(r => ({van: r.dataset.oud || '', naar: r.querySelector('.vNaam').value.trim()}))
+      .filter(h => h.van && h.naar && h.van !== h.naar);
     const agendaAnders = o.lesAgenda !== i.lesAgenda;
     D = await api('bewaarInstellingen', o);
     sjiekSync(false);
@@ -1638,6 +1670,42 @@ function herstelConcept(){
   if (viesDag()) return false;                       // je bent al iets anders aan het invullen
   dag = c.inv.dag; inv = c.inv; invBasis = JSON.stringify(opgeslagenInv(dag)); view = 'vandaag'; render();
   toast('Niet-opgeslagen wijzigingen teruggezet, worden nu opgeslagen'); planAuto(); return true;
+}
+
+// ================= TERUGKNOP (Android) =================
+// Een geïnstalleerde web-app sluit bij "terug" als er geen geschiedenis is. Daarom zetten we één extra stap
+// in de browsergeschiedenis (pushState). Terug haalt die stap weg (popstate): wij doen dan zelf "terug" binnen
+// de app en zetten de stap opnieuw klaar. Pas op Vandaag/vandaag, zonder open venster, mag terug de app sluiten.
+let viewStapel = [], laatsteView = null, terugBezig = false;
+function terugInApp(){
+  const venster = document.querySelector('.kiezer-bg');          // tijdkiezer of vraag: annuleren
+  if (venster) {
+    const knop = venster.querySelector('[data-k="annuleer"], [data-k="terug"]');
+    if (knop) knop.click(); else venster.remove();
+    return true;
+  }
+  if (document.querySelector('.sheet-bg')) { closeSheet(); return true; }   // los venster (instellingen, dienst…)
+  if (viewStapel.length) {                                        // vorig scherm
+    const vorige = viewStapel.pop();
+    verlaat(() => { terugBezig = true; view = vorige; render(); window.scrollTo(0,0); });
+    return true;
+  }
+  if (view !== 'vandaag' || dag !== vandaag()) {                  // anders: naar Vandaag, vandaag
+    verlaat(() => { terugBezig = true; view = 'vandaag'; dag = vandaag(); render(); window.scrollTo(0,0); });
+    return true;
+  }
+  return false;
+}
+if (!IN_GOOGLE) {
+  history.replaceState({planner: 'basis'}, '');
+  history.pushState({planner: 'stap'}, '');
+  window.addEventListener('popstate', () => {
+    if (terugInApp()) { history.pushState({planner: 'stap'}, ''); return; }
+    // op het startscherm: nog een keer terug sluit de app
+    toast('Nog een keer terug om af te sluiten');
+    if (viesDag()) nuOpslaan();
+    setTimeout(() => { if (history.state && history.state.planner === 'basis') history.pushState({planner: 'stap'}, ''); }, 2500);
+  });
 }
 
 // ================= AUTOMATISCH OPSLAAN (Vandaag) =================
