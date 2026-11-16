@@ -120,6 +120,8 @@
   .sheet{background:var(--bg);width:100%;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;
     padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-width:680px;margin:0 auto}
   .sheet h3{margin:0 0 6px;font-size:21px}
+  .toast.actie{display:flex;align-items:center;gap:12px;pointer-events:auto}
+  .toastknop{background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;padding:6px 2px;cursor:pointer}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(140px + env(safe-area-inset-bottom));
     background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:12px;z-index:30;font-size:15px;max-width:90vw}
   .loading{position:fixed;inset:0;display:grid;place-items:center;color:var(--muted);background:var(--bg);z-index:50}
@@ -217,7 +219,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.16-12';
+const APP_VERSIE = '2026.11.16-13';
 const SERVER_MIN = '2026.11.16-5';   // deze app verwacht minstens deze Code.gs-versie (vak hernoemen)
 
 // ================= data & helpers =================
@@ -354,6 +356,15 @@ function inWachtrij(fn, args){
   return Promise.resolve(d);
 }
 function toast(t){ const el=document.createElement('div'); el.className='toast'; el.textContent=t; document.body.appendChild(el); setTimeout(()=>el.remove(),2800); }
+/** Melding met een knop (bijv. "Ongedaan maken"), blijft ms milliseconden staan. */
+function toastActie(t, knop, fn, ms = 6000){
+  document.querySelectorAll('.toast.actie').forEach(x => x.remove());
+  const el = document.createElement('div'); el.className = 'toast actie';
+  el.innerHTML = `<span></span><button class="toastknop"></button>`;
+  el.firstChild.textContent = t; el.lastChild.textContent = knop;
+  el.lastChild.onclick = () => { el.remove(); fn(); };
+  document.body.appendChild(el); setTimeout(() => el.remove(), ms);
+}
 
 /** Lessen worden alleen bij het opstarten opgehaald: 2 weken terug t/m ±2 maanden vooruit, in één keer. */
 const LES_KEY = 'planner-lessen';
@@ -720,13 +731,31 @@ function deadlineKaart(s){
       <div class="grow"></div><button class="btn sec small" id="dlNieuw">+ Deadline</button></div></div>`;
 }
 function deadlineKnoppen(){
-  document.querySelectorAll('[data-dk]').forEach(b => b.onclick = async () => {
+  document.querySelectorAll('[data-dk]').forEach(b => b.onclick = () => {
     const d = D.deadlines.find(x=>x.id===b.dataset.dk);
-    D = await api('bewaarDeadline', Object.assign({}, d, {klaar:true})); render(); toast('Afgevinkt ✓ ' + deadlineNaam(d));
+    if (!d || b.classList.contains('bezig')) return;
+    tril(); b.classList.add('bezig');
+    zetDeadlineKlaar(d, true);
+    toastActie('Afgevinkt ✓ ' + deadlineNaam(d), 'Ongedaan maken', () => { zetDeadlineKlaar(d, false); toast('Weer open: ' + deadlineNaam(d)); });
   });
   document.querySelectorAll('[data-de]').forEach(el => el.onclick = () => openDeadline(D.deadlines.find(x=>x.id===el.dataset.de)));
   if ($('#dlNieuw')) $('#dlNieuw').onclick = () => openDeadline(null);
   if ($('#dlAlle')) $('#dlAlle').onclick = () => alleDeadlines();
+}
+/**
+ * Deadline af- of weer aanvinken. Het scherm verandert meteen (optimistisch); de server krijgt het daarna.
+ * Verzoeken voor dezelfde deadline gaan na elkaar, en alleen het antwoord op de laatste actie telt.
+ */
+const dlRij = {}, dlLaatste = {};
+function zetDeadlineKlaar(d, klaar){
+  const x = Object.assign({}, d, {klaar});
+  const nr = (dlLaatste[d.id] || 0) + 1; dlLaatste[d.id] = nr;
+  D.deadlines = D.deadlines.map(y => y.id === d.id ? x : y); render();
+  dlRij[d.id] = (dlRij[d.id] || Promise.resolve()).then(() => api('bewaarDeadline', x)).then(res => {
+    if (dlLaatste[d.id] === nr) { D = res; achtergrondRender(); }
+  }).catch(() => {
+    if (dlLaatste[d.id] === nr) { D.deadlines = D.deadlines.map(y => y.id === d.id ? Object.assign({}, y, {klaar: !klaar}) : y); render(); }
+  });
 }
 function alleDeadlines(){
   const nu = vandaag();
