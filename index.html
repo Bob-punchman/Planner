@@ -217,7 +217,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.16-11';
+const APP_VERSIE = '2026.11.16-12';
 const SERVER_MIN = '2026.11.16-5';   // deze app verwacht minstens deze Code.gs-versie (vak hernoemen)
 
 // ================= data & helpers =================
@@ -1191,6 +1191,7 @@ function openInstellingen(){
   const tent = D.tentamens.slice().sort((a,b)=>a.datum.localeCompare(b.datum));
   const thema = opslag.get('planner-thema') || 'systeem';
   sheet(`<h3>Instellingen</h3>
+    <div class="sub autostatus iStatus">Wijzigingen worden vanzelf opgeslagen.</div>
     <h2>Weergave</h2>
     <div class="card"><div class="seg" id="iThema">${[['licht','Licht'],['donker','Donker'],['systeem','Systeem']].map(([v,l]) =>
       `<button data-v="${v}" class="${thema===v?'on':''}">${l}</button>`).join('')}</div>
@@ -1230,14 +1231,13 @@ function openInstellingen(){
       <label class="f">Naam van je Sjiek-agenda (een stukje is genoeg)</label><input id="iSjiekNaam" value="${esc(i.sjiekAgenda)}">
       <div class="note">${!D.sjiekInfo ? '' : D.sjiekInfo.gevonden ? '✓ Gevonden. Wordt bijgewerkt als je de app opent.' : 'Niet gevonden met deze naam.'}</div>
     </div>
-    <div style="height:6px"></div><button class="btn" id="iOk">Instellingen opslaan</button>
     ${IN_GOOGLE ? '' : `<h2>Koppeling</h2><div class="card"><div class="note" style="margin-top:0">Gekoppeld met je Google Sheet.</div>
       <button class="btn danger" id="iOntkoppel">Ontkoppelen</button></div>`}
     <h2>Tentamens</h2>
     <div class="card" style="padding:4px 12px">${tent.map(t => `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">${esc(t.vak)}</div>
       <div class="sub">${dagKort(t.datum)} ${t.datum.slice(0,4)}${t.tijd?' · '+t.tijd:''}${t.opmerking?' · '+esc(t.opmerking):''}</div></div>
       <button class="x" data-del="${t.id}" aria-label="verwijderen">×</button></div>`).join('') || '<div class="empty">Geen tentamens.</div>'}</div>
-    <div class="card">
+    <div class="card" data-geen-auto>
       <div class="row"><div class="grow"><label class="f" style="margin-top:0">Datum</label><input type="date" id="tDatum"></div>
         <div class="grow"><label class="f" style="margin-top:0">Tijd</label><input type="time" id="tTijd"></div></div>
       <label class="f">Vak</label><input id="tVak" placeholder="bijv. FYC11">
@@ -1251,6 +1251,7 @@ function openInstellingen(){
       ${(D.versie || '') < SERVER_MIN ? `<div class="alert">Code.gs is ouder dan deze app verwacht (${SERVER_MIN}). Plak de nieuwste Code.gs en kies Implementeren → Implementaties beheren → Nieuwe versie.</div>` : ''}
       ${IN_GOOGLE ? '' : '<button class="btn sec" id="iUpdate" style="margin-top:8px">Controleer op update</button><div class="note" id="iUpdateInfo"></div>'}
     </div>
+    <div class="sub autostatus iStatus" style="text-align:center;margin-top:8px"></div>
     <button class="btn ghost" id="iAnn">Sluiten</button>`);
   if ($('#iUpdate')) $('#iUpdate').onclick = async () => {
     const info = $('#iUpdateInfo'); info.textContent = 'Kijken op GitHub…';
@@ -1271,12 +1272,12 @@ function openInstellingen(){
   const keuze = {herinneringen:i.herinneringen, sjiekImport:i.sjiekImport, overslaanBijAfspraak:i.overslaanBijAfspraak};
   [['iHer','herinneringen'],['iSjiek','sjiekImport'],['iAfspraak','overslaanBijAfspraak']].forEach(([id,k]) =>
     document.querySelectorAll('#'+id+' button').forEach(b => b.onclick = () => { keuze[k] = b.dataset.v;
-      document.querySelectorAll('#'+id+' button').forEach(y => y.classList.toggle('on', y===b)); }));
+      document.querySelectorAll('#'+id+' button').forEach(y => y.classList.toggle('on', y===b)); planI(); }));
   document.querySelectorAll('.hLeeg').forEach(b => b.onclick = () => {
-    const el = b.dataset.wd ? $(`input[data-wd="${b.dataset.wd}"]`) : $('#'+b.dataset.id); el.value = ''; });
+    const el = b.dataset.wd ? $(`input[data-wd="${b.dataset.wd}"]`) : $('#'+b.dataset.id); el.value = ''; planI(); });
   const vakTot = () => { const t = [...document.querySelectorAll('.vDoel')].reduce((s,el)=>s+(num(el.value)||0),0);
     $('#iVakTot').textContent = 'Totaal zelfstudie: ' + u(t) + ' u per week'; };
-  const vakEvents = () => { document.querySelectorAll('.vDel').forEach(b => b.onclick = () => { b.closest('.vakrow').remove(); vakTot(); });
+  const vakEvents = () => { document.querySelectorAll('.vDel').forEach(b => b.onclick = () => { b.closest('.vakrow').remove(); vakTot(); planI(); });
     document.querySelectorAll('.vDoel').forEach(el => el.oninput = vakTot); vakTot(); };
   vakEvents();
   $('#iVakAdd').onclick = () => { $('#iVakken').insertAdjacentHTML('beforeend', vakRij({vak:'', weekdoel:2})); vakEvents(); };
@@ -1289,6 +1290,7 @@ function openInstellingen(){
     const k = $('#iOntkoppel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Zeker? Tik nog een keer'; return; }
     opslag.weg(CFG_KEY); opslag.weg(CACHE_KEY); location.reload(); };
   $('#iPlan').onclick = async () => {
+    await sheetHaak();                      // eerst je wijzigingen opslaan, dan pas het plan ophalen
     const r = await api('herinnerPlan', vandaag());
     sheet(`<h3>Herinneringen vandaag</h3><div class="sub">Volgens de opgeslagen instellingen${I().herinneringen!=='aan'?' (staan nu <b>uit</b>)':''}</div>
       <div class="card" style="padding:4px 12px">${r.plan.map(h => `<div class="list-item" style="cursor:default"><div class="grow">
@@ -1298,11 +1300,15 @@ function openInstellingen(){
       <button class="btn ghost" id="pTerug">Terug</button>`);
     $('#pTerug').onclick = openInstellingen;
   };
-  $('#iOk').onclick = async () => {
+  // ---- automatisch opslaan: 1,5 s na de laatste wijziging, en meteen als het venster dicht gaat ----
+  let iTimer = null, iBezig = null, laatst = JSON.stringify(verzamel().o || null), vorige = JSON.parse(laatst || '{}');
+  const status = (t, fout) => document.querySelectorAll('.iStatus').forEach(el => { el.textContent = t; el.classList.toggle('fout', !!fout); });
+  /** Leest alle velden uit. Geeft { o } of { fout: 'tekst' }. */
+  function verzamel(){
     const o = Object.assign({lesAgenda: $('#iAgenda').value.trim(), sjiekAgenda: $('#iSjiekNaam').value.trim() || 'poolmanager',
       dienstenInAgenda: i.dienstenInAgenda}, keuze);
     for (const el of document.querySelectorAll('.sheet input[data-k]')) {
-      const v = num(el.value); if (el.value.trim()==='' || isNaN(v)) return toast('Controleer: ' + el.closest('.row').textContent.trim());
+      const v = num(el.value); if (el.value.trim()==='' || isNaN(v)) return { fout: 'Controleer: ' + el.closest('.row').textContent.trim() };
       o[el.dataset.k] = v;
     }
     o.herinnerTijden = WEEKDAGEN.map(d => d + '=' + ($(`input[data-wd="${d}"]`).value || '')).join(';');
@@ -1312,16 +1318,52 @@ function openInstellingen(){
     o.deadlineTijd = $('#iDlTijd').value || ''; o.deadlineDagTijd = $('#iDlDag').value || '';
     o.vakken = [...document.querySelectorAll('.vakrow')].map(r => ({vak: r.querySelector('.vNaam').value.trim(), weekdoel: num(r.querySelector('.vDoel').value) || 0}))
       .filter(v => v.vak);
-    if (new Set(o.vakken.map(v=>v.vak.toLowerCase())).size !== o.vakken.length) return toast('Een vak staat er dubbel in');
+    if (new Set(o.vakken.map(v=>v.vak.toLowerCase())).size !== o.vakken.length) return { fout: 'Een vak staat er dubbel in' };
     // hernoemde vakken: de server zet je oude uren, deadlines en tentamens over naar de nieuwe naam
     o.hernoem = [...document.querySelectorAll('.vakrow')]
       .map(r => ({van: r.dataset.oud || '', naar: r.querySelector('.vNaam').value.trim()}))
       .filter(h => h.van && h.naar && h.van !== h.naar);
-    const agendaAnders = o.lesAgenda !== i.lesAgenda;
-    D = await api('bewaarInstellingen', o);
-    sjiekSync(false);
-    if (agendaAnders) { LESSEN = null; opslag.weg(LES_KEY); haalLessenOp(); }
-    inv = null; closeSheet(); render(); toast('Instellingen opgeslagen ✓');
+    return { o };
+  }
+  /** Versturen. Eén verzoek tegelijk; wat intussen veranderde gaat in de volgende ronde mee. */
+  function bewaarI(o){
+    if (iBezig) return iBezig.then(() => bewaarI(o));
+    const tekst = JSON.stringify(o);
+    if (tekst === laatst) return Promise.resolve(true);
+    status('Opslaan…');
+    const rijen = [...document.querySelectorAll('.vakrow')];
+    iBezig = api('bewaarInstellingen', o).then(d => {
+      D = d; laatst = tekst;
+      rijen.forEach(r => { const n = r.querySelector('.vNaam').value.trim(); if (n) r.dataset.oud = n; });   // hernoemd = nu de oude naam
+      if (o.sjiekImport !== vorige.sjiekImport || o.sjiekAgenda !== vorige.sjiekAgenda) sjiekSync(false);
+      if (o.lesAgenda !== vorige.lesAgenda) { LESSEN = null; opslag.weg(LES_KEY); haalLessenOp(); }
+      vorige = o;
+      status('Opgeslagen ✓'); achtergrondRender();
+      return true;
+    }).catch(() => { status('Niet opgeslagen: probeer het nog eens', true); return false; })
+      .finally(() => { iBezig = null; });
+    return iBezig;
+  }
+  function planI(){
+    clearTimeout(iTimer);
+    const r = verzamel();
+    if (r.fout) { status(r.fout, true); return; }
+    if (JSON.stringify(r.o) === laatst) { status('Opgeslagen ✓'); return; }
+    status('Slaat zo op…');
+    iTimer = setTimeout(() => bewaarI(r.o), 1500);
+  }
+  // elk veld (behalve "tentamen toevoegen") start het wachten
+  const host = $('.sheet');
+  ['input', 'change'].forEach(soort => host.addEventListener(soort, e => {
+    if (e.target.closest('[data-geen-auto]') || !e.target.matches('input, select')) return;
+    planI();
+  }));
+  // venster dicht of vervangen: meteen opslaan (de velden worden nu nog uitgelezen, versturen gebeurt daarna)
+  sheetSluitHaak = () => {
+    clearTimeout(iTimer);
+    const r = verzamel();
+    if (r.fout) { toast('Niet opgeslagen. ' + r.fout); return Promise.resolve(false); }
+    return bewaarI(r.o).then(ok => { if (!ok) toast('Instellingen niet opgeslagen'); return ok; });
   };
   document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
     if (!b.dataset.zeker) { b.dataset.zeker = 1; b.textContent = 'zeker?'; b.style.fontSize = '14px'; return; }
@@ -1595,11 +1637,15 @@ function renderTrends(){
 }
 
 // ================= sheet (pop-up van onderen) =================
+// Een venster kan iets nog willen opslaan voordat het dicht gaat of vervangen wordt (bijv. instellingen).
+let sheetSluitHaak = null;
+function sheetHaak(){ const h = sheetSluitHaak; sheetSluitHaak = null; return h ? h() : Promise.resolve(true); }
 function sheet(html){
+  sheetHaak();
   $('#sheetHost').innerHTML = `<div class="sheet-bg"><div class="sheet">${html}</div></div>`;
   $('.sheet-bg').onclick = e => { if (e.target.classList.contains('sheet-bg')) closeSheet(); };
 }
-function closeSheet(){ $('#sheetHost').innerHTML = ''; setTimeout(inhalen, 0); }
+function closeSheet(){ sheetHaak(); $('#sheetHost').innerHTML = ''; setTimeout(inhalen, 0); }
 
 // ================= NIET-OPGESLAGEN WIJZIGINGEN =================
 const CONCEPT_KEY = 'planner-concept';
