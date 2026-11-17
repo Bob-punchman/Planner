@@ -221,7 +221,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.17-17';
+const APP_VERSIE = '2026.11.17-18';
 const SERVER_MIN = '2026.11.17-6';   // deze app verwacht minstens deze Code.gs-versie (meerdere deadlines tegelijk)
 
 // ================= data & helpers =================
@@ -487,7 +487,7 @@ function meter(label, val, doel, txt, isMax){
 // ================= navigatie =================
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   if (b.dataset.v === view) return;
-  verlaat(() => { view = b.dataset.v; render(); window.scrollTo(0,0); });
+  verlaat(() => { view = b.dataset.v; if (view === 'week') wk = startWeek(); render(); window.scrollTo(0,0); });
 });
 $('#gear').onclick = () => openInstellingen();
 
@@ -1220,6 +1220,15 @@ function maandSjiek(mi){
 
 // ================= WEEK =================
 let wk = maandag(vandaag()), refl = null;
+/** Welke week het Week-scherm laat zien als je het opent.
+ *  Maandag t/m zaterdag: vorige week, zolang de reflectie daarvan nog leeg is.
+ *  Op zondag, of als vorige week al een reflectie heeft: deze week. */
+function startWeek(){
+  const nu = vandaag(), deze = maandag(nu), vorige = plus(deze, -7);
+  if (dt(nu).getDay() === 0) return deze;
+  const r = (D && D.reflecties || []).find(x => x.week === vorige);
+  return (r && (r.goed || r.beter || r.focus)) ? deze : vorige;
+}
 function weekTekst(ws){
   const i = I(), zo = plus(wk,6), mi = maandInfo(wk.slice(0,7));
   return [
@@ -1261,8 +1270,10 @@ function renderWeek(){
   if (dls.length) sig.push(['infobox', 'Deadlines deze week: ' + dls.map(d => esc(deadlineNaam(d)) + ' (' + dagKort(d.datum) + ')').join(', ') + '.']);
   if (ws.modus && ws.werk > 0) sig.push(['alert', `Toetsweekmodus en toch ${u(ws.werk)} u Sjiek: check of je genoeg studietijd overhoudt.`]);
 
+  const reflVorige = wk === plus(maandag(nu), -7) && wk === startWeek();
   $('#main').innerHTML = `
     ${toetsBanner(ws.modus, ws.doel, 'deze week')}
+    ${reflVorige ? '<div class="infobox">Je ziet vorige week, want de reflectie daarvan is nog niet opgeslagen. Tik › voor deze week.</div>' : ''}
     <div class="daynav"><button class="nb" id="wPrev" aria-label="vorige week">‹</button>
       <div class="lbl">${dagKort(wk)} – ${dagKort(zo)}</div><button class="nb" id="wNext" aria-label="volgende week">›</button></div>
     <div class="card">
