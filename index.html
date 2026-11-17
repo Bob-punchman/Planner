@@ -221,8 +221,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.17-15';
-const SERVER_MIN = '2026.11.16-5';   // deze app verwacht minstens deze Code.gs-versie (vak hernoemen)
+const APP_VERSIE = '2026.11.17-16';
+const SERVER_MIN = '2026.11.17-6';   // deze app verwacht minstens deze Code.gs-versie (meerdere deadlines tegelijk)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -810,9 +810,10 @@ function alleDeadlines(){
   sheet(`<h3>Deadlines</h3>
     <div class="card" style="padding:4px 12px">${open.map(rij).join('') || '<div class="empty">Geen openstaande deadlines.</div>'}</div>
     ${klaar.length ? `<details><summary>Klaar (${klaar.length})</summary><div class="card" style="padding:4px 12px">${klaar.map(rij).join('')}</div></details>` : ''}
-    <button class="btn" id="adNieuw">+ Deadline</button><button class="btn ghost" id="adDicht">Sluiten</button>`);
+    <button class="btn" id="adNieuw">+ Deadline</button><button class="btn sec" id="adMeer" style="margin-top:8px">+ Meerdere tegelijk (lijst plakken)</button><button class="btn ghost" id="adDicht">Sluiten</button>`);
   document.querySelectorAll('.sheet [data-de]').forEach(el => el.onclick = () => openDeadline(D.deadlines.find(x=>x.id===el.dataset.de), true));
   $('#adNieuw').onclick = () => openDeadline(null, true);
+  $('#adMeer').onclick = () => meerdereDeadlines(true);
   $('#adDicht').onclick = closeSheet;
 }
 function openDeadline(d, terugNaarLijst){
@@ -820,6 +821,7 @@ function openDeadline(d, terugNaarLijst){
   d = Object.assign({datum:'', tijd:'23:59', vak:'', wat:'', klaar:false}, d||{});
   const vakken = [...new Set(D.vakken.map(v=>v.vak).concat(d.vak?[d.vak]:[]))];
   sheet(`<h3>${nieuw?'Nieuwe deadline':'Deadline wijzigen'}</h3>
+    ${nieuw ? '<button class="btn ghost small" id="eMeer" style="padding:2px 0">Meerdere tegelijk? Plak een lijst →</button>' : ''}
     <label class="f">Wat moet er af?</label><input id="eWat" value="${esc(d.wat)}" placeholder="bijv. PvAE inleveren">
     <label class="f">Vak</label><select id="eVak"><option value="">—</option>${vakken.map(v=>`<option ${v===d.vak?'selected':''}>${esc(v)}</option>`).join('')}<option value="__ander">Ander vak…</option></select>
     <input id="eVakAnder" placeholder="vaknaam" style="display:none;margin-top:6px">
@@ -836,6 +838,7 @@ function openDeadline(d, terugNaarLijst){
   $('#eVak').onchange = e => $('#eVakAnder').style.display = e.target.value==='__ander' ? 'block' : 'none';
   const terug = () => terugNaarLijst ? alleDeadlines() : closeSheet();
   $('#eAnn').onclick = terug;
+  if ($('#eMeer')) $('#eMeer').onclick = () => meerdereDeadlines(terugNaarLijst);
   if (!nieuw) $('#eDel').onclick = async () => {
     const k = $('#eDel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer om te verwijderen'; return; }
     D = await api('verwijderDeadline', d.id); render(); terug(); toast('Deadline verwijderd'); };
@@ -846,6 +849,78 @@ function openDeadline(d, terugNaarLijst){
     const btn = $('#eOk'); btn.disabled = true; btn.textContent = 'Opslaan…';
     try { D = await api('bewaarDeadline', x); render(); terug(); toast('Deadline opgeslagen ✓'); }
     catch(e){ btn.disabled = false; btn.textContent = 'Opslaan'; }
+  };
+}
+
+// ================= MEERDERE DEADLINES TEGELIJK =================
+/**
+ * Leest een geplakte lijst: één deadline per regel. Herkent o.a.
+ *   24-11 Verslag week 1            24-11-2026 23:59 Verslag
+ *   2026-11-24 17:00 Presentatie    ma 24 nov 12:00 - Quiz H3
+ *   24/11<TAB>17:00<TAB>Opdracht    (kolommen uit Excel/Sheets)
+ * Zonder jaar: dit jaar, of volgend jaar als de datum al meer dan 2 maanden voorbij is.
+ */
+function leesDeadlineRegels(tekst, stdTijd){
+  const nu = vandaag(), jaar = +nu.slice(0,4);
+  return String(tekst || '').split(/\r?\n/).map(r => r.trim()).filter(Boolean).map(regel => {
+    let r = regel.replace(/\t+/g, ' ').replace(/^(ma|di|wo|do|vr|za|zo)[a-z]*\.?,?\s+/i, '');
+    let d, m, y, mt;
+    if ((mt = r.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) { y = +mt[1]; m = +mt[2]; d = +mt[3]; }
+    else if ((mt = r.match(/^(\d{1,2})[-\/.](\d{1,2})(?:[-\/.](\d{2,4}))?(?![\d:])/))) { d = +mt[1]; m = +mt[2]; y = mt[3] ? +mt[3] : null; }
+    else if ((mt = r.match(/^(\d{1,2})\s+([a-z]{3})[a-z]*\.?(?:\s+(\d{4}))?/i)) && MAANDEN.includes(mt[2].toLowerCase().replace('maa','mrt'))) {
+      d = +mt[1]; m = MAANDEN.indexOf(mt[2].toLowerCase().replace('maa','mrt')) + 1; y = mt[3] ? +mt[3] : null; }
+    else return { regel, fout: 'geen datum gevonden aan het begin' };
+    if (y !== null && y < 100) y += 2000;
+    r = r.slice(mt[0].length).trim();
+    let tijd = stdTijd || '23:59';
+    const tm = r.match(/^(?:om\s+)?(\d{1,2})[:.](\d{2})(?:\s*uur)?/i);
+    if (tm && +tm[1] < 24 && +tm[2] < 60) { tijd = pad(+tm[1]) + ':' + tm[2]; r = r.slice(tm[0].length).trim(); }
+    const wat = r.replace(/^[-–—:|,·]+\s*/, '').trim();
+    const maak = yy => `${yy}-${pad(m)}-${pad(d)}`;
+    if (y === null) { y = jaar; if (dagenTot(maak(y), nu) > 60) y++; }
+    const datum = maak(y), t = new Date(y, m - 1, d);
+    if (t.getMonth() !== m - 1 || t.getDate() !== d) return { regel, fout: 'datum bestaat niet' };
+    if (!wat) return { regel, fout: 'geen omschrijving' };
+    return { regel, datum, tijd, wat };
+  });
+}
+function meerdereDeadlines(terugNaarLijst){
+  const vakken = D.vakken.map(v => v.vak);
+  sheet(`<h3>Meerdere deadlines</h3>
+    <label class="f" style="margin-top:0">Vak (voor alle regels)</label>
+    <select id="mVak"><option value="">—</option>${vakken.map(v=>`<option>${esc(v)}</option>`).join('')}<option value="__ander">Ander vak…</option></select>
+    <input id="mVakAnder" placeholder="vaknaam" style="display:none;margin-top:6px">
+    <label class="f">Tijd als er geen tijd bij staat</label><input id="mTijd" value="23:59" inputmode="numeric" style="width:100px">
+    <label class="f">Plak je lijst: één deadline per regel, datum vooraan</label>
+    <textarea id="mTekst" rows="8" placeholder="24-11 Verslag week 1&#10;1-12 17:00 PvAE inleveren&#10;ma 8 dec - Logboek"></textarea>
+    <div class="note">Werkt ook met kolommen die je uit Excel of Google Sheets kopieert (datum, tijd, omschrijving).</div>
+    <div id="mVoorbeeld"></div>
+    <div style="height:10px"></div><button class="btn" id="mOk" disabled>Toevoegen</button>
+    <button class="btn ghost" id="mAnn">Annuleren</button>`);
+  const terug = () => terugNaarLijst ? alleDeadlines() : closeSheet();
+  $('#mAnn').onclick = terug;
+  const vak = () => $('#mVak').value === '__ander' ? $('#mVakAnder').value.trim() : $('#mVak').value;
+  let goed = [];
+  const toon = () => {
+    const tijd = /^\d{1,2}:\d{2}$/.test($('#mTijd').value.trim()) ? $('#mTijd').value.trim().padStart(5, '0') : '23:59';
+    const regels = leesDeadlineRegels($('#mTekst').value, tijd), v = vak();
+    const bestaat = x => D.deadlines.some(y => y.datum === x.datum && (y.vak||'') === v && y.wat.trim().toLowerCase() === x.wat.toLowerCase());
+    goed = regels.filter(x => !x.fout && !bestaat(x)).map(x => Object.assign({}, x, { vak: v }));
+    $('#mVoorbeeld').innerHTML = regels.length ? `<div class="card" style="padding:4px 12px">${regels.map(x => x.fout
+      ? `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">⚠ ${esc(x.regel)}</div><div class="sub">${x.fout}: wordt overgeslagen</div></div></div>`
+      : `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">${esc(x.wat)}</div>
+          <div class="sub">${dagKort(x.datum)} ${x.datum.slice(0,4)} · ${x.tijd}${bestaat(x) ? ' · staat er al, wordt overgeslagen' : ''}</div></div>
+          <span class="badge ${bestaat(x) ? 'none' : ''}">${bestaat(x) ? '—' : 'nieuw'}</span></div>`).join('')}</div>` : '';
+    const b = $('#mOk'); b.disabled = !goed.length;
+    b.textContent = goed.length ? `${goed.length} ${goed.length === 1 ? 'deadline' : 'deadlines'} toevoegen${v ? ' bij ' + v : ''}` : 'Toevoegen';
+  };
+  $('#mVak').onchange = e => { $('#mVakAnder').style.display = e.target.value === '__ander' ? 'block' : 'none'; toon(); };
+  $('#mVakAnder').oninput = toon; $('#mTijd').oninput = toon; $('#mTekst').oninput = toon;
+  $('#mOk').onclick = async () => {
+    if (!goed.length) return;
+    const b = $('#mOk'), n = goed.length; b.disabled = true; b.textContent = 'Toevoegen…';
+    try { D = await api('bewaarDeadlines', goed.map(({datum, tijd, vak, wat}) => ({datum, tijd, vak, wat}))); render(); terug(); toast(n + (n === 1 ? ' deadline' : ' deadlines') + ' toegevoegd ✓'); }
+    catch(e){ toon(); }
   };
 }
 
