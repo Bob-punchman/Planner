@@ -120,6 +120,8 @@
   .sheet{background:var(--bg);width:100%;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;
     padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-width:680px;margin:0 auto}
   .sheet h3{margin:0 0 6px;font-size:21px}
+  .dlkop{background:none;border:0;padding:0;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer}
+  .dlmeer{display:block;width:100%;text-align:left;padding:8px 0 2px;white-space:normal}
   .toast.actie{display:flex;align-items:center;gap:12px;pointer-events:auto}
   .toastknop{background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;padding:6px 2px;cursor:pointer}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(140px + env(safe-area-inset-bottom));
@@ -219,7 +221,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.16-13';
+const APP_VERSIE = '2026.11.17-15';
 const SERVER_MIN = '2026.11.16-5';   // deze app verwacht minstens deze Code.gs-versie (vak hernoemen)
 
 // ================= data & helpers =================
@@ -573,15 +575,36 @@ function opgeslagenInv(dag){
   const r = D.dagen.find(x=>x.datum===dag);
   const studie = {}; D.vakken.forEach(v => studie[v.vak] = 0); Object.assign(studie, studieOp(dag));
   return { dag, studie, gamen:r?r.gamen:0, sport:r?r.sport:false, notitie:r?(r.notitie||''):'', coderen:r?(r.coderen||0):0, slaap:r?(r.slaap||0):0,
-          bedtijd:r?(tijdOfLeeg(r.bedtijd)):'', opstaan:r?(tijdOfLeeg(r.opstaan)):'' };
+          bedtijd:r?(tijdOfLeeg(r.bedtijd)):'', opstaan:r?(tijdOfLeeg(r.opstaan)):'', wakker: r ? wakkerUit(r) : 0 };
+}
+/**
+ * 's Nachts wakker geweest (minuten). Wordt niet apart opgeslagen: het is het verschil tussen
+ * de tijd in bed (bedtijd → opstaan) en de opgeslagen slaap. Zo hoeft de server niets te veranderen.
+ */
+function wakkerUit(r){
+  const bed = tijdOfLeeg(r.bedtijd), op = tijdOfLeeg(r.opstaan), sl = Number(r.slaap) || 0;
+  if (!bed || !op || !sl) return 0;
+  const m = Math.round((slaapUren(bed, op) - sl) * 60);
+  return m >= 1 ? m : 0;
+}
+/** "60", "45" of "1:15" → minuten */
+function minutenUit(v){
+  const s = String(v || '').trim(); if (!s) return 0;
+  const m = s.match(/^(\d{1,2}):(\d{2})$/); if (m) return +m[1] * 60 + +m[2];
+  const n = Math.round(num(s)); return isNaN(n) || n < 0 ? 0 : n;
+}
+/** Tekst onder de slaaptijden. */
+function slaapTekst(){
+  if (!(inv.bedtijd && inv.opstaan)) return inv.slaap ? uMin(inv.slaap) + ' slaap (zonder tijden ingevuld)' : 'Vul beide tijden in, dan rekent de app je slaap uit.';
+  return '= ' + uMin(inv.slaap) + ' slaap' + (inv.wakker ? ` (${uMin(slaapUren(inv.bedtijd, inv.opstaan))} in bed − ${uMin(inv.wakker / 60)} wakker)` : '');
 }
 /** "23:59", "23:59:00" of een volledige datum-tijd → "23:59"; iets onherkenbaars → "" */
 function tijdOfLeeg(v){
   const s = String(v || ''); const m = s.match(/(\d{1,2}):(\d{2})/);
   return m ? pad(+m[1]) + ':' + m[2] : '';
 }
-let invBasis = '';   // hoe de dag eruitzag toen je hem opende: zo zien we of je iets hebt veranderd
-function laadInv(){ inv = opgeslagenInv(dag); invBasis = JSON.stringify(inv); }
+let invBasis = '', toonWakker = false;   // toonWakker: veld "'s nachts wakker" open geklikt   // hoe de dag eruitzag toen je hem opende: zo zien we of je iets hebt veranderd
+function laadInv(){ inv = opgeslagenInv(dag); invBasis = JSON.stringify(inv); toonWakker = false; }
 const viesDag = () => !!(D && inv && JSON.stringify(inv) !== invBasis);
 /** Nieuwe gegevens binnen (bijv. van je andere apparaat)? Alleen overnemen als je niets aan het veranderen bent. */
 function verversInv(){ if (inv && !viesDag() && !bezig()) laadInv(); }
@@ -662,7 +685,10 @@ function renderVandaag(){
         <input type="time" id="vBed" value="${inv.bedtijd}" style="width:150px"></div>
       <div class="row line"><div class="grow">Wakker geworden</div>
         <input type="time" id="vOp" value="${inv.opstaan}" style="width:150px"></div>
-      <div class="note" id="vSlaap">${inv.bedtijd && inv.opstaan ? '= ' + uMin(inv.slaap) + ' slaap' : inv.slaap ? uMin(inv.slaap) + ' slaap (zonder tijden ingevuld)' : 'Vul beide tijden in, dan rekent de app je slaap uit.'}</div>
+      <div class="row line" id="vWakkerRij" style="${inv.wakker || toonWakker ? '' : 'display:none'}"><div class="grow">'s Nachts wakker geweest <span class="sub">(minuten)</span></div>
+        <input id="vWakker" inputmode="numeric" placeholder="0" value="${inv.wakker || ''}" style="width:90px;text-align:right"></div>
+      <div class="note" id="vSlaap">${slaapTekst()}</div>
+      ${inv.wakker || toonWakker ? '' : `<button class="btn ghost small" id="vWakkerAan" style="padding:4px 0">+ 's Nachts wakker geweest?</button>`}
       <div class="row line"><div class="grow">Sportschool</div>
         <div class="seg small" id="vSport"><button data-v="0" class="${!inv.sport?'on':''}">Nee</button><button data-v="1" class="${inv.sport?'on':''}">Ja</button></div></div>
       <div class="note">Tik op een getal om het precies in te typen. Wijzigingen worden vanzelf opgeslagen, een paar seconden nadat je klaar bent.</div>
@@ -707,11 +733,14 @@ function renderVandaag(){
   const slaapBij = () => {   // alleen de regel eronder bijwerken, zodat je niet uit het veld springt
     const ok = t => /^\d{2}:\d{2}$/.test(t);
     inv.bedtijd = ok($('#vBed').value) ? $('#vBed').value : ''; inv.opstaan = ok($('#vOp').value) ? $('#vOp').value : '';
-    if (inv.bedtijd && inv.opstaan) inv.slaap = slaapUren(inv.bedtijd, inv.opstaan);
-    $('#vSlaap').textContent = inv.bedtijd && inv.opstaan ? '= ' + uMin(inv.slaap) + ' slaap' : 'Vul beide tijden in, dan rekent de app je slaap uit.';
+    inv.wakker = minutenUit($('#vWakker').value);
+    if (inv.bedtijd && inv.opstaan) inv.slaap = Math.max(0, Math.round((slaapUren(inv.bedtijd, inv.opstaan) - inv.wakker / 60) * 100) / 100);
+    $('#vSlaap').textContent = slaapTekst();
     planAuto();
   };
-  $('#vBed').oninput = slaapBij; $('#vOp').oninput = slaapBij;
+  $('#vBed').oninput = slaapBij; $('#vOp').oninput = slaapBij; $('#vWakker').oninput = slaapBij;
+  if ($('#vWakkerAan')) $('#vWakkerAan').onclick = () => {
+    toonWakker = true; $('#vWakkerRij').style.display = ''; $('#vWakkerAan').remove(); $('#vWakker').focus(); };
 }
 
 // ================= DEADLINES =================
@@ -720,13 +749,25 @@ function wanneer(vanaf, d){
   const n = dagenTot(vanaf, d.datum);
   return n < 0 ? (-n)+' d te laat' : n === 0 ? 'vandaag '+(d.tijd||'') : n === 1 ? 'morgen '+(d.tijd||'') : 'over '+n+' dagen';
 }
+/**
+ * Deadlinekaart. Ingeklapt (standaard) zie je alleen wat binnen 2 dagen moet (of te laat is);
+ * de rest zit achter "▸ nog X". Uitgeklapt zie je alles van de komende 2 weken. Wordt per apparaat onthouden.
+ */
+const DL_OPEN_KEY = 'planner-deadlines-open';
 function deadlineKaart(s){
   const open = D.deadlines.filter(d => !d.klaar && dagenTot(s, d.datum) <= 14).sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd));
   const later = D.deadlines.filter(d => !d.klaar && dagenTot(s, d.datum) > 14).length;
-  return `<h2>Deadlines</h2><div class="card">
-    ${open.map(d => `<div class="dl ${dagenTot(s,d.datum)<=2?'urgent':''}"><button class="vink" data-dk="${d.id}" aria-label="klaar">✓</button>
+  const uit = opslag.get(DL_OPEN_KEY) === '1';
+  const urgent = open.filter(d => dagenTot(s, d.datum) <= 2);
+  const zicht = uit ? open : urgent, verborgen = open.length - zicht.length;
+  const kop = open.length ? `<button class="dlkop" id="dlKlap" aria-expanded="${uit}">${uit ? '▾' : '▸'} Deadlines <span class="sub">(${open.length})</span></button>` : 'Deadlines';
+  return `<h2>${kop}</h2><div class="card">
+    ${zicht.map(d => `<div class="dl ${dagenTot(s,d.datum)<=2?'urgent':''}"><button class="vink" data-dk="${d.id}" aria-label="klaar">✓</button>
       <div class="grow" data-de="${d.id}" style="cursor:pointer"><div class="name">${esc(deadlineNaam(d))}</div><div class="sub">${dagKort(d.datum)} · ${esc(d.tijd||'')}</div></div>
-      <div class="wanneer">${wanneer(s,d)}</div></div>`).join('') || '<div class="note">Geen deadlines in de komende 2 weken.</div>'}
+      <div class="wanneer">${wanneer(s,d)}</div></div>`).join('')}
+    ${!open.length ? '<div class="note">Geen deadlines in de komende 2 weken.</div>'
+      : verborgen ? `<button class="btn ghost small dlmeer" id="dlMeer">▸ nog ${verborgen} ${verborgen === 1 ? 'deadline' : 'deadlines'} deze 2 weken${!zicht.length ? ` · eerstvolgende ${esc(deadlineNaam(open[0]))}, ${wanneer(s, open[0])}` : ''}</button>`
+      : uit && urgent.length < open.length ? `<button class="btn ghost small dlmeer" id="dlMeer">▴ minder tonen</button>` : ''}
     <div class="row" style="margin-top:6px"><button class="btn ghost small" id="dlAlle">Alle deadlines${later?' (+'+later+' later)':''}</button>
       <div class="grow"></div><button class="btn sec small" id="dlNieuw">+ Deadline</button></div></div>`;
 }
@@ -740,6 +781,9 @@ function deadlineKnoppen(){
   });
   document.querySelectorAll('[data-de]').forEach(el => el.onclick = () => openDeadline(D.deadlines.find(x=>x.id===el.dataset.de)));
   if ($('#dlNieuw')) $('#dlNieuw').onclick = () => openDeadline(null);
+  const klap = () => { opslag.set(DL_OPEN_KEY, opslag.get(DL_OPEN_KEY) === '1' ? '0' : '1'); render(); };
+  if ($('#dlKlap')) $('#dlKlap').onclick = klap;
+  if ($('#dlMeer')) $('#dlMeer').onclick = klap;
   if ($('#dlAlle')) $('#dlAlle').onclick = () => alleDeadlines();
 }
 /**
