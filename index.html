@@ -221,7 +221,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.17-16';
+const APP_VERSIE = '2026.11.17-17';
 const SERVER_MIN = '2026.11.17-6';   // deze app verwacht minstens deze Code.gs-versie (meerdere deadlines tegelijk)
 
 // ================= data & helpers =================
@@ -1787,6 +1787,18 @@ function renderTrends(){
 // ================= sheet (pop-up van onderen) =================
 // Een venster kan iets nog willen opslaan voordat het dicht gaat of vervangen wordt (bijv. instellingen).
 let sheetSluitHaak = null;
+// ================= GEEN INVUL-SUGGESTIES =================
+/** Zet de browser-suggesties (eerder ingevulde waarden) uit voor elk invoerveld,
+ *  ook voor velden die later in een sheet verschijnen. */
+function geenSuggesties(root){
+  if (!root || !root.querySelectorAll) return;
+  const velden = root.matches && root.matches('input, textarea') ? [root] : root.querySelectorAll('input, textarea');
+  velden.forEach(el => el.setAttribute('autocomplete', 'off'));
+}
+new MutationObserver(lijst => lijst.forEach(m => m.addedNodes.forEach(geenSuggesties)))
+  .observe(document.documentElement, { childList: true, subtree: true });
+geenSuggesties(document);
+
 function sheetHaak(){ const h = sheetSluitHaak; sheetSluitHaak = null; return h ? h() : Promise.resolve(true); }
 function sheet(html){
   sheetHaak();
