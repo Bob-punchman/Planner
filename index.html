@@ -221,7 +221,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.17-18';
+const APP_VERSIE = '2026.11.17-19';
 const SERVER_MIN = '2026.11.17-6';   // deze app verwacht minstens deze Code.gs-versie (meerdere deadlines tegelijk)
 
 // ================= data & helpers =================
@@ -456,7 +456,7 @@ function weekStats(ma){
   const dagen = [...Array(7)].map((_,i) => {
     const s = plus(ma,i), r = D.dagen.find(x=>x.datum===s) || {}, ds = dienstenOp(s), st = studieOp(s);
     Object.keys(st).forEach(v => perVak[v] = (perVak[v]||0) + st[v]);
-    return { s, studie:Object.values(st).reduce((a,b)=>a+b,0), gamen:r.gamen||0, sport:!!r.sport, coderen:r.coderen||0, slaap:r.slaap||0, bedtijd:r.bedtijd||'',
+    return { s, studie:Object.values(st).reduce((a,b)=>a+b,0), gamen:r.gamen||0, sport:!!r.sport, coderen:r.coderen||0, slaap:r.slaap||0, bedtijd:r.bedtijd||'', notitie:String(r.notitie||'').trim(),
              werk: ds.reduce((t,x)=>t+nettoU(x),0),
              les: w && w.lessen && !w.buiten ? w.lessen.filter(l=>l.datum===s).reduce((t,l)=>t+l.uren,0) : null,
              laat: ds.some(isLaat) };
@@ -1240,11 +1240,14 @@ function weekTekst(ws){
     ws.slaapGem !== null ? `Slaap: gemiddeld ${uMin(ws.slaapGem)} per nacht (${ws.slaapN} nachten ingevuld)` + (ws.bedGem!==null ? `, gemiddeld naar bed om ${uurTekst(ws.bedGem)}` : '') : '',
     `Sjiek: ${u(ws.werk)} u deze week · ${ymNaam(wk.slice(0,7))} totaal ${u(mi.tot)} u (doel ${mi.doel})`,
     ws.les!==null ? `Lessen: ${u(ws.les)} u` : '',
+    notitiesWeek(ws).length ? 'Notities per dag:\n' + notitiesWeek(ws).map(d => `- ${dagKort(d.s)}: ${d.notitie}`).join('\n') : '',
     `Wat ging goed: ${refl.goed || '-'}`,
     `Wat kan beter: ${refl.beter || '-'}`,
     `Focus volgende week: ${refl.focus || '-'}`,
   ].filter(Boolean).join('\n');
 }
+/** Dagen van de week waarop je bij Vandaag een notitie hebt gezet. */
+const notitiesWeek = ws => ws.dagen.filter(d => d.notitie);
 function renderWeek(){
   const i = I(), zo = plus(wk,6), nu = vandaag();
   const ws = weekStats(wk);
@@ -1299,7 +1302,9 @@ function renderWeek(){
     </table></div><div class="note">Tik op een dag om hem in te vullen. ☾ = late dienst.</div></div>
     <h2>Reflectie</h2>
     <div class="card">
-      <label class="f" style="margin-top:0">Wat ging goed?</label><textarea id="rGoed">${esc(refl.goed)}</textarea>
+      ${notitiesWeek(ws).length ? `<label class="f" style="margin-top:0">Notities van deze week</label>
+        ${notitiesWeek(ws).map(d => `<div class="row line"><div class="name" style="min-width:64px">${dagKort(d.s)}</div><div class="grow">${esc(d.notitie)}</div></div>`).join('')}` : ''}
+      <label class="f" ${notitiesWeek(ws).length ? '' : 'style="margin-top:0"'}>Wat ging goed?</label><textarea id="rGoed">${esc(refl.goed)}</textarea>
       <label class="f">Wat kan beter?</label><textarea id="rBeter">${esc(refl.beter)}</textarea>
       <label class="f">Focus volgende week</label><textarea id="rFocus">${esc(refl.focus)}</textarea>
       <div style="height:10px"></div>
