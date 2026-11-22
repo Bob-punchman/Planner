@@ -221,7 +221,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.22-1';
+const APP_VERSIE = '2026.11.22-2';
 const SERVER_MIN = '2026.11.22-1';   // deze app verwacht minstens deze Code.gs-versie (werknaam, schoolvakanties en uitjes)
 
 // ================= data & helpers =================
@@ -1511,7 +1511,7 @@ function renderWeek(){
   const ws = weekStats(wk);
   $('#title').textContent = 'Week ' + weekNr(wk);
   if (!refl || refl.week !== wk) { const r = D.reflecties.find(x=>x.week===wk) || {};
-    refl = {week:wk, goed:r.goed||'', beter:r.beter||'', focus:r.focus||''}; }
+    refl = {week:wk, goed:r.goed||'', beter:r.beter||'', focus:r.focus||''}; reflStatus = ''; }
   const begonnen = wk <= nu, bezig = begonnen && nu <= zo;
   const sig = [];
   if (begonnen) {
@@ -1559,7 +1559,7 @@ function renderWeek(){
       <tr class="tot"><td>Totaal</td><td>${ws.les===null?'…':u(ws.les)}</td><td>${u(ws.studie)}</td><td>${u(ws.gamen)}</td><td>${u(ws.coderen)}</td><td>${ws.sport}×</td><td>${u(ws.werk)}</td>
         <td>${ws.slaapGem===null?'–':'⌀ '+u(Math.round(ws.slaapGem*10)/10)}</td></tr>
     </table></div><div class="note">Tik op een dag om hem in te vullen. ☾ = late dienst${ws.doel.vakantieDagen ? ', 🏖/☀ = vakantie' : ''}${ws.doel.uitjeDagen ? ', 🧳 = weg' : ''}.</div></div>
-    <h2>Reflectie</h2>
+    <h2>Reflectie <span id="rStatus" class="sub autostatus ${reflStatus}">${STATUS_TEKST[reflStatus] || ''}</span></h2>
     <div class="card">
       ${notitiesWeek(ws).length ? `<label class="f" style="margin-top:0">Notities van deze week</label>
         ${notitiesWeek(ws).map(d => `<div class="row line"><div class="name" style="min-width:64px">${dagKort(d.s)}</div><div class="grow">${esc(d.notitie)}</div></div>`).join('')}` : ''}
@@ -1567,29 +1567,22 @@ function renderWeek(){
       <label class="f">Wat kan beter?</label><textarea id="rBeter">${esc(refl.beter)}</textarea>
       <label class="f">Focus volgende week</label><textarea id="rFocus">${esc(refl.focus)}</textarea>
       <div style="height:10px"></div>
-      <button class="btn sec" id="rKopie">Kopieer weekoverzicht voor Claude</button>
+      <button class="btn sec" id="rKopie">Kopieer weekoverzicht</button>
     </div>`;
-  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="rOpslaan">Reflectie opslaan</button></div>`;
   $('#wPrev').onclick = () => verlaat(() => { wk = plus(wk,-7); renderWeek(); });
   $('#wNext').onclick = () => verlaat(() => { wk = plus(wk,7); renderWeek(); });
   document.querySelectorAll('tr[data-d]').forEach(tr => tr.onclick = () => verlaat(() => { dag = tr.dataset.d; view = 'vandaag'; render(); window.scrollTo(0,0); }));
-  [['rGoed','goed'],['rBeter','beter'],['rFocus','focus']].forEach(([id,k]) => $('#'+id).oninput = e => refl[k] = e.target.value);
+  [['rGoed','goed'],['rBeter','beter'],['rFocus','focus']].forEach(([id,k]) => $('#'+id).oninput = e => { refl[k] = e.target.value; planRefl(); });
+  $('#rStatus').onclick = () => { if (reflStatus === 'fout') reflNuOpslaan(); };
   $('#rKopie').onclick = async () => {
     const tekst = weekTekst(ws);
-    try { await navigator.clipboard.writeText(tekst); toast('Gekopieerd: plak het in de chat met Claude'); }
+    try { await navigator.clipboard.writeText(tekst); toast('Weekoverzicht gekopieerd ✓'); }
     catch(e) {
       sheet(`<h3>Weekoverzicht</h3><div class="note">Kopiëren lukte niet automatisch. Selecteer de tekst en kopieer hem zelf.</div>
         <textarea id="kTekst" style="min-height:220px" readonly>${esc(tekst)}</textarea>
         <div style="height:10px"></div><button class="btn ghost" id="kDicht">Sluiten</button>`);
       $('#kTekst').select(); $('#kDicht').onclick = closeSheet;
     }
-  };
-  $('#rOpslaan').onclick = () => {
-    if (opslaanBezig) return;
-    const btn = $('#rOpslaan'); btn.disabled = true; btn.textContent = 'Opslaan…';
-    opslaanBezig = (async () => {
-      try { D = await api('bewaarReflectie', refl); refl = null; toast('Reflectie opgeslagen ✓'); } catch(e){}
-    })().finally(() => { opslaanBezig = null; if (!wachtend) render(); });
   };
 }
 
@@ -2147,15 +2140,22 @@ document.addEventListener('focusout', () => setTimeout(inhalen, 150));
 /** Weggaan van een dag/week met niet-opgeslagen wijzigingen: eerst vragen. */
 let opslaanBezig = null, wachtend = false;   // loopt er een opslag? dan eerst daarop wachten
 function verlaat(actie, annuleer, naFout){
-  if (opslaanBezig) {
+  const loopt = opslaanBezig || reflBezig;
+  if (loopt) {
     wachtend = true; toast('Even wachten, wordt opgeslagen…');
-    opslaanBezig.then(() => { wachtend = false; verlaat(actie, annuleer, naFout); });
+    loopt.then(() => { wachtend = false; verlaat(actie, annuleer, naFout); });
     return;
   }
   // dag gewijzigd: niet vragen, gewoon meteen opslaan. Lukt dat niet, dan alsnog de vraag hieronder.
   if (viesDag() && !naFout) {
     wachtend = true;
     nuOpslaan().then(ok => { wachtend = false; verlaat(actie, annuleer, !ok); });
+    return;
+  }
+  // reflectie gewijzigd: ook meteen opslaan
+  if (viesRefl() && !naFout) {
+    wachtend = true;
+    reflNuOpslaan().then(ok => { wachtend = false; verlaat(actie, annuleer, !ok); });
     return;
   }
   const soort = viesDag() ? 'dag' : viesRefl() ? 'refl' : null;
@@ -2188,6 +2188,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'hidden') return;
   bewaarConcept();                    // eerst lokaal bewaren (vangnet als de app meteen wordt afgesloten)
   if (viesDag()) nuOpslaan();         // en meteen proberen op te slaan, niet wachten op de timer
+  if (viesRefl()) reflNuOpslaan();
 });
 window.addEventListener('pagehide', bewaarConcept);
 window.addEventListener('beforeunload', e => { bewaarConcept(); if (viesDag() || viesRefl()) { e.preventDefault(); e.returnValue = ''; } });
@@ -2274,6 +2275,37 @@ function nuOpslaan(){
   }).catch(() => { bewaarConcept(); toonStatus('fout'); return false; })   // niet steeds opnieuw proberen: wacht op een tik of een nieuwe wijziging
     .then(ok => { opslaanBezig = null; if (ok && viesDag()) planAuto(); if (!wachtend) achtergrondRender(); return ok; });
   return opslaanBezig;
+}
+
+// ================= AUTOMATISCH OPSLAAN (weekreflectie) =================
+// Zelfde idee als bij Vandaag: na elke tik even wachten (debounce). Typ je binnen REFL_MS verder,
+// dan begint het wachten opnieuw. Zo wordt een hele zin één verzoek, en een halve gedachte niet steeds opgeslagen.
+const REFL_MS = 3000;
+let reflTimer = null, reflBezig = null, reflStatus = '';
+function toonReflStatus(s){
+  reflStatus = s;
+  const el = $('#rStatus');
+  if (el) { el.textContent = STATUS_TEKST[s] || ''; el.className = 'sub autostatus ' + s; }
+}
+function planRefl(){
+  clearTimeout(reflTimer);
+  if (!viesRefl()) { if (reflStatus === 'wacht') toonReflStatus(''); return; }
+  toonReflStatus('wacht');
+  reflTimer = setTimeout(reflNuOpslaan, REFL_MS);
+}
+/** Meteen opslaan. Promise met true (gelukt of offline bewaard) of false (fout). Eén verzoek tegelijk. */
+function reflNuOpslaan(){
+  clearTimeout(reflTimer);
+  if (reflBezig) return reflBezig.then(() => viesRefl() ? reflNuOpslaan() : true);
+  if (!viesRefl()) return Promise.resolve(true);
+  toonReflStatus('bezig');
+  reflBezig = api('bewaarReflectie', Object.assign({}, refl)).then(d => {
+    D = d;                             // refl zelf laten staan: je kunt al verder getypt hebben
+    toonReflStatus((opslag.get(WACHT_KEY) || []).length ? 'offline' : 'ok');
+    return true;
+  }).catch(() => { toonReflStatus('fout'); return false; })
+    .then(ok => { reflBezig = null; if (ok && viesRefl()) planRefl(); if (!wachtend) achtergrondRender(); return ok; });
+  return reflBezig;
 }
 
 // ================= start =================
