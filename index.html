@@ -1,0 +1,2329 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<title>Planner</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f1f4f2">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Planner">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root{
+    --bg:#f1f4f2; --card:#fff; --ink:#1e2a2c; --muted:#6a787b; --line:#dde4e1;
+    --accent:#2c6e6a; --accent-soft:#d9ebe8; --plan:#9cc7c2;
+    --ok:#2f7a4f; --ok-soft:#dbefe2; --warn:#b4432f; --warn-soft:#f6ddd7;
+    --info:#355f8c; --info-soft:#dde8f4; --radius:14px;
+    --field:#fff; --soft:#e3e9e7; --track:#e6ecea; --hl:#f3f8f7; --on-accent:#fff; --game:#6b4fb3;
+    color-scheme: light;
+  }
+  /* Donker thema: eigen stappen, geen automatische omkering */
+  html[data-thema="donker"]{
+    --bg:#121718; --card:#1a2123; --ink:#e6edeb; --muted:#97a6a8; --line:#2b3537;
+    --accent:#5fb3ad; --accent-soft:#1d3634; --plan:#2f5c58;
+    --ok:#5cc489; --ok-soft:#163325; --warn:#f08a76; --warn-soft:#3b201b;
+    --info:#93b9e6; --info-soft:#1a2939;
+    --field:#222b2d; --soft:#283234; --track:#2c373a; --hl:#1f2c2b; --on-accent:#0d1716; --game:#a996ef;
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:17px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(14px + env(safe-area-inset-top)) 16px 8px;
+    display:flex;align-items:center;justify-content:space-between}
+  header h1{font-size:24px;margin:0;font-weight:700;letter-spacing:-.01em}
+  main{padding:0 14px 150px;max-width:680px;margin:0 auto}
+  nav{position:fixed;bottom:0;left:0;right:0;z-index:6;background:var(--card);border-top:1px solid var(--line);
+    display:flex;padding-bottom:env(safe-area-inset-bottom)}
+  nav button{flex:1;border:0;background:none;padding:10px 0 12px;font:inherit;font-size:13px;color:var(--muted);
+    display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+  nav button .i{font-size:22px;line-height:1}
+  nav button.on{color:var(--accent);font-weight:600}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin:10px 0}
+  .row{display:flex;gap:10px;align-items:center}
+  .grow{flex:1;min-width:0}
+  .line{padding:8px 0;border-bottom:1px solid var(--line)}
+  .line:last-of-type{border-bottom:0}
+  label.f{display:block;font-size:14px;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;
+    background:var(--field);color:var(--ink);appearance:none;-webkit-appearance:none}
+  textarea{min-height:70px;resize:vertical}
+  .btn{border:0;border-radius:12px;padding:13px 16px;font:inherit;font-weight:600;background:var(--accent);color:var(--on-accent);width:100%;cursor:pointer}
+  .btn.sec{background:var(--accent-soft);color:var(--accent)}
+  .btn.ghost{background:none;color:var(--muted);font-weight:500}
+  .btn.danger{background:var(--warn-soft);color:var(--warn)}
+  .btn.small{width:auto;padding:7px 11px;font-size:14px}
+  .sticky{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));padding:10px 14px;
+    background:linear-gradient(transparent,var(--bg) 30%);z-index:4}
+  .autostatus{font-weight:400;margin-left:6px}
+  .autostatus.fout{color:#c0392b;text-decoration:underline;cursor:pointer}
+  .sticky .btn{max-width:652px;margin:0 auto;display:block;box-shadow:0 4px 14px rgba(44,110,106,.3)}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 4px 6px;font-weight:600}
+  .name{font-weight:600}
+  .sub{font-size:14px;color:var(--muted)}
+  .note{font-size:14px;color:var(--muted);margin:6px 2px}
+  .empty{color:var(--muted);text-align:center;padding:16px 8px}
+  .badge{font-size:13px;padding:3px 9px;border-radius:99px;background:var(--ok-soft);color:var(--ok);white-space:nowrap;font-weight:600}
+  .badge.none{background:var(--soft);color:var(--muted);font-weight:500}
+  .list-item{display:flex;align-items:center;gap:10px;padding:12px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+  .list-item:last-child{border-bottom:0}
+  .big{font-size:38px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+  .unit{font-size:15px;font-weight:500;color:var(--muted);margin-left:4px;letter-spacing:0}
+  .seg{display:flex;background:var(--soft);border-radius:11px;padding:3px;gap:3px}
+  .seg button{flex:1;border:0;background:none;border-radius:9px;padding:9px 4px;font:inherit;font-size:15px;color:var(--muted);cursor:pointer}
+  .seg button.on{background:var(--field);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .seg.small button{padding:6px 14px}
+  .alert,.okbox,.infobox{border-radius:12px;padding:10px 12px;font-size:15px;margin:10px 0}
+  .alert{background:var(--warn-soft);color:var(--warn)}
+  .okbox{background:var(--ok-soft);color:var(--ok)}
+  .infobox{background:var(--info-soft);color:var(--info)}
+  .daynav{display:flex;gap:8px;align-items:center;margin:6px 0}
+  .nb{border:1px solid var(--line);background:var(--field);border-radius:10px;width:46px;height:46px;font-size:22px;color:var(--ink);flex:none;cursor:pointer}
+  .daynav .lbl{flex:1;text-align:center;font-weight:600}
+  .step{display:flex;align-items:center;gap:6px}
+  .step button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--field);font-size:22px;color:var(--accent);cursor:pointer}
+  .sv{min-width:62px;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
+  .ag{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);align-items:baseline}
+  .ag:last-child{border-bottom:0}
+  .ag .tijd{font-variant-numeric:tabular-nums;color:var(--muted);font-size:15px;min-width:96px}
+  .ag.werk .grow{color:var(--accent);font-weight:600}
+  .count{display:flex;align-items:center;gap:10px}
+  .m{margin:10px 0}
+  .mv{font-size:15px;font-variant-numeric:tabular-nums}
+  .meter{height:9px;background:var(--track);border-radius:99px;overflow:hidden;margin-top:5px}
+  .meter i{display:block;height:100%;background:var(--accent);border-radius:99px}
+  .meter.good i{background:var(--ok)}
+  .meter.bad i{background:var(--warn)}
+  .track{position:relative;height:22px;background:var(--track);border-radius:8px;margin:34px 0 8px}
+  .track i{position:absolute;top:0;bottom:0;left:0}
+  .track i.gew{background:var(--accent);border-radius:8px 0 0 8px}
+  .track i.gep{background:var(--plan)}
+  .mark{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--ink);transform:translateX(-1px)}
+  .mark b{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-size:12px;white-space:nowrap;margin-bottom:2px}
+  .mark.doel{background:var(--warn)}
+  .mark.doel b{color:var(--warn)}
+  .legend{display:flex;gap:14px;font-size:14px;color:var(--muted);flex-wrap:wrap}
+  .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;background:var(--accent)}
+  .legend span.p::before{background:var(--plan)}
+  table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:8px 3px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{font-size:12px;color:var(--muted);font-weight:600}
+  tr.tot td{font-weight:700;border-bottom:0}
+  tr.vandaag td{background:var(--hl)}
+  .mini{height:8px;background:var(--track);border-radius:99px;overflow:hidden;width:70px;display:inline-block;vertical-align:middle}
+  .mini i{display:block;height:100%;background:var(--accent)}
+  .sheet-bg{position:fixed;inset:0;background:rgba(30,42,44,.35);z-index:20;display:flex;align-items:flex-end}
+  .sheet{background:var(--bg);width:100%;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;
+    padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-width:680px;margin:0 auto}
+  .sheet h3{margin:0 0 6px;font-size:21px}
+  .dlkop{background:none;border:0;padding:0;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer}
+  .dlmeer{display:block;width:100%;text-align:left;padding:8px 0 2px;white-space:normal}
+  .toast.actie{display:flex;align-items:center;gap:12px;pointer-events:auto}
+  .toastknop{background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;padding:6px 2px;cursor:pointer}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(140px + env(safe-area-inset-bottom));
+    background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:12px;z-index:30;font-size:15px;max-width:90vw}
+  .loading{position:fixed;inset:0;display:grid;place-items:center;color:var(--muted);background:var(--bg);z-index:50}
+  .gear{border:0;background:none;font-size:24px;color:var(--muted);padding:4px;cursor:pointer}
+  details summary{list-style:none;cursor:pointer;color:var(--accent);font-weight:600;padding:12px 4px}
+  details summary::-webkit-details-marker{display:none}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);background:var(--field);border-radius:99px;padding:8px 13px;font:inherit;font-size:15px;color:var(--accent);cursor:pointer}
+  .chip.game{color:var(--game)}
+  .big.neg{color:var(--warn)}
+  .timer{border-color:var(--accent);background:var(--hl)}
+  /* knoppen voelen ingedrukt aan; .bezig = wacht nog op de server */
+  .btn,.chip,.nb,.step button,.vink,.seg button{transition:transform .08s ease,opacity .15s}
+  .btn:active,.chip:active,.nb:active,.step button:active,.vink:active,.seg button:active{transform:scale(.94)}
+  .bezig{opacity:.55;pointer-events:none}
+  .timer.pauze{border-style:dashed}
+  .timer.pauze #tKlok{animation:knipper 1.4s ease-in-out infinite}
+  @keyframes knipper{50%{opacity:.35}}
+  .vakrow input{width:auto}
+  .list-item.vervallen .name{text-decoration:line-through;color:var(--muted)}
+  .badge.warn{background:var(--warn-soft);color:var(--warn)}
+  .dl{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+  .dl:last-child{border-bottom:0}
+  .dl .wanneer{font-size:13px;font-weight:600;white-space:nowrap}
+  .dl.urgent .wanneer{color:var(--warn)}
+  .vink{width:34px;height:34px;border-radius:50%;border:2px solid var(--line);background:var(--field);flex:none;cursor:pointer;color:var(--ok);font-size:17px}
+  .setup{max-width:520px;margin:40px auto;padding:0 16px}
+  .chip.code{color:var(--info)}
+  .tabelwrap{overflow-x:auto}
+  .grafiek{position:relative}
+  .grafiek svg{display:block;width:100%;height:auto;overflow:visible}
+  .grafiek .gt{font-weight:600;margin-bottom:2px}
+  .grafiek .gs{font-size:13px;color:var(--muted);margin-bottom:6px}
+  .grafiek .ax{font-size:11px;fill:var(--muted)}
+  .grafiek .grid{stroke:var(--line);stroke-width:1}
+  .grafiek .ref{stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 4}
+  .grafiek .tick{stroke:var(--ink);stroke-width:2;stroke-linecap:round}
+  .grafiek [data-i]{cursor:pointer}
+  .legenda{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--muted);margin:2px 0 6px}
+  .legenda span{display:inline-flex;align-items:center;gap:5px}
+  .legenda i{width:10px;height:10px;border-radius:3px;display:inline-block}
+  .legenda i.lijn{height:0;border-top:2px solid var(--ink);border-radius:0;width:12px}
+  .legenda i.stip{height:0;border-top:2px dashed var(--muted);border-radius:0;width:12px}
+  .tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;padding:6px 9px;border-radius:8px;
+    white-space:nowrap;transform:translate(-50%,-100%);display:none;z-index:3;line-height:1.35}
+  input.tijd{font-variant-numeric:tabular-nums;text-align:center;cursor:pointer}
+  input.tijd::placeholder, input.datum::placeholder{color:var(--muted);opacity:.7;letter-spacing:.08em}
+  .kiezer-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:40;display:flex;align-items:flex-end}
+  .kiezer{background:var(--bg);width:100%;max-width:680px;margin:0 auto;border-radius:20px 20px 0 0;
+    padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+  .kiezer .kop{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+  .kiezer .groot{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .kiezer .groot span{display:inline-block;min-width:1.25em;text-align:center;border-bottom:3px solid transparent;cursor:pointer}
+  .kiezer .groot span.leeg{color:var(--muted);opacity:.5}
+  .kiezer .groot span.actief{border-bottom-color:var(--accent)}
+  .kiezer .rooster.m60{grid-template-columns:repeat(10,1fr);gap:4px}
+  .kiezer .rooster.m60 button{padding:8px 0;font-size:14px}
+  .kiezer .rooster{display:grid;gap:6px;margin:8px 0 12px}
+  .kiezer .rooster.u{grid-template-columns:repeat(6,1fr)}
+  .kiezer .rooster.m{grid-template-columns:repeat(6,1fr)}
+  .kiezer .rooster button{border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:10px;padding:11px 0;
+    font:inherit;font-size:16px;font-variant-numeric:tabular-nums;cursor:pointer}
+  .kiezer .rooster button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+  .kiezer .lbl{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .datumveld{display:flex;gap:6px;align-items:stretch;position:relative;min-width:0}
+  .datumveld input.datum{flex:1;min-width:0;font-variant-numeric:tabular-nums}
+  .datumveld input.datum.fout{border-color:var(--warn);background:var(--warn-soft)}
+  .datumveld .kal{flex:none;width:46px;border:1px solid var(--line);border-radius:10px;background:var(--field);color:var(--ink);font-size:18px;cursor:pointer}
+  .datumveld input.native{position:absolute;right:0;bottom:0;width:46px;height:100%;opacity:0;pointer-events:none}
+  input.tijd.fout{border-color:var(--warn);background:var(--warn-soft)}
+  .x{border:0;background:none;color:var(--warn);font-size:20px;padding:4px 8px;cursor:pointer}
+</style>
+<script>
+  // thema meteen toepassen (voordat de app tekent): licht, donker of systeem
+  (function(){ var k = 'systeem'; try { k = JSON.parse(localStorage.getItem('planner-thema')) || 'systeem'; } catch(e){}
+    var d = k === 'donker' || (k === 'systeem' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-thema', d ? 'donker' : 'licht'); })();
+</script>
+<!--TEST-HEAD-->
+</head>
+<body>
+<!--TEST-BODY-->
+<div class="loading" id="loading">Even laden…</div>
+<header><h1 id="title">Vandaag</h1><button class="gear" id="gear" aria-label="Instellingen">⚙︎</button></header>
+<main id="main"></main>
+<div id="stickyHost"></div>
+<nav id="nav">
+  <button data-v="vandaag"><span class="i">✓</span>Vandaag</button>
+  <button data-v="week"><span class="i">◷</span>Week</button>
+  <button data-v="maand"><span class="i">▤</span>Maand</button>
+  <button data-v="trends"><span class="i">↗</span>Trends</button>
+</nav>
+<div id="sheetHost"></div>
+
+<script>
+// ================= versie =================
+// Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
+const APP_VERSIE = '2026.11.22-1';
+const SERVER_MIN = '2026.11.22-1';   // deze app verwacht minstens deze Code.gs-versie (werknaam, schoolvakanties en uitjes)
+
+// ================= data & helpers =================
+let D = null;          // alle gegevens uit de spreadsheet
+let view = 'vandaag';
+const DAGEN = ['zo','ma','di','wo','do','vr','za'];
+const DAGEN_LANG = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+const MAANDEN = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+const MAANDEN_LANG = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2,'0');
+const fmt = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const vandaag = () => fmt(new Date());
+const dt = s => new Date(s+'T12:00:00');
+const plus = (s,n) => { const d=dt(s); d.setDate(d.getDate()+n); return fmt(d); };
+const maandag = s => plus(s, -((dt(s).getDay()+6)%7));
+const weekNr = s => { const d=dt(s); d.setDate(d.getDate()+3-((d.getDay()+6)%7)); const j=new Date(d.getFullYear(),0,4,12);
+  return 1+Math.round(((d-j)/864e5-3+((j.getDay()+6)%7))/7); };
+const dagKort = s => { const d=dt(s); return DAGEN[d.getDay()]+' '+d.getDate()+' '+MAANDEN[d.getMonth()]; };
+const dagenTot = (van,tot) => Math.round((dt(tot)-dt(van))/864e5);
+const u = n => (Math.round(n*100)/100).toLocaleString('nl-NL',{maximumFractionDigits:2});
+const euro = n => '€ '+Math.round(n).toLocaleString('nl-NL');
+const euroC = n => '€ '+n.toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2});
+const num = s => Number(String(s).replace(',','.'));
+const mins = t => { const [h,m]=String(t||'0:0').split(':').map(Number); return (h||0)*60+(m||0); };
+const ymPlus = (ym,n) => { let [y,m]=ym.split('-').map(Number); m+=n; while(m>12){m-=12;y++;} while(m<1){m+=12;y--;} return y+'-'+pad(m); };
+const ymNaam = ym => { const [y,m]=ym.split('-').map(Number); return MAANDEN_LANG[m-1]+' '+y; };
+const I = () => D.instellingen;
+/** Naam van je werk zoals je hem bij ⚙︎ invult (staat alleen in je eigen sheet, niet in de code). */
+const W = () => (D && D.instellingen && D.instellingen.werkNaam) || 'Werk';
+
+function brutoU(d){ let b=mins(d.begin), e=mins(d.eind); if (e<=b) e+=1440; return (e-b)/60; }
+function nettoU(d){ return Math.max(0, brutoU(d)-(Number(d.pauze)||0)/60); }
+function isLaat(d){ const b=mins(d.begin), e=mins(d.eind); return e<=b || e>=23*60; }
+function stdPauze(br){ return br > I().pauzeVanaf ? I().pauzeMin : 0; }
+const telt = x => x.status !== 'vervallen';
+function dienstenOp(s){ return D.diensten.filter(x=>x.datum===s && telt(x)).sort((a,b)=>a.begin.localeCompare(b.begin)); }
+function tarief(uren){ const i=I(); return uren>=i.grens2 ? i.loon2 : uren>=i.grens1 ? i.loon1 : i.loonBasis; }
+function maandInfo(ym){
+  const ds = D.diensten.filter(x=>x.datum.startsWith(ym+'-') && telt(x));
+  const tot = ds.reduce((t,x)=>t+nettoU(x),0);
+  const gew = ds.filter(x=>x.status==='gewerkt').reduce((t,x)=>t+nettoU(x),0);
+  const g = D.maanddoelen.find(m=>m.maand===ym);
+  const bruto = ds.reduce((t,x)=>t+nettoU(x)*(x.toeslag||100)/100,0) * tarief(tot);
+  // geen eigen doel voor deze maand: standaard maanddoel + extra uren in vakantieweken (⚙︎ → Vakanties)
+  const extra = g ? 0 : Math.round(werkExtra(ym));
+  return { ds, tot, gew, doel: g?g.doel:I().maandDoel + extra, extra, minimum: g?g.minimum:I().maandMinimum, bruto, tarief: tarief(tot) };
+}
+function grensTekst(uren){
+  const i=I();
+  for (const g of [i.grens1, i.grens2]) if (g > 0 && uren<g && g-uren<=3)
+    return `<div class="alert">Net onder de ${g}-grens: nog ${u(g-uren)} u en je krijgt een hoger uurloon over álle uren.</div>`;
+  return '';
+}
+/** Komende tentamens vanaf een datum, op volgorde. Vandaag telt een tentamen niet meer mee zodra de begintijd voorbij is. */
+function komendeTentamens(vanaf){
+  const nu = new Date(), nuMin = nu.getHours()*60 + nu.getMinutes();
+  const voorbij = t => t.datum === vandaag() && t.tijd && mins(t.tijd) <= nuMin;
+  return D.tentamens.filter(t => t.datum >= vanaf && !voorbij(t)).sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd));
+}
+function volgendTentamen(vanaf){ return komendeTentamens(vanaf)[0]; }
+
+// Werkt op twee manieren: binnen Google (google.script.run) of als losse app (fetch met geheime sleutel).
+const IN_GOOGLE = !!(window.google && google.script && google.script.run);
+const CFG_KEY = 'planner-koppeling', CACHE_KEY = 'planner-cache';
+const opslag = { get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
+                 set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
+                 weg(k){ try { localStorage.removeItem(k); } catch(e){} } };
+function roep(fn, args, cfg){
+  if (IN_GOOGLE) return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+  cfg = cfg || opslag.get(CFG_KEY);
+  if (!cfg) return Promise.reject(new Error('Niet gekoppeld'));
+  return fetch(cfg.url, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+                          body: JSON.stringify({sleutel: cfg.sleutel, fn, args}) })
+    .then(r => r.json()).then(j => { if (!j.ok) throw new Error(j.fout || 'Onbekende fout'); return j.data; });
+}
+// Offline: deze schrijfacties worden bewaard en later verstuurd als er geen verbinding is.
+const OFFLINE_FN = ['bewaarDag', 'bewaarReflectie', 'bewaarDeadline', 'bewaarDienst'], WACHT_KEY = 'planner-wachtrij';
+const isNetwerkFout = e => /Failed to fetch|NetworkError|Load failed|network/i.test(e && e.message || String(e));
+function lokaal(fn, a){             // laat de wijziging meteen zien, ook zonder verbinding
+  const d = JSON.parse(JSON.stringify(D));
+  if (fn === 'bewaarDag') {
+    d.dagen = d.dagen.filter(x => x.datum !== a.datum);
+    if (Number(a.gamen) || a.sport || a.notitie || Number(a.coderen) || Number(a.slaap) || a.bedtijd || a.opstaan)
+      d.dagen.push({datum:a.datum, gamen:Number(a.gamen)||0, sport:!!a.sport, notitie:a.notitie||'', coderen:Number(a.coderen)||0,
+                    slaap:Number(a.slaap)||0, bedtijd:a.bedtijd||'', opstaan:a.opstaan||''});
+    const vakken = Object.keys(a.studie || {});
+    d.studie = d.studie.filter(x => !(x.datum === a.datum && vakken.includes(x.vak)));
+    vakken.forEach(v => { if (Number(a.studie[v]) > 0) d.studie.push({id:a.datum+'|'+v, datum:a.datum, vak:v, uren:Number(a.studie[v])}); });
+  } else if (fn === 'bewaarReflectie') {
+    d.reflecties = d.reflecties.filter(r => r.week !== a.week).concat([Object.assign({}, a)]);
+  } else if (fn === 'bewaarDeadline') {
+    const x = Object.assign({}, a, {id: a.id || 'nieuw-' + Date.now()});
+    d.deadlines = d.deadlines.filter(y => y.id !== x.id).concat([x]);
+  } else if (fn === 'bewaarDienst') {   // bijv. "Gewerkt?" afvinken op locatie zonder bereik
+    const oud = d.diensten.find(y => y.id === a.id) || {};
+    const x = Object.assign({}, oud, a, {pauze: Number(a.pauze) || 0, toeslag: Number(a.toeslag) || 100, status: a.status || 'gepland'});
+    d.diensten = d.diensten.filter(y => y.id !== x.id).concat([x]);
+  }
+  return d;
+}
+async function verstuurWachtrij(){
+  const rij = opslag.get(WACHT_KEY) || [];
+  if (!rij.length || IN_GOOGLE) return;
+  for (let n = 0; n < rij.length; n++) {
+    try { await roep(rij[n].fn, rij[n].args); }
+    catch(e) { opslag.set(WACHT_KEY, rij.slice(n)); return; }   // nog steeds offline: later opnieuw
+  }
+  opslag.weg(WACHT_KEY);
+  try { D = await roep('haalAlles', []); opslag.set(CACHE_KEY, D); inv = null;
+        achtergrondRender(); toast('Offline wijzigingen opgeslagen ✓'); } catch(e) {}
+}
+window.addEventListener('online', verstuurWachtrij);
+function api(fn, ...args){
+  if (!IN_GOOGLE && OFFLINE_FN.includes(fn) && (opslag.get(WACHT_KEY) || []).length) return inWachtrij(fn, args);
+  return roep(fn, args).catch(e => {
+    if (!IN_GOOGLE && OFFLINE_FN.includes(fn) && isNetwerkFout(e)) return inWachtrij(fn, args);
+    throw e;
+  }).then(d => {
+    if (!IN_GOOGLE && d && d.diensten) opslag.set(CACHE_KEY, d);   // laatste stand bewaren: app opent direct
+    return d;
+  }).catch(e => {
+    const m = e.message || String(e);
+    toast(isNetwerkFout(e) ? 'Geen verbinding. Probeer het zo opnieuw.' : 'Er ging iets mis: ' + m);
+    throw e;
+  });
+}
+function inWachtrij(fn, args){
+  // nieuw item zonder id: nu al een tijdelijk id geven, dat ook naar de server gaat.
+  // Anders krijgt hij lokaal een ander id dan op de server, en komt hij na nog een wijziging dubbel in de sheet.
+  if ((fn === 'bewaarDeadline' || fn === 'bewaarDienst') && args[0] && !args[0].id)
+    args = [Object.assign({}, args[0], {id: 'nieuw-' + Date.now()})].concat(args.slice(1));
+  const rij = opslag.get(WACHT_KEY) || []; rij.push({fn, args}); opslag.set(WACHT_KEY, rij);
+  const d = lokaal(fn, args[0]); opslag.set(CACHE_KEY, d);
+  setTimeout(() => toast('Offline bewaard. Wordt verstuurd zodra je verbinding hebt.'), 2900);
+  setTimeout(verstuurWachtrij, 3000);   // misschien is de verbinding er alweer
+  return Promise.resolve(d);
+}
+function toast(t){ const el=document.createElement('div'); el.className='toast'; el.textContent=t; document.body.appendChild(el); setTimeout(()=>el.remove(),2800); }
+/** Melding met een knop (bijv. "Ongedaan maken"), blijft ms milliseconden staan. */
+function toastActie(t, knop, fn, ms = 6000){
+  document.querySelectorAll('.toast.actie').forEach(x => x.remove());
+  const el = document.createElement('div'); el.className = 'toast actie';
+  el.innerHTML = `<span></span><button class="toastknop"></button>`;
+  el.firstChild.textContent = t; el.lastChild.textContent = knop;
+  el.lastChild.onclick = () => { el.remove(); fn(); };
+  document.body.appendChild(el); setTimeout(() => el.remove(), ms);
+}
+
+/** Lessen worden alleen bij het opstarten opgehaald: 2 weken terug t/m ±2 maanden vooruit, in één keer. */
+const LES_KEY = 'planner-lessen';
+let LESSEN = null;                       // { van, tot, lessen } of { fout }
+function lesBereik(){ const ma = maandag(vandaag()); return { van: plus(ma, -14), tot: plus(ma, 9*7 - 1) }; }
+function haalLessenOp(){
+  const b = lesBereik();
+  if (!LESSEN) LESSEN = opslag.get(LES_KEY);          // laatste stand, ook zonder internet
+  return api('haalLessen', b.van, b.tot)
+    .then(r => { LESSEN = r.fout ? { fout: r.fout } : Object.assign({}, b, r); if (!r.fout) opslag.set(LES_KEY, LESSEN); achtergrondRender(); })
+    .catch(() => { if (!LESSEN) LESSEN = { fout: 'Lessen laden uit de agenda lukte niet.' }; achtergrondRender(); });
+}
+function lessenWeek(ma){
+  if (!LESSEN) return null;                            // nog bezig met ophalen
+  if (LESSEN.fout) return { fout: LESSEN.fout };
+  if (ma < maandag(LESSEN.van) || ma > LESSEN.tot)     // buiten wat bij het opstarten is opgehaald
+    return { lessen: [], buiten: true };
+  return { lessen: LESSEN.lessen.filter(l => l.datum >= ma && l.datum <= plus(ma, 6)) };
+}
+function lessenOp(s){ const w=lessenWeek(maandag(s)); if (!w || w.fout) return w; return {lessen: w.lessen.filter(l=>l.datum===s), buiten: w.buiten}; }
+
+// ================= SCHOOLVAKANTIES EN UITJES =================
+// Periodes staan in het tabblad "Periodes": soort vakantie (gewone schoolvakantie), zomer of uitje.
+// - vakantie: lager studiedoel (⚙︎), gamen = vrije daglimiet (hoeft niet verdiend), eventueel extra werkuren.
+// - zomer:    studiedoel 0, verder als vakantie.
+// - uitje:    je bent weg. Op die dagen gaan de doelen omlaag naar rato van hoeveel van je dag je weg bent.
+// De toetsweekmodus werkt er gewoon bovenop: een tentamen vlak na een vakantie trekt het studiedoel weer omhoog.
+const periodes = () => (D && D.periodes) || [];
+const isZomerNaam = naam => /zomer/i.test(String(naam || ''));   // "Zomervakantie", "ZOMER", "zomerstop": niet hoofdlettergevoelig
+/** Schoolvakantie op dag s, of null. Overlappen er twee, dan gaat de zomervakantie voor. */
+function vakantieOp(s){
+  const l = periodes().filter(p => p.soort !== 'uitje' && p.van <= s && s <= p.tot);
+  return l.find(p => p.soort === 'zomer') || l[0] || null;
+}
+/** Je actieve dag in minuten (⚙︎ → Uitjes), bijv. 08:00–23:00. Eind na middernacht mag (bijv. 01:00). */
+function actieveDag(){
+  const a = mins(I().dagStart || '08:00'); let b = mins(I().dagEind || '23:00'); if (b <= a) b += 1440;
+  return { a, b };
+}
+/**
+ * Welk deel (0–1) van je actieve dag ben je weg voor dit uitje op dag s?
+ * Vertrekdag: vanaf de vertrektijd. Terugkomdag: tot de terugkomtijd. Geen tijd = de hele dag weg.
+ * Voorbeeld met 08:00–23:00: om 07:00 weg = 100%, om 18:00 weg = 5 van de 15 uur = 33%.
+ */
+function wegDeel(p, s){
+  const { a, b } = actieveDag();
+  const begin = s === p.van && p.vertrek ? mins(p.vertrek) : 0;
+  const eind = s === p.tot && p.terug ? mins(p.terug) : 1440 * 2;
+  const overlap = Math.max(0, Math.min(eind, b) - Math.max(begin, a));
+  return Math.min(1, overlap / (b - a));
+}
+/** Uitjes op dag s: { lijst, deel } (deel = opgeteld, max 1), of null. */
+function uitjeOp(s){
+  const lijst = periodes().filter(p => p.soort === 'uitje' && p.van <= s && s <= p.tot);
+  if (!lijst.length) return null;
+  return { lijst, deel: Math.min(1, lijst.reduce((t, p) => t + wegDeel(p, s), 0)) };
+}
+const procent = x => Math.round(x * 100) + '%';
+/** "vr 12 dec 18:00 – zo 14 dec 20:00" */
+const periodeTekst = p => dagKort(p.van) + (p.vertrek ? ' ' + p.vertrek : '') + (p.tot !== p.van || p.terug ? ' – ' + (p.tot !== p.van ? dagKort(p.tot) : '') + (p.terug ? ' ' + p.terug : '') : '');
+/** Tentamens waarvoor dit uitje in de week ervóór valt (7 dagen). */
+function uitjeVoorTentamen(p){
+  const raak = [];
+  for (let s = p.van; s <= p.tot; s = plus(s, 1)) {
+    const m = toetsweek(s, false, 7);
+    if (m) m.alle.forEach(x => { if (!raak.includes(x.t)) raak.push(x.t); });
+  }
+  return raak;
+}
+/** Extra werkuren in een maand door vakantiedagen (⚙︎ → Vakanties), minder op dagen dat je weg bent. */
+function werkExtra(ym){
+  const perDag = (Number(I().vakantieWerkExtra) || 0) / 7; if (!perDag) return 0;
+  let extra = 0;
+  for (let s = ym + '-01'; s.startsWith(ym); s = plus(s, 1)) {
+    if (!vakantieOp(s)) continue;
+    const uit = uitjeOp(s); extra += perDag * (uit ? 1 - uit.deel : 1);
+  }
+  return extra;
+}
+
+function basisDoel(){ const s = D.vakken.reduce((t,v)=>t+v.weekdoel,0); return s || 15; }
+/**
+ * Toetsweekmodus voor dag s: alle tentamens binnen X dagen ná s (de tentamendag zelf telt niet).
+ * Geeft { t, dagen } van het eerstvolgende (voor meldingen) en { alle } met elk tentamen en zijn afstand in dagen.
+ */
+function toetsweek(s, weekVanaf, dagen){
+  const n = dagen || Number(I().toetsweekDagen) || 0; if (!n) return null;
+  const eind = weekVanaf ? plus(s, 6) : s;
+  // "alleen indien nodig" telt niet mee: haal hem weg met "Niet nodig", of pas de opmerking aan als je hem wél moet maken
+  const lijst = D.tentamens.filter(t => !/indien nodig/i.test(t.opmerking||'') && t.datum > s && dagenTot(eind, t.datum) <= n)
+    .sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd));
+  if (!lijst.length) return null;
+  const alle = lijst.map(t => ({ t, dagen: dagenTot(s, t.datum) }));
+  return { t: alle[0].t, dagen: alle[0].dagen, alle };
+}
+/**
+ * Weekdoelen (basis voor dagDoel): in toetsweekmodus hoger studiedoel (extra uren naar het tentamenvak) en minder gamen.
+ * In een schoolvakantie is het basisdoel lager (zomer: 0); de vakken houden onderling dezelfde verhouding.
+ * gameDag = vrije gametijd per dag in een vakantie.
+ */
+function doelen(modus, vak){
+  const i = I(), normaal = basisDoel(), perVak = {};
+  const basis = !vak ? normaal : vak.soort === 'zomer' ? 0 : Math.max(0, Number(i.vakantieStudie) || 0);
+  const factor = normaal ? basis / normaal : 0;
+  D.vakken.forEach(v => perVak[v.vak] = v.weekdoel * factor);
+  const gameDag = Math.max(0, Number(i.vakantieGameDag) || 0);
+  if (!modus) return { studie: basis, perVak, gameMax: i.gameMax, gameDag };
+  const studie = Math.max(basis, Number(i.toetsweekStudie) || basis), extra = studie - basis;
+  // extra tijd verdelen over alle komende tentamens: gewicht = 1 ÷ dagen tot het tentamen (dichterbij = meer)
+  const totGewicht = modus.alle.reduce((t, x) => t + 1 / x.dagen, 0);
+  modus.alle.forEach(x => {
+    const deel = extra * (1 / x.dagen) / totGewicht;
+    const raak = D.vakken.filter(v => x.t.vak.toLowerCase().includes(v.vak.toLowerCase()));
+    raak.forEach(v => perVak[v.vak] += deel / raak.length);
+  });
+  const toetsGame = Math.min(i.gameMax, Number(i.toetsweekGameMax) || i.gameMax);
+  return { studie, perVak, gameMax: toetsGame, gameDag: Math.min(gameDag, toetsGame / 7) };
+}
+/**
+ * Doelen voor één dag: het weekdoel gedeeld door 7. Valt de dag binnen de toetsweekmodus
+ * (vóór een tentamen, niet de tentamendag zelf), dan het toetsweekdoel gedeeld door 7.
+ * Vakantie: lager weekdoel, en gamen is een vrije daglimiet (gameVrij) in plaats van verdienen (gameMax).
+ * Uitje: alles keer het deel van de dag dat je er wél bent (beschikbaar).
+ */
+function dagDoel(s){
+  const m = toetsweek(s), vak = vakantieOp(s), uit = uitjeOp(s), d = doelen(m, vak), perVak = {};
+  const er = uit ? 1 - uit.deel : 1;
+  Object.keys(d.perVak).forEach(v => perVak[v] = d.perVak[v] / 7 * er);
+  return { studie: d.studie / 7 * er, gameMax: vak ? 0 : d.gameMax / 7 * er, gameVrij: vak ? d.gameDag * er : 0,
+           perVak, modus: m, tentamens: m ? m.alle.map(x => x.t) : [], vakantie: vak, uitje: uit, beschikbaar: er };
+}
+/** Doelen voor een reeks dagen (week of maand) = de optelsom van de dagdoelen. */
+function doelenVoor(van, aantal){
+  const som = { studie: 0, gameMax: 0, gameVrij: 0, perVak: {}, modus: null, modusDagen: 0, dagen: aantal, tentamens: [],
+                beschikbaar: 0, vakantieDagen: 0, vakanties: [], uitjeDagen: 0, uitjes: [] };
+  for (let n = 0; n < aantal; n++) {
+    const d = dagDoel(plus(van, n));
+    som.studie += d.studie; som.gameMax += d.gameMax; som.gameVrij += d.gameVrij; som.beschikbaar += d.beschikbaar;
+    if (d.vakantie) { som.vakantieDagen++; if (!som.vakanties.includes(d.vakantie)) som.vakanties.push(d.vakantie); }
+    if (d.uitje) { som.uitjeDagen++; d.uitje.lijst.forEach(p => { if (!som.uitjes.includes(p)) som.uitjes.push(p); }); }
+    Object.keys(d.perVak).forEach(v => som.perVak[v] = (som.perVak[v] || 0) + d.perVak[v]);
+    if (d.modus) {
+      som.modusDagen++; if (!som.modus) som.modus = d.modus;
+      d.modus.alle.forEach(x => { if (!som.tentamens.includes(x.t)) som.tentamens.push(x.t); });
+    }
+  }
+  return som;
+}
+/** Alle tentamens als tekst: "Wiskunde (ma 19 jan), Scheikunde (di 20 jan)". */
+const tentamenTekst = lijst => lijst.map(t => t.vak + ' (' + dagKort(t.datum) + ')').join(', ');
+/** Melding bovenaan. wat = 'vandaag' of 'deze week'; d.modusDagen/d.dagen alleen bij een week. */
+function toetsBanner(m, d, wat){
+  if (!m) return '';
+  const deel = d.dagen > 1 && d.modusDagen < d.dagen ? ` (${d.modusDagen} van de ${d.dagen} dagen toetsweek)` : '';
+  return `<div class="infobox">📚 <b>Toetsweekmodus</b>: ${esc(tentamenTekst(d.tentamens))}. Studiedoel ${wat} ${uD(d.studie)}, max ${uD(d.gameMax + (d.gameVrij || 0))} gamen${deel}. Liefst geen diensten.</div>`;
+}
+/** Melding voor schoolvakanties en uitjes. d = dagDoel (één dag) of doelenVoor (week); wat = 'vandaag' of 'deze week'. */
+function vrijBanner(d, wat){
+  const uit = [], studieT = d.modus ? 'studiedoel omhoog door de toetsweekmodus' : d.studie > 0.01 ? `studiedoel ${wat} ${uD(d.studie)}` : 'geen studiedoel';
+  const icoon = l => l.some(p => p.soort === 'zomer') ? '☀' : '🏖';
+  if (d.dagen > 1) {
+    if (d.vakantieDagen) uit.push(`<div class="infobox">${icoon(d.vakanties)} <b>${esc(d.vakanties.map(p => p.naam).join(', '))}</b>${d.vakantieDagen < d.dagen ? ` (${d.vakantieDagen} van de ${d.dagen} dagen)` : ''}: ${studieT}, ${uD(d.gameVrij)} vrije gametijd (hoeft niet verdiend).</div>`);
+    if (d.uitjeDagen) uit.push(`<div class="infobox">🧳 Weg: ${esc(d.uitjes.map(p => p.naam + ' (' + periodeTekst(p) + ')').join(', '))}. Je doelen zijn daar al op aangepast.</div>`);
+  } else {
+    if (d.vakantie) uit.push(`<div class="infobox">${icoon([d.vakantie])} <b>${esc(d.vakantie.naam)}</b>: ${studieT}, gamen max ${uD(d.gameVrij)} (hoeft niet verdiend).</div>`);
+    if (d.uitje) uit.push(`<div class="infobox">🧳 <b>${esc(d.uitje.lijst.map(p => p.naam).join(', '))}</b>: ${d.uitje.deel >= 0.999
+      ? 'je bent vandaag weg, dus geen doelen en geen herinneringen.'
+      : `je bent ${procent(d.uitje.deel)} van je dag weg, je doelen gaan naar ${procent(1 - d.uitje.deel)}.`}</div>`);
+  }
+  return uit.join('');
+}
+function studieOp(s){ const o={}; D.studie.filter(x=>x.datum===s).forEach(x=>o[x.vak]=(o[x.vak]||0)+x.uren); return o; }
+function weekStats(ma){
+  const w = lessenWeek(ma);
+  const perVak = {};
+  const dagen = [...Array(7)].map((_,i) => {
+    const s = plus(ma,i), r = D.dagen.find(x=>x.datum===s) || {}, ds = dienstenOp(s), st = studieOp(s);
+    Object.keys(st).forEach(v => perVak[v] = (perVak[v]||0) + st[v]);
+    return { s, studie:Object.values(st).reduce((a,b)=>a+b,0), gamen:r.gamen||0, sport:!!r.sport, coderen:r.coderen||0, slaap:r.slaap||0, bedtijd:r.bedtijd||'', notitie:String(r.notitie||'').trim(),
+             werk: ds.reduce((t,x)=>t+nettoU(x),0),
+             les: w && w.lessen && !w.buiten ? w.lessen.filter(l=>l.datum===s).reduce((t,l)=>t+l.uren,0) : null,
+             laat: ds.some(isLaat), vakantie: vakantieOp(s), uitje: uitjeOp(s) };
+  });
+  const som = k => dagen.reduce((t,d)=>t+(d[k]||0),0);
+  const studie = som('studie'), gamen = som('gamen');
+  const doel = doelenVoor(ma, 7), modus = doel.modus;   // weekdoel = optelsom van 7 dagdoelen
+  // gametijd = verdiend op gewone dagen (max) + vrije gametijd op vakantiedagen
+  const verdiend = Math.min(doel.gameMax, studie / (I().verdienPer || 2)) + doel.gameVrij;
+  const slaapDagen = dagen.filter(d => d.slaap > 0);
+  return { dagen, perVak, studie, gamen, verdiend, gameOver: verdiend - gamen, modus, doel, coderen: som('coderen'),
+           sportDoel: Math.round(I().sportDoel * doel.beschikbaar / 7), codeDoel: I().codeerDoel * doel.beschikbaar / 7,
+           slaapGem: slaapDagen.length ? slaapDagen.reduce((t,d)=>t+d.slaap,0) / slaapDagen.length : null, slaapN: slaapDagen.length,
+           bedGem: (b => b.length ? b.reduce((t,x)=>t+bedUur(x.bedtijd),0) / b.length : null)(dagen.filter(d => d.bedtijd)),
+           sport:dagen.filter(d=>d.sport).length, werk:som('werk'),
+           les: w && w.lessen && !w.buiten ? som('les') : null, laat: dagen.filter(d=>d.laat).length };
+}
+function vakMeters(ws){
+  const namen = D.vakken.map(v=>v.vak).concat(Object.keys(ws.perVak).filter(v=>!D.vakken.some(x=>x.vak===v)));
+  return namen.map(v => { const doel = ws.doel.perVak[v] || 0, val = ws.perVak[v]||0;
+    return meter(esc(v), val, doel || val || 1, uMin(val)+(doel?' / '+uD(doel):'')); }).join('');
+}
+function meter(label, val, doel, txt, isMax){
+  const pct = Math.min(100, doel ? val/doel*100 : 0);
+  const cls = isMax ? (val>doel ? 'bad' : '') : (val>=doel ? 'good' : '');
+  return `<div class="m"><div class="row"><div class="grow">${label}</div><div class="mv">${txt}</div></div>
+    <div class="meter ${cls}"><i style="width:${pct}%"></i></div></div>`;
+}
+
+// ================= navigatie =================
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  if (b.dataset.v === view) return;
+  verlaat(() => { view = b.dataset.v; if (view === 'week') wk = startWeek(); render(); window.scrollTo(0,0); });
+});
+$('#gear').onclick = () => openInstellingen();
+
+function render(){
+  if (view === 'diensten') { view = 'maand'; maandTab = 'diensten'; }
+  if (view !== laatsteView) {        // onthouden waar je vandaan kwam, voor de terugknop
+    if (!terugBezig && laatsteView) viewStapel = viewStapel.concat(laatsteView).slice(-20);
+    laatsteView = view; terugBezig = false;
+  }
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v===view));
+  $('#stickyHost').innerHTML = '';
+  ({vandaag:renderVandaag, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
+}
+
+// ================= TIMER =================
+// De timer staat op de server (zodat telefoon en pc dezelfde timer zien), maar de server doet er soms een paar
+// seconden over. Daarom past de app de timer eerst meteen op het scherm aan en stuurt hij het daarna pas door.
+// Pauzes: pauzeStart = sinds wanneer hij stilstaat, pauzeMs = alle eerdere pauzes bij elkaar.
+let timerBezig = false;
+function verstreken(t){ return Math.max(0, (t.pauzeStart || Date.now()) - t.start - (Number(t.pauzeMs) || 0)); }
+function klok(t){ const sec = Math.floor(verstreken(t)/1000);
+  return Math.floor(sec/3600)+':'+pad(Math.floor(sec/60)%60)+':'+pad(sec%60); }
+setInterval(() => { const el = document.getElementById('tKlok'); if (el && D && D.timer) el.textContent = klok(D.timer); }, 1000);
+const tril = () => { try { navigator.vibrate && navigator.vibrate(15); } catch(e){} };   // korte tik op Android
+function timerHtml(){
+  const t = D.timer;
+  if (t) { const p = !!t.pauzeStart;
+    return `<div class="card timer ${p?'pauze':''}"><div class="row"><div class="grow">
+      <div class="sub">${p ? 'Gepauzeerd' : 'Timer loopt'} · ${t.soort==='studie' ? 'studie '+esc(t.vak) : esc(t.soort)}${timerBezig ? ' · opslaan…' : ''}</div>
+      <div class="big" id="tKlok">${klok(t)}</div></div>
+      <button class="btn small sec" id="tPauze">${p ? '▶ Verder' : '⏸ Pauze'}</button>
+      <button class="btn small" id="tStop">■ Stop</button></div>
+      <button class="btn ghost" id="tAnn" style="padding:6px;margin-top:4px">Timer annuleren</button></div>`; }
+  return `<div class="card"><div class="sub" style="margin-bottom:8px">Timer starten${timerBezig ? ' · opslaan…' : ''}</div><div class="chips">
+    ${D.vakken.map(v=>`<button class="chip" data-tv="${esc(v.vak)}">▶ ${esc(v.vak)}</button>`).join('')}
+    <button class="chip game" data-tg="gamen">▶ Gamen</button><button class="chip code" data-tg="coderen">▶ Coderen</button></div></div>`;
+}
+/** Timer meteen op het scherm aanpassen, daarna naar de server. Lukt dat niet, dan terug naar hoe het was. */
+async function timerActie(knop, nieuweTimer, melding, fn, ...args){
+  if (timerBezig) return;
+  tril(); if (knop) knop.classList.add('bezig');
+  const oud = D.timer;
+  timerBezig = true; D.timer = nieuweTimer; render(); if (melding) toast(melding);
+  try { D = await api(fn, ...args); }
+  catch(e){ D.timer = oud; }            // api() heeft de foutmelding al getoond
+  finally { timerBezig = false; achtergrondRender(); }
+}
+function timerKnoppen(){
+  const start = (soort, vak, knop) => { const nu = Date.now();
+    timerActie(knop, {soort, vak, start: nu, pauzeMs: 0}, 'Timer gestart: ' + (vak || soort), 'startTimer', soort, vak, nu); };
+  document.querySelectorAll('[data-tv]').forEach(b => b.onclick = () => start('studie', b.dataset.tv, b));
+  document.querySelectorAll('[data-tg]').forEach(g => g.onclick = () => start(g.dataset.tg, '', g));
+  if ($('#tPauze')) $('#tPauze').onclick = e => {
+    const t = D.timer, nu = Date.now();
+    if (t.pauzeStart) timerActie(e.currentTarget, Object.assign({}, t, {pauzeMs: (Number(t.pauzeMs)||0) + (nu - t.pauzeStart), pauzeStart: 0}),
+                                 '', 'hervatTimer', nu);
+    else timerActie(e.currentTarget, Object.assign({}, t, {pauzeStart: nu}), '', 'pauzeerTimer', nu);
+  };
+  if ($('#tAnn')) $('#tAnn').onclick = () => {
+    const k = $('#tAnn'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer: tijd niet opslaan'; return; }
+    timerActie(k, null, 'Timer geannuleerd', 'annuleerTimer'); };
+  if ($('#tStop')) $('#tStop').onclick = () => {
+    tril();
+    const t = D.timer, minuten = Math.round(verstreken(t)/60000);
+    sheet(`<h3>Timer stoppen</h3>
+      <div class="sub">${t.soort==='studie' ? 'Studie '+esc(t.vak) : t.soort==='coderen' ? 'Coderen' : 'Gamen'} · gemeten ${Math.floor(minuten/60)} u ${minuten%60} min${t.pauzeMs || t.pauzeStart ? ' (zonder pauzes)' : ''}</div>
+      <label class="f">Opslaan als (minuten)</label><input id="tMin" inputmode="numeric" value="${minuten}">
+      ${minuten > 240 ? '<div class="alert">Dat is lang. Vergeten te stoppen? Pas de minuten aan.</div>' : ''}
+      <div class="note">Wordt opgeteld bij de dag waarop de timer startte.</div>
+      <div style="height:12px"></div><button class="btn" id="tOk">Opslaan</button><button class="btn ghost" id="tTerug">Timer laten lopen</button>`);
+    $('#tTerug').onclick = closeSheet;
+    $('#tOk').onclick = async () => {
+      const m = num($('#tMin').value); if (isNaN(m) || m < 0) return toast('Vul minuten in');
+      const btn = $('#tOk'); btn.disabled = true; btn.textContent = 'Opslaan…'; tril();
+      try { D = await api('stopTimer', m); closeSheet(); laadInv(); render(); toast('Opgeslagen ✓ ' + uMin(m/60)); }
+      catch(e){ btn.disabled = false; btn.textContent = 'Opslaan'; }
+    };
+  };
+}
+
+// ================= VANDAAG =================
+let dag = vandaag(), inv = null;
+/** Hoe een dag er in de sheet uitziet (om te zien of er iets niet is opgeslagen). */
+function opgeslagenInv(dag){
+  const r = D.dagen.find(x=>x.datum===dag);
+  const studie = {}; D.vakken.forEach(v => studie[v.vak] = 0); Object.assign(studie, studieOp(dag));
+  return { dag, studie, gamen:r?r.gamen:0, sport:r?r.sport:false, notitie:r?(r.notitie||''):'', coderen:r?(r.coderen||0):0, slaap:r?(r.slaap||0):0,
+          bedtijd:r?(tijdOfLeeg(r.bedtijd)):'', opstaan:r?(tijdOfLeeg(r.opstaan)):'', wakker: r ? wakkerUit(r) : 0 };
+}
+/**
+ * 's Nachts wakker geweest (minuten). Wordt niet apart opgeslagen: het is het verschil tussen
+ * de tijd in bed (bedtijd → opstaan) en de opgeslagen slaap. Zo hoeft de server niets te veranderen.
+ */
+function wakkerUit(r){
+  const bed = tijdOfLeeg(r.bedtijd), op = tijdOfLeeg(r.opstaan), sl = Number(r.slaap) || 0;
+  if (!bed || !op || !sl) return 0;
+  const m = Math.round((slaapUren(bed, op) - sl) * 60);
+  return m >= 1 ? m : 0;
+}
+/** "60", "45" of "1:15" → minuten */
+function minutenUit(v){
+  const s = String(v || '').trim(); if (!s) return 0;
+  const m = s.match(/^(\d{1,2}):(\d{2})$/); if (m) return +m[1] * 60 + +m[2];
+  const n = Math.round(num(s)); return isNaN(n) || n < 0 ? 0 : n;
+}
+/** Tekst onder de slaaptijden. */
+function slaapTekst(){
+  if (!(inv.bedtijd && inv.opstaan)) return inv.slaap ? uMin(inv.slaap) + ' slaap (zonder tijden ingevuld)' : 'Vul beide tijden in, dan rekent de app je slaap uit.';
+  return '= ' + uMin(inv.slaap) + ' slaap' + (inv.wakker ? ` (${uMin(slaapUren(inv.bedtijd, inv.opstaan))} in bed − ${uMin(inv.wakker / 60)} wakker)` : '');
+}
+/** "23:59", "23:59:00" of een volledige datum-tijd → "23:59"; iets onherkenbaars → "" */
+function tijdOfLeeg(v){
+  const s = String(v || ''); const m = s.match(/(\d{1,2}):(\d{2})/);
+  return m ? pad(+m[1]) + ':' + m[2] : '';
+}
+let invBasis = '', toonWakker = false;   // toonWakker: veld "'s nachts wakker" open geklikt   // hoe de dag eruitzag toen je hem opende: zo zien we of je iets hebt veranderd
+function laadInv(){ inv = opgeslagenInv(dag); invBasis = JSON.stringify(inv); toonWakker = false; }
+const viesDag = () => !!(D && inv && JSON.stringify(inv) !== invBasis);
+/** Nieuwe gegevens binnen (bijv. van je andere apparaat)? Alleen overnemen als je niets aan het veranderen bent. */
+function verversInv(){ if (inv && !viesDag() && !bezig()) laadInv(); }
+const dagPayload = () => ({datum:inv.dag, studie:inv.studie, gamen:inv.gamen, sport:inv.sport, notitie:inv.notitie,
+                           coderen:inv.coderen, slaap:inv.slaap, bedtijd:inv.bedtijd, opstaan:inv.opstaan});
+const vakNamen = () => Object.keys(inv.studie);
+const LOS = ['gamen', 'coderen', 'slaap'];
+/** Slaapduur uit bedtijd en opstaan (bedtijd mag vóór of na middernacht zijn). */
+function slaapUren(bed, op){
+  if (!bed || !op) return 0;
+  let m = mins(op) - mins(bed); if (m <= 0) m += 1440;
+  return Math.round(m / 60 * 100) / 100;
+}
+/** Bedtijd als getal voor gemiddelden en grafieken: na middernacht telt door (00:30 → 24,5). */
+const bedUur = t => { const m = mins(t); return (m < 12*60 ? m + 1440 : m) / 60; };
+/** 7,0333 → "7 u 2 min" (voor slaap leest dat beter dan decimalen) */
+/** Uren als "2 u 50 min", "35 min" of "3 u" (afgerond op hele minuten). */
+const uMin = h => {
+  const m = Math.round(Math.abs(Number(h) || 0) * 60), teken = h < 0 && m ? '−' : '';
+  if (m < 60) return teken + (m ? m + ' min' : '0 u');
+  return teken + Math.floor(m/60) + ' u' + (m % 60 ? ' ' + (m % 60) + ' min' : '');
+};
+/** Doelen: afgerond op 5 minuten, zodat er geen "2 u 51 min" staat. */
+const uD = h => uMin(Math.round((Number(h) || 0) * 12) / 12);
+const uurTekst = h => { const m = Math.round(h*60) % 1440; return pad(Math.floor(m/60)) + ':' + pad(m%60); };   // velden die niet bij een vak horen
+const invGet = k => LOS.includes(k) ? inv[k] : inv.studie[vakNamen()[+k.slice(1)]];
+const invSet = (k,v) => { if (LOS.includes(k)) inv[k] = v; else inv.studie[vakNamen()[+k.slice(1)]] = v; };
+function stepper(k, label){
+  return `<div class="row line"><div class="grow">${label}</div><div class="step">
+    <button data-k="${k}" data-d="-0.5" aria-label="minder">−</button><span class="sv" data-typ="${k}" style="cursor:pointer;text-decoration:underline dotted">${uMin(invGet(k))}</span>
+    <button data-k="${k}" data-d="0.5" aria-label="meer">+</button></div></div>`;
+}
+function renderVandaag(){
+  if (!inv || inv.dag!==dag) laadInv();
+  const isVandaag = dag===vandaag();
+  $('#title').textContent = isVandaag ? 'Vandaag' : DAGEN_LANG[dt(dag).getDay()].replace(/^./, c=>c.toUpperCase());
+  const gister = dienstenOp(plus(dag,-1)).filter(isLaat);
+  const lo = lessenOp(dag), ds = dienstenOp(dag);
+  const agenda = [];
+  if (lo && lo.lessen) lo.lessen.forEach(l => agenda.push({t:l.begin, html:
+    `<div class="ag"><span class="tijd">${l.begin}–${l.eind}</span><span class="grow">${esc(l.titel)}</span></div>`}));
+  ds.forEach(x => agenda.push({t:x.begin, html:
+    `<div class="ag werk"><span class="tijd">${x.begin}–${x.eind}</span><span class="grow">${esc(W())}${x.waar?' · '+esc(x.waar):''}</span><span class="sub">${u(nettoU(x))} u</span></div>`}));
+  agenda.sort((a,b)=>a.t.localeCompare(b.t));
+  const ws = weekStats(maandag(dag)), i = I();
+  const komend = komendeTentamens(dag), t = komend[0];
+  const zelfdeDag = t ? komend.filter(x => x.datum === t.datum).length - 1 : 0;   // nog meer tentamens op die dag
+  $('#main').innerHTML = `
+    <div class="daynav"><button class="nb" id="dPrev" aria-label="vorige dag">‹</button>
+      <input type="date" id="dDatum" value="${dag}" style="flex:1">
+      <button class="nb" id="dNext" aria-label="volgende dag">›</button></div>
+    ${isVandaag ? '' : '<button class="btn ghost" id="dNu" style="padding:6px">Terug naar vandaag</button>'}
+    ${gister.length ? `<div class="alert">Late dienst gisteren (tot ${gister[gister.length-1].eind}): vandaag geen zwaar studieblok en geen vroege sportschool.</div>` : ''}
+    ${(d => toetsBanner(d.modus, d, 'vandaag') + vrijBanner(d, 'vandaag'))(dagDoel(dag))}
+    ${timerHtml()}
+    <div class="card count"><div class="grow"><div class="sub">Gametijd deze week</div>
+      <div class="sub">verdiend ${uMin(ws.verdiend)} · gebruikt ${uMin(ws.gamen)}</div>
+      <div class="note" style="margin:4px 0 0">${ws.doel.gameMax > 0.01 ? `Elke ${u(i.verdienPer)} u studie = 1 u gamen (max ${uD(ws.doel.gameMax)} deze week)` : ''}${ws.doel.gameMax > 0.01 && ws.doel.gameVrij ? ' + ' : ''}${ws.doel.gameVrij ? `${uD(ws.doel.gameVrij)} vrij in de vakantie` : ''}</div></div>
+      <div class="big ${ws.gameOver<0?'neg':''}">${uMin(ws.gameOver)}<span class="unit">over</span></div></div>
+    ${t ? `<div class="card count"><div class="grow"><div class="sub">Volgende tentamen</div><div class="name">${esc(t.vak)}${zelfdeDag ? ` <span class="sub">+${zelfdeDag} op dezelfde dag</span>` : ''}</div>
+      <div class="sub">${dagKort(t.datum)}${t.tijd?' · '+t.tijd:''}${t.opmerking?' · '+esc(t.opmerking):''}</div>
+      ${/indien nodig|her(toets|kansing)/i.test(t.vak+' '+t.opmerking) ? `<button class="btn sec small" id="tNiet" style="margin-top:8px">Niet nodig ✓</button>` : ''}</div>
+      <div class="big">${dagenTot(dag,t.datum)}<span class="unit">${dagenTot(dag,t.datum)===1?'dag':'dagen'}</span></div></div>` : ''}
+    ${deadlineKaart(dag)}
+    <h2>Agenda</h2>
+    <div class="card">
+      ${lo===null ? '<div class="note">Lessen laden…</div>' : ''}
+      ${lo && lo.fout ? `<div class="note">${esc(lo.fout)}</div>` : ''}
+      ${lo && lo.buiten ? `<div class="note">Lessen worden opgehaald voor 2 weken terug t/m ${dagKort(LESSEN.tot)}. Deze dag valt erbuiten.</div>` : ''}
+      ${agenda.map(a=>a.html).join('') || (lo && lo.lessen ? '<div class="empty">Geen lessen of diensten.</div>' : '')}
+    </div>
+    <h2>Invullen <span id="vStatus" class="sub autostatus ${autoStatus}">${STATUS_TEKST[autoStatus] || ''}</span></h2>
+    <div class="card">
+      ${vakNamen().map((v,n) => stepper('s'+n, esc(v))).join('') || '<div class="note">Voeg vakken toe bij ⚙︎.</div>'}
+      ${stepper('gamen','Gamen')}
+      ${stepper('coderen','Coderen <span class="sub">(leerlijn)</span>')}
+      <div class="row line"><div class="grow">Naar bed <span class="sub">(gisteravond)</span></div>
+        <input type="time" id="vBed" value="${inv.bedtijd}" style="width:150px"></div>
+      <div class="row line"><div class="grow">Wakker geworden</div>
+        <input type="time" id="vOp" value="${inv.opstaan}" style="width:150px"></div>
+      <div class="row line" id="vWakkerRij" style="${inv.wakker || toonWakker ? '' : 'display:none'}"><div class="grow">'s Nachts wakker geweest <span class="sub">(minuten)</span></div>
+        <input id="vWakker" inputmode="numeric" placeholder="0" value="${inv.wakker || ''}" style="width:90px;text-align:right"></div>
+      <div class="note" id="vSlaap">${slaapTekst()}</div>
+      ${inv.wakker || toonWakker ? '' : `<button class="btn ghost small" id="vWakkerAan" style="padding:4px 0">+ 's Nachts wakker geweest?</button>`}
+      <div class="row line"><div class="grow">Sportschool</div>
+        <div class="seg small" id="vSport"><button data-v="0" class="${!inv.sport?'on':''}">Nee</button><button data-v="1" class="${inv.sport?'on':''}">Ja</button></div></div>
+      <div class="note">Tik op een getal om het precies in te typen. Wijzigingen worden vanzelf opgeslagen, een paar seconden nadat je klaar bent.</div>
+      <label class="f">Notitie</label><input id="vNot" value="${esc(inv.notitie)}" placeholder="bijv. moe na dienst">
+    </div>
+    <h2>Week ${weekNr(dag)}</h2>
+    <div class="card">
+      ${meter('Zelfstudie totaal', ws.studie, ws.doel.studie, uMin(ws.studie)+' / '+uD(ws.doel.studie))}
+      ${meter('Sportschool', ws.sport, ws.sportDoel, ws.sport+' / '+ws.sportDoel+'×')}
+      ${meter('Coderen', ws.coderen, ws.codeDoel, uMin(ws.coderen)+' / '+uD(ws.codeDoel))}
+      ${ws.slaapGem !== null ? `<div class="note">Slaap gemiddeld ${uMin(ws.slaapGem)} per nacht (doel ${uMin(i.slaapDoel)})</div>` : ''}
+      <div class="note">${esc(W())} deze week: ${u(ws.werk)} u${ws.les!==null?' · lessen: '+u(ws.les)+' u':''}</div>
+    </div>`;
+
+  timerKnoppen();
+  deadlineKnoppen();
+  if ($('#tNiet')) $('#tNiet').onclick = async () => {
+    const k = $('#tNiet'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Zeker? Tik nog een keer'; return; }
+    D = await api('verwijderTentamen', t.id); render(); toast(t.vak + ' verwijderd. Gefeliciteerd!');
+  };
+  const naar = s => { if (!s) return; verlaat(() => { dag = s; render(); }, () => render()); };
+  $('#dPrev').onclick = () => naar(plus(dag,-1));
+  $('#dNext').onclick = () => naar(plus(dag,1));
+  $('#dDatum').onchange = e => naar(e.target.value);
+  if ($('#dNu')) $('#dNu').onclick = () => naar(vandaag());
+  document.querySelectorAll('.step button').forEach(b => b.onclick = () => {
+    invSet(b.dataset.k, Math.max(0, Math.round((invGet(b.dataset.k) + Number(b.dataset.d))*2)/2)); renderVandaag(); planAuto(); });
+  document.querySelectorAll('#vSport button').forEach(b => b.onclick = () => { inv.sport = b.dataset.v==='1'; renderVandaag(); planAuto(); });
+  document.querySelectorAll('[data-typ]').forEach(el => el.onclick = () => {
+    const k = el.dataset.typ, oud = invGet(k), mi = Math.round(oud*60);
+    sheet(`<h3>${({gamen:'Gamen',coderen:'Coderen',slaap:'Slaap'})[k] || esc(vakNamen()[+k.slice(1)])} · ${dagKort(dag)}</h3>
+      <div class="row"><div class="grow"><label class="f">Uren</label><input id="eU" inputmode="numeric" value="${Math.floor(mi/60)}"></div>
+      <div class="grow"><label class="f">Minuten</label><input id="eM" inputmode="numeric" value="${mi%60}"></div></div>
+      <div style="height:12px"></div><button class="btn" id="eOk">Klaar</button><button class="btn ghost" id="eAnn">Annuleren</button>`);
+    $('#eAnn').onclick = closeSheet;
+    $('#eOk').onclick = () => { const uu = num($('#eU').value||0), mm = num($('#eM').value||0);
+      if (isNaN(uu) || isNaN(mm) || uu<0 || mm<0) return toast('Vul geldige getallen in');
+      invSet(k, Math.round((uu + mm/60)*100)/100); closeSheet(); renderVandaag(); planAuto(); };
+  });
+  $('#vNot').oninput = e => { inv.notitie = e.target.value; planAuto(); };
+  $('#vStatus').onclick = () => { if (autoStatus === 'fout') nuOpslaan(); };
+  const slaapBij = () => {   // alleen de regel eronder bijwerken, zodat je niet uit het veld springt
+    const ok = t => /^\d{2}:\d{2}$/.test(t);
+    inv.bedtijd = ok($('#vBed').value) ? $('#vBed').value : ''; inv.opstaan = ok($('#vOp').value) ? $('#vOp').value : '';
+    inv.wakker = minutenUit($('#vWakker').value);
+    if (inv.bedtijd && inv.opstaan) inv.slaap = Math.max(0, Math.round((slaapUren(inv.bedtijd, inv.opstaan) - inv.wakker / 60) * 100) / 100);
+    $('#vSlaap').textContent = slaapTekst();
+    planAuto();
+  };
+  $('#vBed').oninput = slaapBij; $('#vOp').oninput = slaapBij; $('#vWakker').oninput = slaapBij;
+  if ($('#vWakkerAan')) $('#vWakkerAan').onclick = () => {
+    toonWakker = true; $('#vWakkerRij').style.display = ''; $('#vWakkerAan').remove(); $('#vWakker').focus(); };
+}
+
+// ================= DEADLINES =================
+function deadlineNaam(d){ return (d.vak ? d.vak + ': ' : '') + d.wat; }
+function wanneer(vanaf, d){
+  const n = dagenTot(vanaf, d.datum);
+  return n < 0 ? (-n)+' d te laat' : n === 0 ? 'vandaag '+(d.tijd||'') : n === 1 ? 'morgen '+(d.tijd||'') : 'over '+n+' dagen';
+}
+/**
+ * Deadlinekaart. Ingeklapt (standaard) zie je alleen wat binnen 2 dagen moet (of te laat is);
+ * de rest zit achter "▸ nog X". Uitgeklapt zie je alles van de komende 2 weken. Wordt per apparaat onthouden.
+ */
+const DL_OPEN_KEY = 'planner-deadlines-open';
+function deadlineKaart(s){
+  const open = D.deadlines.filter(d => !d.klaar && dagenTot(s, d.datum) <= 14).sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd));
+  const later = D.deadlines.filter(d => !d.klaar && dagenTot(s, d.datum) > 14).length;
+  const uit = opslag.get(DL_OPEN_KEY) === '1';
+  const urgent = open.filter(d => dagenTot(s, d.datum) <= 2);
+  const zicht = uit ? open : urgent, verborgen = open.length - zicht.length;
+  const kop = open.length ? `<button class="dlkop" id="dlKlap" aria-expanded="${uit}">${uit ? '▾' : '▸'} Deadlines <span class="sub">(${open.length})</span></button>` : 'Deadlines';
+  return `<h2>${kop}</h2><div class="card">
+    ${zicht.map(d => `<div class="dl ${dagenTot(s,d.datum)<=2?'urgent':''}"><button class="vink" data-dk="${d.id}" aria-label="klaar">✓</button>
+      <div class="grow" data-de="${d.id}" style="cursor:pointer"><div class="name">${esc(deadlineNaam(d))}</div><div class="sub">${dagKort(d.datum)} · ${esc(d.tijd||'')}</div></div>
+      <div class="wanneer">${wanneer(s,d)}</div></div>`).join('')}
+    ${!open.length ? '<div class="note">Geen deadlines in de komende 2 weken.</div>'
+      : verborgen ? `<button class="btn ghost small dlmeer" id="dlMeer">▸ nog ${verborgen} ${verborgen === 1 ? 'deadline' : 'deadlines'} deze 2 weken${!zicht.length ? ` · eerstvolgende ${esc(deadlineNaam(open[0]))}, ${wanneer(s, open[0])}` : ''}</button>`
+      : uit && urgent.length < open.length ? `<button class="btn ghost small dlmeer" id="dlMeer">▴ minder tonen</button>` : ''}
+    <div class="row" style="margin-top:6px"><button class="btn ghost small" id="dlAlle">Alle deadlines${later?' (+'+later+' later)':''}</button>
+      <div class="grow"></div><button class="btn sec small" id="dlNieuw">+ Deadline</button></div></div>`;
+}
+function deadlineKnoppen(){
+  document.querySelectorAll('[data-dk]').forEach(b => b.onclick = () => {
+    const d = D.deadlines.find(x=>x.id===b.dataset.dk);
+    if (!d || b.classList.contains('bezig')) return;
+    tril(); b.classList.add('bezig');
+    zetDeadlineKlaar(d, true);
+    toastActie('Afgevinkt ✓ ' + deadlineNaam(d), 'Ongedaan maken', () => { zetDeadlineKlaar(d, false); toast('Weer open: ' + deadlineNaam(d)); });
+  });
+  document.querySelectorAll('[data-de]').forEach(el => el.onclick = () => openDeadline(D.deadlines.find(x=>x.id===el.dataset.de)));
+  if ($('#dlNieuw')) $('#dlNieuw').onclick = () => openDeadline(null);
+  const klap = () => { opslag.set(DL_OPEN_KEY, opslag.get(DL_OPEN_KEY) === '1' ? '0' : '1'); render(); };
+  if ($('#dlKlap')) $('#dlKlap').onclick = klap;
+  if ($('#dlMeer')) $('#dlMeer').onclick = klap;
+  if ($('#dlAlle')) $('#dlAlle').onclick = () => alleDeadlines();
+}
+/**
+ * Deadline af- of weer aanvinken. Het scherm verandert meteen (optimistisch); de server krijgt het daarna.
+ * Verzoeken voor dezelfde deadline gaan na elkaar, en alleen het antwoord op de laatste actie telt.
+ */
+const dlRij = {}, dlLaatste = {};
+function zetDeadlineKlaar(d, klaar){
+  const x = Object.assign({}, d, {klaar});
+  const nr = (dlLaatste[d.id] || 0) + 1; dlLaatste[d.id] = nr;
+  D.deadlines = D.deadlines.map(y => y.id === d.id ? x : y); render();
+  dlRij[d.id] = (dlRij[d.id] || Promise.resolve()).then(() => api('bewaarDeadline', x)).then(res => {
+    if (dlLaatste[d.id] === nr) { D = res; achtergrondRender(); }
+  }).catch(() => {
+    if (dlLaatste[d.id] === nr) { D.deadlines = D.deadlines.map(y => y.id === d.id ? Object.assign({}, y, {klaar: !klaar}) : y); render(); }
+  });
+}
+function alleDeadlines(){
+  const nu = vandaag();
+  const srt = l => l.sort((a,b)=>(a.datum+a.tijd).localeCompare(b.datum+b.tijd));
+  const open = srt(D.deadlines.filter(d=>!d.klaar)), klaar = srt(D.deadlines.filter(d=>d.klaar)).reverse();
+  const rij = d => `<div class="list-item" data-de="${d.id}"><div class="grow"><div class="name" style="${d.klaar?'text-decoration:line-through;color:var(--muted)':''}">${esc(deadlineNaam(d))}</div>
+    <div class="sub">${dagKort(d.datum)} ${d.datum.slice(0,4)} · ${esc(d.tijd||'')}</div></div><div class="sub">${d.klaar?'klaar':wanneer(nu,d)}</div></div>`;
+  sheet(`<h3>Deadlines</h3>
+    <div class="card" style="padding:4px 12px">${open.map(rij).join('') || '<div class="empty">Geen openstaande deadlines.</div>'}</div>
+    ${klaar.length ? `<details><summary>Klaar (${klaar.length})</summary><div class="card" style="padding:4px 12px">${klaar.map(rij).join('')}</div></details>` : ''}
+    <button class="btn" id="adNieuw">+ Deadline</button><button class="btn sec" id="adMeer" style="margin-top:8px">+ Meerdere tegelijk (lijst plakken)</button><button class="btn ghost" id="adDicht">Sluiten</button>`);
+  document.querySelectorAll('.sheet [data-de]').forEach(el => el.onclick = () => openDeadline(D.deadlines.find(x=>x.id===el.dataset.de), true));
+  $('#adNieuw').onclick = () => openDeadline(null, true);
+  $('#adMeer').onclick = () => meerdereDeadlines(true);
+  $('#adDicht').onclick = closeSheet;
+}
+function openDeadline(d, terugNaarLijst){
+  const nieuw = !d;
+  d = Object.assign({datum:'', tijd:'23:59', vak:'', wat:'', klaar:false}, d||{});
+  const vakken = [...new Set(D.vakken.map(v=>v.vak).concat(d.vak?[d.vak]:[]))];
+  sheet(`<h3>${nieuw?'Nieuwe deadline':'Deadline wijzigen'}</h3>
+    ${nieuw ? '<button class="btn ghost small" id="eMeer" style="padding:2px 0">Meerdere tegelijk? Plak een lijst →</button>' : ''}
+    <label class="f">Wat moet er af?</label><input id="eWat" value="${esc(d.wat)}" placeholder="bijv. verslag inleveren">
+    <label class="f">Vak</label><select id="eVak"><option value="">—</option>${vakken.map(v=>`<option ${v===d.vak?'selected':''}>${esc(v)}</option>`).join('')}<option value="__ander">Ander vak…</option></select>
+    <input id="eVakAnder" placeholder="vaknaam" style="display:none;margin-top:6px">
+    <div class="row"><div class="grow"><label class="f">Datum</label><input type="date" id="eDatum" value="${d.datum}"></div>
+      <div class="grow"><label class="f">Tijd</label><input type="time" id="eTijd" value="${d.tijd}"></div></div>
+    ${nieuw?'':`<label class="f">Status</label><div class="seg" id="eKlaar"><button data-v="0" class="${!d.klaar?'on':''}">Open</button><button data-v="1" class="${d.klaar?'on':''}">Klaar</button></div>`}
+    <div class="note">Herinnering in je agenda: ${I().deadlineDagen} dag(en) van tevoren om ${I().deadlineTijd} en op de dag zelf om ${I().deadlineDagTijd} (aan te passen bij ⚙︎).</div>
+    <div style="height:10px"></div><button class="btn" id="eOk">Opslaan</button>
+    ${nieuw?'':'<button class="btn danger" id="eDel" style="margin-top:8px">Verwijderen</button>'}
+    <button class="btn ghost" id="eAnn">Annuleren</button>`);
+  let klaar = d.klaar;
+  document.querySelectorAll('#eKlaar button').forEach(b => b.onclick = () => { klaar = b.dataset.v==='1';
+    document.querySelectorAll('#eKlaar button').forEach(y => y.classList.toggle('on', y===b)); });
+  $('#eVak').onchange = e => $('#eVakAnder').style.display = e.target.value==='__ander' ? 'block' : 'none';
+  const terug = () => terugNaarLijst ? alleDeadlines() : closeSheet();
+  $('#eAnn').onclick = terug;
+  if ($('#eMeer')) $('#eMeer').onclick = () => meerdereDeadlines(terugNaarLijst);
+  if (!nieuw) $('#eDel').onclick = async () => {
+    const k = $('#eDel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer om te verwijderen'; return; }
+    D = await api('verwijderDeadline', d.id); render(); terug(); toast('Deadline verwijderd'); };
+  $('#eOk').onclick = async () => {
+    const vak = $('#eVak').value==='__ander' ? $('#eVakAnder').value.trim() : $('#eVak').value;
+    const x = {id:d.id, wat:$('#eWat').value.trim(), vak, datum:$('#eDatum').value, tijd:$('#eTijd').value || '23:59', klaar};
+    if (!x.wat || !x.datum) return toast('Vul in elk geval in wat en wanneer');
+    const btn = $('#eOk'); btn.disabled = true; btn.textContent = 'Opslaan…';
+    try { D = await api('bewaarDeadline', x); render(); terug(); toast('Deadline opgeslagen ✓'); }
+    catch(e){ btn.disabled = false; btn.textContent = 'Opslaan'; }
+  };
+}
+
+// ================= MEERDERE DEADLINES TEGELIJK =================
+/**
+ * Leest een geplakte lijst: één deadline per regel. Herkent o.a.
+ *   24-11 Verslag week 1            24-11-2026 23:59 Verslag
+ *   2026-11-24 17:00 Presentatie    ma 24 nov 12:00 - Quiz H3
+ *   24/11<TAB>17:00<TAB>Opdracht    (kolommen uit Excel/Sheets)
+ * Zonder jaar: dit jaar, of volgend jaar als de datum al meer dan 2 maanden voorbij is.
+ */
+function leesDeadlineRegels(tekst, stdTijd){
+  const nu = vandaag(), jaar = +nu.slice(0,4);
+  return String(tekst || '').split(/\r?\n/).map(r => r.trim()).filter(Boolean).map(regel => {
+    let r = regel.replace(/\t+/g, ' ').replace(/^(ma|di|wo|do|vr|za|zo)[a-z]*\.?,?\s+/i, '');
+    let d, m, y, mt;
+    if ((mt = r.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) { y = +mt[1]; m = +mt[2]; d = +mt[3]; }
+    else if ((mt = r.match(/^(\d{1,2})[-\/.](\d{1,2})(?:[-\/.](\d{2,4}))?(?![\d:])/))) { d = +mt[1]; m = +mt[2]; y = mt[3] ? +mt[3] : null; }
+    else if ((mt = r.match(/^(\d{1,2})\s+([a-z]{3})[a-z]*\.?(?:\s+(\d{4}))?/i)) && MAANDEN.includes(mt[2].toLowerCase().replace('maa','mrt'))) {
+      d = +mt[1]; m = MAANDEN.indexOf(mt[2].toLowerCase().replace('maa','mrt')) + 1; y = mt[3] ? +mt[3] : null; }
+    else return { regel, fout: 'geen datum gevonden aan het begin' };
+    if (y !== null && y < 100) y += 2000;
+    r = r.slice(mt[0].length).trim();
+    let tijd = stdTijd || '23:59';
+    const tm = r.match(/^(?:om\s+)?(\d{1,2})[:.](\d{2})(?:\s*uur)?/i);
+    if (tm && +tm[1] < 24 && +tm[2] < 60) { tijd = pad(+tm[1]) + ':' + tm[2]; r = r.slice(tm[0].length).trim(); }
+    const wat = r.replace(/^[-–—:|,·]+\s*/, '').trim();
+    const maak = yy => `${yy}-${pad(m)}-${pad(d)}`;
+    if (y === null) { y = jaar; if (dagenTot(maak(y), nu) > 60) y++; }
+    const datum = maak(y), t = new Date(y, m - 1, d);
+    if (t.getMonth() !== m - 1 || t.getDate() !== d) return { regel, fout: 'datum bestaat niet' };
+    if (!wat) return { regel, fout: 'geen omschrijving' };
+    return { regel, datum, tijd, wat };
+  });
+}
+function meerdereDeadlines(terugNaarLijst){
+  const vakken = D.vakken.map(v => v.vak);
+  sheet(`<h3>Meerdere deadlines</h3>
+    <label class="f" style="margin-top:0">Vak (voor alle regels)</label>
+    <select id="mVak"><option value="">—</option>${vakken.map(v=>`<option>${esc(v)}</option>`).join('')}<option value="__ander">Ander vak…</option></select>
+    <input id="mVakAnder" placeholder="vaknaam" style="display:none;margin-top:6px">
+    <label class="f">Tijd als er geen tijd bij staat</label><input id="mTijd" value="23:59" inputmode="numeric" style="width:100px">
+    <label class="f">Plak je lijst: één deadline per regel, datum vooraan</label>
+    <textarea id="mTekst" rows="8" placeholder="24-11 Verslag week 1&#10;1-12 17:00 Opdracht inleveren&#10;ma 8 dec - Logboek"></textarea>
+    <div class="note">Werkt ook met kolommen die je uit Excel of Google Sheets kopieert (datum, tijd, omschrijving).</div>
+    <div id="mVoorbeeld"></div>
+    <div style="height:10px"></div><button class="btn" id="mOk" disabled>Toevoegen</button>
+    <button class="btn ghost" id="mAnn">Annuleren</button>`);
+  const terug = () => terugNaarLijst ? alleDeadlines() : closeSheet();
+  $('#mAnn').onclick = terug;
+  const vak = () => $('#mVak').value === '__ander' ? $('#mVakAnder').value.trim() : $('#mVak').value;
+  let goed = [];
+  const toon = () => {
+    const tijd = /^\d{1,2}:\d{2}$/.test($('#mTijd').value.trim()) ? $('#mTijd').value.trim().padStart(5, '0') : '23:59';
+    const regels = leesDeadlineRegels($('#mTekst').value, tijd), v = vak();
+    const bestaat = x => D.deadlines.some(y => y.datum === x.datum && (y.vak||'') === v && y.wat.trim().toLowerCase() === x.wat.toLowerCase());
+    goed = regels.filter(x => !x.fout && !bestaat(x)).map(x => Object.assign({}, x, { vak: v }));
+    $('#mVoorbeeld').innerHTML = regels.length ? `<div class="card" style="padding:4px 12px">${regels.map(x => x.fout
+      ? `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">⚠ ${esc(x.regel)}</div><div class="sub">${x.fout}: wordt overgeslagen</div></div></div>`
+      : `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">${esc(x.wat)}</div>
+          <div class="sub">${dagKort(x.datum)} ${x.datum.slice(0,4)} · ${x.tijd}${bestaat(x) ? ' · staat er al, wordt overgeslagen' : ''}</div></div>
+          <span class="badge ${bestaat(x) ? 'none' : ''}">${bestaat(x) ? '—' : 'nieuw'}</span></div>`).join('')}</div>` : '';
+    const b = $('#mOk'); b.disabled = !goed.length;
+    b.textContent = goed.length ? `${goed.length} ${goed.length === 1 ? 'deadline' : 'deadlines'} toevoegen${v ? ' bij ' + v : ''}` : 'Toevoegen';
+  };
+  $('#mVak').onchange = e => { $('#mVakAnder').style.display = e.target.value === '__ander' ? 'block' : 'none'; toon(); };
+  $('#mVakAnder').oninput = toon; $('#mTijd').oninput = toon; $('#mTekst').oninput = toon;
+  $('#mOk').onclick = async () => {
+    if (!goed.length) return;
+    const b = $('#mOk'), n = goed.length; b.disabled = true; b.textContent = 'Toevoegen…';
+    try { D = await api('bewaarDeadlines', goed.map(({datum, tijd, vak, wat}) => ({datum, tijd, vak, wat}))); render(); terug(); toast(n + (n === 1 ? ' deadline' : ' deadlines') + ' toegevoegd ✓'); }
+    catch(e){ toon(); }
+  };
+}
+
+// ================= SCHOOLVAKANTIES PLAKKEN =================
+/**
+ * Leest een geplakt vakantierooster: één vakantie per regel, met een naam en één of twee datums. Herkent o.a.
+ *   Kerstvakantie 21-12-2026 t/m 01-01-2027      Voorjaarsvakantie: 15 feb 2027 - 19 feb 2027
+ *   Herfstvakantie 19 t/m 23 oktober 2026         Zomervakantie<TAB>12-07-2027<TAB>20-08-2027
+ * Zonder jaar: dit jaar, of volgend jaar als de datum al meer dan 2 maanden voorbij is.
+ * "zomer" in de naam (hoofdletters maken niet uit) = zomervakantie.
+ */
+const MAAND_RE = '(jan|feb|maa|mrt|apr|mei|jun|jul|aug|sep|okt|nov|dec)[a-z]*\\.?';
+const maandNr = t => { const k = t.toLowerCase().slice(0,3).replace('maa','mrt'); return MAANDEN.indexOf(k) + 1; };
+function leesVakantieRegels(tekst){
+  const nu = vandaag(), jaarNu = +nu.slice(0,4);
+  return String(tekst || '').split(/\r?\n/).map(r => r.trim()).filter(Boolean).map(regel => {
+    let r = regel.replace(/\t+/g, ' ');
+    const data = [];                                            // { d, m, y } in volgorde
+    // "19 t/m 23 oktober 2026" (twee dagen, één maand)
+    const kort = new RegExp('\\b(\\d{1,2})\\s*(?:t\\/m|tm|tot en met|tot|-|–)\\s*(\\d{1,2})\\s+' + MAAND_RE + '(?:\\s+(\\d{4}))?', 'i');
+    let mt = r.match(kort);
+    if (mt) {
+      const m = maandNr(mt[3]), y = mt[4] ? +mt[4] : null;
+      data.push({ d: +mt[1], m, y }, { d: +mt[2], m, y }); r = r.replace(mt[0], ' ');
+    } else {
+      const los = new RegExp('\\b(\\d{4})-(\\d{1,2})-(\\d{1,2})|\\b(\\d{1,2})[-\\/.](\\d{1,2})(?:[-\\/.](\\d{2,4}))?|\\b(\\d{1,2})\\s+' + MAAND_RE + '(?:\\s+(\\d{4}))?', 'gi');
+      r = r.replace(los, (...g) => {
+        if (g[1]) data.push({ d: +g[3], m: +g[2], y: +g[1] });
+        else if (g[4]) data.push({ d: +g[4], m: +g[5], y: g[6] ? +g[6] : null });
+        else data.push({ d: +g[7], m: maandNr(g[8]), y: g[9] ? +g[9] : null });
+        return ' ';
+      });
+    }
+    const naam = r.replace(/\b(t\/m|tm|tot en met|tot|van)\b/gi, ' ').replace(/\b(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|ma|di|wo|do|vr|za|zo)\b\.?/gi, ' ')
+      .replace(/[-–—:|,·()]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!data.length) return { regel, fout: 'geen datum gevonden' };
+    if (!naam) return { regel, fout: 'geen naam' };
+    const [a, b] = [data[0], data[1] || data[0]];
+    [a, b].forEach(x => { if (x.y !== null && x.y < 100) x.y += 2000; });
+    if (a.y === null) a.y = b.y !== null ? b.y - (b.m < a.m ? 1 : 0) : null;
+    const iso = x => x.y + '-' + pad(x.m) + '-' + pad(x.d);
+    if (a.y === null) { a.y = jaarNu; if (dagenTot(iso(a), nu) > 60) a.y++; }
+    if (b.y === null) { b.y = a.y; if (iso(b) < iso(a)) b.y++; }
+    for (const x of [a, b]) { const t = new Date(x.y, x.m - 1, x.d); if (!x.m || t.getMonth() !== x.m - 1 || t.getDate() !== x.d) return { regel, fout: 'datum bestaat niet' }; }
+    if (iso(b) < iso(a)) return { regel, fout: 'einddatum vóór begindatum' };
+    return { regel, naam, van: iso(a), tot: iso(b), soort: isZomerNaam(naam) ? 'zomer' : 'vakantie' };
+  });
+}
+function vakantiesPlakken(){
+  sheet(`<h3>Schoolvakanties plakken</h3>
+    <label class="f" style="margin-top:0">Plak het vakantierooster: één vakantie per regel, naam en datums</label>
+    <textarea id="vpTekst" rows="7" placeholder="Kerstvakantie 21-12-2026 t/m 01-01-2027&#10;Voorjaarsvakantie 15 feb 2027 - 19 feb 2027&#10;Zomervakantie 12-07-2027 t/m 20-08-2027"></textarea>
+    <div class="note">Werkt ook met kolommen uit Excel of Google Sheets. "zomer" in de naam wordt vanzelf een zomervakantie.</div>
+    <div id="vpVoorbeeld"></div>
+    <div style="height:10px"></div><button class="btn" id="vpOk" disabled>Toevoegen</button>
+    <button class="btn ghost" id="vpAnn">Annuleren</button>`);
+  let goed = [];
+  const bestaat = x => periodes().some(p => p.soort !== 'uitje' && p.van === x.van && p.tot === x.tot);
+  const toon = () => {
+    const regels = leesVakantieRegels($('#vpTekst').value);
+    goed = regels.filter(x => !x.fout && !bestaat(x));
+    $('#vpVoorbeeld').innerHTML = regels.length ? `<div class="card" style="padding:4px 12px">${regels.map(x => x.fout
+      ? `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">⚠ ${esc(x.regel)}</div><div class="sub">${x.fout}: wordt overgeslagen</div></div></div>`
+      : `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">${x.soort === 'zomer' ? '☀ ' : '🏖 '}${esc(x.naam)}</div>
+          <div class="sub">${dagKort(x.van)} ${x.van.slice(0,4)} – ${dagKort(x.tot)} ${x.tot.slice(0,4)}${x.soort === 'zomer' ? ' · zomervakantie' : ''}${bestaat(x) ? ' · staat er al' : ''}</div></div>
+          <span class="badge ${bestaat(x) ? 'none' : ''}">${bestaat(x) ? '—' : 'nieuw'}</span></div>`).join('')}</div>` : '';
+    const b = $('#vpOk'); b.disabled = !goed.length;
+    b.textContent = goed.length ? `${goed.length} ${goed.length === 1 ? 'vakantie' : 'vakanties'} toevoegen` : 'Toevoegen';
+  };
+  $('#vpTekst').oninput = toon;
+  $('#vpAnn').onclick = openInstellingen;
+  $('#vpOk').onclick = async () => {
+    if (!goed.length) return;
+    const b = $('#vpOk'), n = goed.length; b.disabled = true; b.textContent = 'Toevoegen…';
+    try { D = await api('bewaarPeriodes', goed.map(({soort, naam, van, tot}) => ({soort, naam, van, tot}))); render(); openInstellingen();
+          toast(n + (n === 1 ? ' vakantie' : ' vakanties') + ' toegevoegd ✓'); }
+    catch(e){ toon(); }
+  };
+}
+
+// ================= DIENSTEN (onderdeel van Maand → Werk) =================
+function dienstItem(x){
+  const nu = vandaag(), verv = x.status === 'vervallen';
+  const open = !verv && x.datum < nu && x.status !== 'gewerkt';
+  return `<div class="list-item ${verv?'vervallen':''}" data-id="${x.id}"><div class="grow">
+    <div class="name">${dagKort(x.datum)} · ${x.begin}–${x.eind}</div>
+    <div class="sub">${esc(x.waar||W())} · ${u(nettoU(x))} u netto${x.toeslag>100?' · '+x.toeslag+'%':''}${isLaat(x)?' · laat':''}${x.agendaId?' · uit agenda':' · handmatig'}</div></div>
+    ${verv ? '<span class="badge warn">vervallen</span>' : open ? `<button class="btn sec small" data-ok="${x.id}">Gewerkt?</button>`
+           : `<span class="badge ${x.status==='gewerkt'?'':'none'}">${x.status}</span>`}</div>`;
+}
+function werkKop(){
+  const si = D.werkInfo;
+  return I().werkImport !== 'aan' ? '' : !si ? '<div class="note">Werkagenda bijwerken…</div>'
+    : si.gevonden ? `<div class="note">Automatisch uit je werkagenda · bijgewerkt ${si.tijd}. Diensten die niet in de agenda staan, voeg je zelf toe.</div>`
+    : '<div class="alert">Werkagenda niet gevonden. Controleer de naam bij ⚙︎.</div>';
+}
+/** Alle komende diensten over alle maanden (zoals het oude Diensten-scherm), eerdere maanden ingeklapt. */
+function alleDiensten(){
+  const ymNu = vandaag().slice(0,7), per = {};
+  D.diensten.forEach(x => (per[x.datum.slice(0,7)] = per[x.datum.slice(0,7)] || []).push(x));
+  const maanden = Object.keys(per).sort();
+  const blok = m => { const mi = maandInfo(m);
+    return `<h2>${ymNaam(m)} · ${u(mi.tot)} u</h2><div class="card" style="padding:4px 12px">
+      ${per[m].sort((a,b)=>(a.datum+a.begin).localeCompare(b.datum+b.begin)).map(dienstItem).join('')}</div>`; };
+  const komend = maanden.filter(m => m >= ymNu), eerder = maanden.filter(m => m < ymNu).reverse();
+  $('#maandInhoud').innerHTML = werkKop() + (komend.map(blok).join('') || '<div class="empty">Nog geen diensten gepland.</div>')
+    + (eerder.length ? `<details><summary>Eerdere maanden (${eerder.length})</summary>${eerder.map(blok).join('')}</details>` : '');
+  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="dNieuw">+ Dienst</button></div>`;
+  $('#dNieuw').onclick = () => openDienst(null);
+  dienstKnoppen();
+}
+function dienstKnoppen(){
+  document.querySelectorAll('.list-item[data-id]').forEach(el => el.onclick = () =>
+    openDienst(Object.assign({}, D.diensten.find(x=>x.id===el.dataset.id))));
+  document.querySelectorAll('[data-ok]').forEach(el => el.onclick = async e => {
+    e.stopPropagation();
+    const x = Object.assign({}, D.diensten.find(d=>d.id===el.dataset.ok), {status:'gewerkt'});
+    D = await api('bewaarDienst', x); render(); toast('Afgevinkt ✓ Eerder klaar? Tik op de dienst.');
+  });
+}
+
+function openDienst(x){
+  const nieuw = !x || !x.id;
+  x = Object.assign({datum: vandaag(), begin:'', eind:'', pauze:'', waar:'', toeslag:100, status:'gepland', opmerking:''}, x||{});
+  let pauzeAuto = nieuw || (x.begin && x.eind && Number(x.pauze)===stdPauze(brutoU(x)));
+  sheet(`<h3>${nieuw?'Nieuwe dienst':'Dienst wijzigen'}</h3>
+    <label class="f">Datum</label><input type="date" id="sDatum" value="${x.datum}">
+    <div class="row">
+      <div class="grow"><label class="f">Begin</label><input type="time" id="sBegin" value="${x.begin}"></div>
+      <div class="grow"><label class="f">Eind</label><input type="time" id="sEind" value="${x.eind}"></div>
+      <div class="grow"><label class="f">Pauze (min)</label><input id="sPauze" inputmode="numeric" value="${x.pauze}"></div>
+    </div>
+    <label class="f">Waar / klant</label><input id="sWaar" value="${esc(x.waar)}" placeholder="bijv. locatie of klant">
+    <label class="f">Toeslag</label><div class="seg" id="sToeslag">
+      <button data-v="100" class="${x.toeslag!=150?'on':''}">Normaal</button><button data-v="150" class="${x.toeslag==150?'on':''}">150% (feestdag)</button></div>
+    <label class="f">Status</label><div class="seg" id="sStatus">
+      <button data-v="gepland" class="${x.status!=='gewerkt'?'on':''}">Gepland</button><button data-v="gewerkt" class="${x.status==='gewerkt'?'on':''}">Gewerkt</button></div>
+    <label class="f">Opmerking</label><input id="sOpm" value="${esc(x.opmerking)}" placeholder="bijv. eten meenemen">
+    <div class="card" id="sInfo"></div>
+    ${x.agendaId ? `<div class="note">${x.status==='vervallen' ? 'Deze dienst staat niet meer in je werkagenda. Verwijder hem als hij echt niet doorgaat.'
+      : 'Komt uit je werkagenda. Zolang hij op Gepland staat, volgen de tijden de agenda. Op Gewerkt houdt hij jouw tijden vast (handig als je eerder klaar was).'}</div>` : ''}
+    <button class="btn" id="sOk">Opslaan</button>
+    ${nieuw?'':'<button class="btn danger" id="sDel" style="margin-top:8px">Verwijderen</button>'}
+    <button class="btn ghost" id="sAnn">Annuleren</button>`);
+  const st = {toeslag: Number(x.toeslag)||100, status: x.status};
+  const huidig = () => ({datum:$('#sDatum').value, begin:$('#sBegin').value, eind:$('#sEind').value, pauze:Number($('#sPauze').value)||0});
+  const info = () => {
+    const d = huidig();
+    if (!/^\d{2}:\d{2}$/.test(d.begin) || !/^\d{2}:\d{2}$/.test(d.eind) || !d.datum) { $('#sInfo').innerHTML = '<div class="note">Vul datum, begin- en eindtijd in (uu:mm).</div>'; return; }
+    if (pauzeAuto) { d.pauze = stdPauze(brutoU(d)); $('#sPauze').value = d.pauze; }
+    const ym = d.datum.slice(0,7), mi = maandInfo(ym);
+    const zonder = !nieuw && x.datum.startsWith(ym) ? nettoU(x) : 0;
+    const na = mi.tot - zonder + nettoU(d);
+    $('#sInfo').innerHTML = `<div class="row"><div class="grow"><div class="sub">Netto</div><div class="name">${u(nettoU(d))} u</div></div>
+      <div style="text-align:right"><div class="sub">${ymNaam(ym)} wordt</div><div class="name">${u(na)} u</div></div></div>
+      ${isLaat(d) ? '<div class="note">⚠︎ Eindigt laat: de ochtend erna geen zwaar studieblok of vroege sportschool.</div>' : ''}
+      ${(() => { const w = uitjeOp(d.datum); return w ? `<div class="alert">🧳 Je bent dan weg: ${esc(w.lijst.map(p => p.naam + ' (' + periodeTekst(p) + ')').join(', '))}.</div>` : ''; })()}
+      ${(() => { const m = toetsweek(d.datum); return m ? `<div class="alert">📚 Toetsweekmodus: ${esc(m.t.vak)} ${m.dagen===1?'morgen':'over '+m.dagen+' dagen'}. Weet je zeker dat je deze dienst wilt?</div>` : ''; })()}
+      ${grensTekst(na)}`;
+  };
+  ['#sDatum','#sBegin','#sEind'].forEach(s => $(s).oninput = info);
+  $('#sPauze').oninput = () => { pauzeAuto = false; info(); };
+  [['sToeslag','toeslag'],['sStatus','status']].forEach(([id,k]) => document.querySelectorAll('#'+id+' button').forEach(b => b.onclick = () => {
+    st[k] = k==='toeslag' ? Number(b.dataset.v) : b.dataset.v;
+    document.querySelectorAll('#'+id+' button').forEach(y => y.classList.toggle('on', y===b)); }));
+  info();
+  $('#sAnn').onclick = closeSheet;
+  if (!nieuw) $('#sDel').onclick = async () => {
+    const k = $('#sDel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer om te verwijderen'; return; }
+    D = await api('verwijderDienst', x.id); closeSheet(); render(); toast('Dienst verwijderd'); };
+  $('#sOk').onclick = async () => {
+    const d = huidig();
+    if (!d.datum || !/^\d{2}:\d{2}$/.test(d.begin) || !/^\d{2}:\d{2}$/.test(d.eind)) return toast('Vul datum, begin- en eindtijd in (uu:mm)');
+    const btn = $('#sOk'); btn.disabled = true; btn.textContent = 'Opslaan…';
+    try {
+      D = await api('bewaarDienst', Object.assign({id:x.id, waar:$('#sWaar').value.trim(), opmerking:$('#sOpm').value.trim()}, d, st));
+      closeSheet(); render();
+      toast('Opgeslagen ✓ ' + ymNaam(d.datum.slice(0,7)) + ': ' + u(maandInfo(d.datum.slice(0,7)).tot) + ' u');
+    } catch(e){ btn.disabled = false; btn.textContent = 'Opslaan'; }
+  };
+}
+
+// ================= DIENSTZOEKER =================
+/** Avonden die je vrijhoudt (⚙︎), bijv. ['wo']. */
+const vrijeAvondenLijst = () => String(I().vrijeAvonden || '').split(',').map(x => x.trim()).filter(Boolean);
+const vrijeAvond = s => vrijeAvondenLijst().includes(DAGEN[dt(s).getDay()]);
+/** Beoordeelt een dag voor een extra dienst. null = niet geschikt. */
+function dagAdvies(s){
+  if (dienstenOp(s).length) return null;
+  const weg = uitjeOp(s);
+  if (weg && weg.deel >= 0.999) return null;                                       // je bent de hele dag weg
+  if (['12-31','01-01'].includes(s.slice(5))) return null;                         // oud & nieuw vrij
+  if (D.tentamens.some(t => t.datum === s || t.datum === plus(s,1))) return null;  // tentamen of dag ervoor
+  const w = lessenWeek(maandag(s));
+  if (w === null) return { s, laden: true };
+  const les = w && w.lessen ? w.lessen.filter(l => l.datum === s) : [];
+  const onbekend = !!(w && (w.buiten || w.fout));
+  const begin = les.reduce((m,l) => !m || l.begin < m ? l.begin : m, ''), eind = les.reduce((m,l) => l.eind > m ? l.eind : m, '');
+  let wat, score;
+  if (!les.length) { wat = 'hele dag vrij'; score = 3; }
+  else if (mins(eind) <= 16*60+30) { wat = 'na je les (tot ' + eind + ')'; score = 2; }
+  else if (mins(begin) >= 13*60) { wat = 'ochtend (les vanaf ' + begin + ')'; score = 1; }
+  else return null;
+  const op = [];
+  if (onbekend) { op.push('lesrooster onbekend, check het zelf'); score -= 0.5; }
+  if (vrijeAvond(s)) { op.push("avond houd je vrij"); score -= 0.5; }
+  if (weg) { op.push('weg: ' + weg.lijst.map(p => p.naam).join(', ')); score -= 1; }
+  const m = toetsweek(s, false, Math.min(7, Number(I().toetsweekDagen) || 7));   // jouw regel: de week ervóór geen diensten
+  if (m) { op.push(m.t.vak + ' over ' + m.dagen + ' d'); score -= 2; }
+  const dl = D.deadlines.find(d => !d.klaar && (d.datum === s || d.datum === plus(s,1)));
+  if (dl) { op.push('deadline ' + (dl.datum === s ? 'vandaag' : 'morgen')); score -= 1; }
+  if (dienstenOp(plus(s,-1)).some(isLaat)) op.push('na late dienst: niet vroeg');
+  return { s, wat, op, score };
+}
+function dienstzoeker(ym, mi){
+  const nu = vandaag();
+  if (ym < nu.slice(0,7)) return '';
+  const doelU = mi.tot < mi.minimum ? mi.minimum : mi.doel;
+  if (mi.tot >= mi.doel) return '';
+  const tekort = doelU - mi.tot, diensten = Math.max(1, Math.ceil(tekort / 6));
+  const dagen = []; let s = ym + '-01'; if (s <= nu) s = plus(nu, 1);
+  for (; s.startsWith(ym); s = plus(s, 1)) { const a = dagAdvies(s); if (a) dagen.push(a); }
+  const laden = dagen.some(a => a.laden);
+  const goed = dagen.filter(a => !a.laden).sort((a,b) => b.score - a.score || a.s.localeCompare(b.s)).slice(0, 8);
+  const label = sc => sc >= 2 ? ['', 'goed'] : sc >= 1 ? ['none', 'kan'] : ['warn', 'liever niet'];
+  return `<h2>Dienstzoeker</h2><div class="card">
+    <div class="name">Nog ${u(tekort)} u tot je ${mi.tot < mi.minimum ? 'minimum' : 'doel'} (${doelU} u) · ±${diensten} ${diensten===1?'dienst':'diensten'} van 6 u</div>
+    ${mi.tot < mi.minimum && mi.doel > mi.minimum ? `<div class="sub">Tot je doel van ${mi.doel} u: nog ${u(mi.doel - mi.tot)} u</div>` : ''}
+    ${laden ? '<div class="note">Lessen laden…</div>' : ''}
+    ${goed.map(a => { const [c,l] = label(a.score); return `<div class="list-item" style="cursor:default"><div class="grow">
+      <div class="name">${dagKort(a.s)}</div><div class="sub">${esc(a.wat)}${a.op.length ? ' · ' + esc(a.op.join(' · ')) : ''}</div></div>
+      <span class="badge ${c}">${l}</span></div>`; }).join('') || (laden ? '' : '<div class="empty">Geen geschikte dagen meer deze maand.</div>')}
+    <div class="note">Kijk in het rooster of de app van je werk welke diensten er op deze dagen open staan. Diensten uit je werkagenda komen vanzelf in de planner.</div></div>`;
+}
+
+// ================= MAAND =================
+let ym = vandaag().slice(0,7), maandTab = 'overzicht';
+/** Cijfers van een maand; de doelen zijn de optelsom van de dagdoelen (toetsweekmodus per dag meegerekend). */
+function maandCijfers(ym){
+  const i = I(), nu = vandaag(), perVak = {}, doelVak = {};
+  let studie = 0, gamen = 0, coderen = 0, sport = 0, dagen = 0, dagenTotNu = 0, dStudie = 0, dGame = 0, dVrij = 0, er = 0, slaap = [], bed = [];
+  for (let s = ym + '-01'; s.startsWith(ym); s = plus(s, 1)) {
+    dagen++; if (s <= nu) dagenTotNu++;
+    const r = D.dagen.find(x => x.datum === s) || {}, st = studieOp(s), dl = dagDoel(s);   // maanddoel = optelsom van de dagdoelen
+    Object.keys(st).forEach(v => { perVak[v] = (perVak[v]||0) + st[v]; studie += st[v]; });
+    Object.keys(dl.perVak).forEach(v => doelVak[v] = (doelVak[v]||0) + dl.perVak[v]);
+    dStudie += dl.studie; dGame += dl.gameMax; dVrij += dl.gameVrij; er += dl.beschikbaar;
+    gamen += r.gamen || 0; coderen += r.coderen || 0; if (r.sport) sport++;
+    if (r.slaap) slaap.push(r.slaap); if (r.bedtijd) bed.push(bedUur(r.bedtijd));
+  }
+  const gem = a => a.length ? a.reduce((t,x)=>t+x,0) / a.length : null;
+  return { dagen, dagenTotNu, perVak, doelVak, studie, gamen, coderen, sport,
+           doelStudie: dStudie, doelSport: i.sportDoel / 7 * er, doelCode: i.codeerDoel / 7 * er,
+           verdiend: Math.min(dGame, studie / (i.verdienPer || 2)) + dVrij, slaapGem: gem(slaap), slaapN: slaap.length, bedGem: gem(bed) };
+}
+function renderMaand(){
+  $('#title').textContent = 'Maand';
+  const mi = maandInfo(ym), i = I();
+  $('#main').innerHTML = `
+    <div class="daynav" style="${maandTab==='diensten'||maandTab==='uitjes'?'display:none':''}"><button class="nb" id="mPrev" aria-label="vorige maand">‹</button>
+      <div class="lbl">${ymNaam(ym)}</div><button class="nb" id="mNext" aria-label="volgende maand">›</button></div>
+    <div class="seg" style="margin:8px 0 4px">
+      <button data-mt="overzicht" class="${maandTab==='overzicht'?'on':''}">Overzicht</button>
+      <button data-mt="werk" class="${maandTab==='werk'?'on':''}">${esc(W())} · ${u(mi.tot)} u</button>
+      <button data-mt="diensten" class="${maandTab==='diensten'?'on':''}">Diensten</button>
+      <button data-mt="uitjes" class="${maandTab==='uitjes'?'on':''}">Uitjes</button></div>
+    <div id="maandInhoud"></div>`;
+  $('#mPrev').onclick = () => { ym = ymPlus(ym,-1); renderMaand(); };
+  $('#mNext').onclick = () => { ym = ymPlus(ym,1); renderMaand(); };
+  document.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => { maandTab = b.dataset.mt; renderMaand(); });
+  if (maandTab === 'werk') maandWerk(mi); else if (maandTab === 'diensten') alleDiensten(); else if (maandTab === 'uitjes') maandUitjes(); else maandOverzicht(mi);
+}
+function maandOverzicht(mi){
+  const i = I(), mc = maandCijfers(ym), nu = vandaag(), lopend = ym === nu.slice(0,7);
+  const pro = v => lopend ? ` <span class="sub">(tot vandaag ±${uD(v / mc.dagen * mc.dagenTotNu)})</span>` : '';
+  const namen = D.vakken.map(v => v.vak).concat(Object.keys(mc.perVak).filter(v => !D.vakken.some(x => x.vak === v)));
+  const vakMeterM = namen.map(v => { const d = mc.doelVak[v] || 0, val = mc.perVak[v] || 0;
+    return meter(esc(v), val, d || val || 1, uMin(val) + (d ? ' / ' + uD(d) : '')); }).join('');
+  // weken die in deze maand vallen
+  const weken = []; for (let ma = maandag(ym + '-01'); ma.slice(0,7) <= ym; ma = plus(ma, 7)) weken.push(ma);
+  const wc = weken.map(ma => ({ ma, w: weekCijfers(ma), werk: [...Array(7)].reduce((t,_,k) => t + dienstenOp(plus(ma,k)).reduce((a,x)=>a+nettoU(x),0), 0) }));
+  // belangrijke data
+  const data = D.tentamens.filter(t => t.datum.startsWith(ym)).map(t => ({ s: t.datum, wat: '📚 ' + t.vak + (t.tijd ? ' · ' + t.tijd : ''), sub: t.opmerking || 'tentamen' }))
+    .concat(D.deadlines.filter(d => d.datum.startsWith(ym)).map(d => ({ s: d.datum, wat: (d.klaar ? '✓ ' : '⏰ ') + deadlineNaam(d), sub: (d.tijd || '') + (d.klaar ? ' · klaar' : '') })))
+    .concat(periodes().filter(p => p.van.slice(0,7) <= ym && p.tot.slice(0,7) >= ym).map(p => ({ s: p.van < ym + '-01' ? ym + '-01' : p.van,
+      wat: (p.soort === 'uitje' ? '🧳 ' : p.soort === 'zomer' ? '☀ ' : '🏖 ') + p.naam, sub: periodeTekst(p) })))
+    .sort((a,b) => a.s.localeCompare(b.s));
+  const sig = [];
+  if (!lopend && ym < nu.slice(0,7)) {
+    if (mc.studie < mc.doelStudie) sig.push(['alert', `Zelfstudie ${uMin(mc.studie)} van ±${uD(mc.doelStudie)}.`]);
+    if (mc.gamen > mc.verdiend) sig.push(['alert', `${uD(mc.gamen - mc.verdiend)} meer gegamed dan verdiend.`]);
+  } else if (lopend) {
+    const verwacht = mc.doelStudie / mc.dagen * mc.dagenTotNu;
+    if (mc.studie < verwacht - 2) sig.push(['infobox', `Je loopt ±${uD(verwacht - mc.studie)} achter op je studie voor deze maand.`]);
+  }
+  $('#maandInhoud').innerHTML = `
+    ${sig.map(([c,t]) => `<div class="${c}">${t}</div>`).join('')}
+    <div class="card">
+      ${meter('<b>Zelfstudie</b>', mc.studie, mc.doelStudie, uMin(mc.studie) + ' / ' + uD(mc.doelStudie)) + pro(mc.doelStudie)}
+      <div style="padding-left:12px;border-left:3px solid var(--line);margin:4px 0 10px">${vakMeterM}</div>
+      ${meter('Sportschool', mc.sport, mc.doelSport, mc.sport + ' / ' + Math.round(mc.doelSport) + '×') + pro(mc.doelSport)}
+      ${meter('Gamen (van verdiend)', mc.gamen, Math.max(mc.verdiend, 0.01), uMin(mc.gamen) + ' / ' + uD(mc.verdiend), true)}
+      ${meter('Coderen', mc.coderen, mc.doelCode, uMin(mc.coderen) + ' / ' + uD(mc.doelCode))}
+      <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${mc.slaapGem===null?'–':uMin(mc.slaapGem)}</div></div>
+      <div class="row line"><div class="grow">Gemiddeld naar bed</div><div class="name">${mc.bedGem===null?'–':uurTekst(mc.bedGem)}</div></div>
+      <div class="row line"><div class="grow">${esc(W())}</div><div class="name">${u(mi.tot)} u</div></div>
+      <div class="note">Doelen zijn je weekdoelen omgerekend naar ${mc.dagen} dagen (inclusief toetsweekmodus, vakanties en uitjes).</div>
+    </div>
+    <h2>Per week</h2>
+    <div class="card"><div class="tabelwrap"><table>
+      <tr><th>Week</th><th>Studie</th><th>Game</th><th>Code</th><th>Sport</th><th>${esc(W())}</th></tr>
+      ${wc.map(({ma, w, werk}) => `<tr data-wk="${ma}" style="cursor:pointer" class="${ma===maandag(nu)?'vandaag':''}">
+        <td>wk ${weekNr(ma)} <span class="sub">${dt(ma).getDate()}/${dt(ma).getMonth()+1}</span></td>
+        <td>${w.studie?u(w.studie):'–'}</td><td>${w.gamen?u(w.gamen):'–'}</td><td>${w.coderen?u(w.coderen):'–'}</td><td>${w.sport?w.sport+'×':'–'}</td><td>${werk?u(werk):'–'}</td></tr>`).join('')}
+    </table></div><div class="note">Hele weken (ook de dagen buiten deze maand). Tik op een week om hem te openen.</div></div>
+    <h2>Belangrijke data</h2>
+    <div class="card" style="padding:4px 12px">${data.map(x => `<div class="list-item" style="cursor:default"><div class="grow">
+      <div class="name">${esc(x.wat)}</div><div class="sub">${dagKort(x.s)}${x.sub ? ' · ' + esc(x.sub) : ''}</div></div></div>`).join('')
+      || '<div class="empty">Geen tentamens, deadlines of vakanties deze maand.</div>'}</div>`;
+  document.querySelectorAll('tr[data-wk]').forEach(tr => tr.onclick = () => { wk = tr.dataset.wk; view = 'week'; render(); window.scrollTo(0,0); });
+}
+// ================= UITJES (Maand → Uitjes) =================
+function uitjeItem(p){
+  const tent = uitjeVoorTentamen(p), n = dagenTot(p.van, p.tot) + 1;
+  return `<div class="list-item" data-uitje="${p.id}"><div class="grow"><div class="name">${esc(p.naam)}</div>
+    <div class="sub">${periodeTekst(p)} · ${n} ${n === 1 ? 'dag' : 'dagen'}</div>
+    ${tent.length ? `<div class="sub" style="color:var(--warn)">⚠ in de week vóór ${esc(tentamenTekst(tent))}</div>` : ''}</div>
+    ${p.tot < vandaag() ? '<span class="badge none">geweest</span>' : ''}</div>`;
+}
+function maandUitjes(){
+  const nu = vandaag(), srt = l => l.sort((a,b) => (a.van + a.vertrek).localeCompare(b.van + b.vertrek));
+  const uitjes = periodes().filter(p => p.soort === 'uitje');
+  const komend = srt(uitjes.filter(p => p.tot >= nu)), eerder = srt(uitjes.filter(p => p.tot < nu)).reverse();
+  const vak = srt(periodes().filter(p => p.soort !== 'uitje' && p.tot >= nu)).slice(0, 4);
+  $('#maandInhoud').innerHTML = `
+    <div class="note">Een weekend weg of een echte vakantie. Op die dagen gaan je doelen omlaag naar rato van hoeveel van je dag je weg bent, en krijg je geen herinneringen om in te vullen.</div>
+    <h2>Gepland</h2>
+    <div class="card" style="padding:4px 12px">${komend.map(uitjeItem).join('') || '<div class="empty">Nog geen uitjes gepland.</div>'}</div>
+    ${eerder.length ? `<details><summary>Eerdere uitjes (${eerder.length})</summary><div class="card" style="padding:4px 12px">${eerder.map(uitjeItem).join('')}</div></details>` : ''}
+    <h2>Schoolvakanties</h2>
+    <div class="card" style="padding:4px 12px">${vak.map(p => `<div class="list-item" style="cursor:default"><div class="grow">
+      <div class="name">${p.soort === 'zomer' ? '☀ ' : '🏖 '}${esc(p.naam)}</div><div class="sub">${periodeTekst(p)}</div></div></div>`).join('')
+      || '<div class="empty">Geen schoolvakanties ingevuld.</div>'}
+      <div class="note">Aanpassen bij ⚙︎ → Schoolvakanties.</div></div>`;
+  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="uNieuw">+ Uitje</button></div>`;
+  $('#uNieuw').onclick = () => openUitje(null);
+  document.querySelectorAll('[data-uitje]').forEach(el => el.onclick = () => openUitje(periodes().find(p => p.id === el.dataset.uitje)));
+}
+function openUitje(p){
+  const nieuw = !p;
+  p = Object.assign({ naam: '', van: '', tot: '', vertrek: '', terug: '' }, p || {});
+  sheet(`<h3>${nieuw ? 'Nieuw uitje' : 'Uitje wijzigen'}</h3>
+    <label class="f">Wat?</label><input id="uNaam" value="${esc(p.naam)}" placeholder="bijv. weekend weg">
+    <div class="row"><div class="grow"><label class="f">Vertrek (datum)</label><input type="date" id="uVan" value="${p.van}"></div>
+      <div style="width:110px"><label class="f">Hoe laat?</label><input type="time" id="uVertrek" value="${p.vertrek}"></div></div>
+    <div class="row"><div class="grow"><label class="f">Terug (datum)</label><input type="date" id="uTot" value="${p.tot}"></div>
+      <div style="width:110px"><label class="f">Hoe laat?</label><input type="time" id="uTerug" value="${p.terug}"></div></div>
+    <div class="note">Tijden mogen leeg: dan tel je die hele dag als weg. Vertrek je 's ochtends vroeg, dan is de dag ook helemaal weg; vertrek je 's avonds, dan houd je het grootste deel van je doelen.</div>
+    <div class="card" id="uInfo"></div>
+    <button class="btn" id="uOk">Opslaan</button>
+    ${nieuw ? '' : '<button class="btn danger" id="uDel" style="margin-top:8px">Verwijderen</button>'}
+    <button class="btn ghost" id="uAnn">Annuleren</button>`);
+  const huidig = () => ({ id: p.id, soort: 'uitje', naam: $('#uNaam').value.trim(), van: $('#uVan').value, tot: $('#uTot').value || $('#uVan').value,
+                          vertrek: /^\d{2}:\d{2}$/.test($('#uVertrek').value) ? $('#uVertrek').value : '',
+                          terug: /^\d{2}:\d{2}$/.test($('#uTerug').value) ? $('#uTerug').value : '' });
+  // voorbeeld: per dag hoeveel je weg bent, plus waarschuwingen (tentamen, diensten)
+  const info = () => {
+    const x = huidig();
+    if (!x.van) { $('#uInfo').innerHTML = '<div class="note">Vul in elk geval de vertrekdatum in.</div>'; return; }
+    if (x.tot < x.van) { $('#uInfo').innerHTML = '<div class="alert">De terugkomdatum ligt vóór de vertrekdatum.</div>'; return; }
+    const dagen = []; for (let s = x.van; s <= x.tot && dagen.length < 15; s = plus(s, 1)) dagen.push(s);
+    const tent = uitjeVoorTentamen(x);
+    const diensten = D.diensten.filter(d => telt(d) && d.datum >= x.van && d.datum <= x.tot);
+    $('#uInfo').innerHTML = dagen.map(s => { const w = wegDeel(x, s);
+        return `<div class="row line"><div class="grow">${dagKort(s)}</div><div class="sub">${w >= 0.999 ? 'hele dag weg' : w <= 0.001 ? 'niet weg' : procent(w) + ' weg · doelen ' + procent(1 - w)}</div></div>`; }).join('')
+      + (dagenTot(x.van, x.tot) >= 15 ? '<div class="note">…en verder.</div>' : '')
+      + (tent.length ? `<div class="alert">⚠ Valt in de week vóór ${esc(tentamenTekst(tent))}. Plan je studie er omheen.</div>` : '')
+      + (diensten.length ? `<div class="alert">Je hebt dan ${diensten.length === 1 ? 'een dienst' : diensten.length + ' diensten'}: ${diensten.map(d => dagKort(d.datum) + ' ' + d.begin).join(', ')}.</div>` : '');
+  };
+  ['#uNaam', '#uVan', '#uTot', '#uVertrek', '#uTerug'].forEach(k => { $(k).addEventListener('input', info); $(k).addEventListener('change', info); });
+  info();
+  $('#uAnn').onclick = closeSheet;
+  if (!nieuw) $('#uDel').onclick = async () => {
+    const k = $('#uDel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer om te verwijderen'; return; }
+    D = await api('verwijderPeriode', p.id); closeSheet(); render(); toast('Uitje verwijderd'); };
+  $('#uOk').onclick = async () => {
+    const x = huidig();
+    if (!x.van) return toast('Vul in elk geval de vertrekdatum in');
+    if (x.tot < x.van) return toast('De terugkomdatum ligt vóór de vertrekdatum');
+    const btn = $('#uOk'); btn.disabled = true; btn.textContent = 'Opslaan…';
+    try { D = await api('bewaarPeriode', x); closeSheet(); render(); toast('Uitje opgeslagen ✓'); }
+    catch(e){ btn.disabled = false; btn.textContent = 'Opslaan'; }
+  };
+}
+function maandWerk(mi){
+  const i = I(), g1 = i.grens1, g2 = i.grens2;
+  const gepland = mi.tot - mi.gew;
+  const schaal = Math.max(70, mi.tot+5, mi.doel+5);
+  const pos = v => Math.min(100, v/schaal*100);
+  let status;
+  const bijGrens = [g1,g2].find(g => g > 0 && mi.tot<g && g-mi.tot<=3);
+  if (bijGrens) status = `<div class="alert">Net onder de ${bijGrens}-grens: nog ${u(bijGrens-mi.tot)} u en je krijgt een hoger uurloon over álle uren. Pak er liefst een dienst bij als buffer.</div>`;
+  else if (mi.tot < mi.minimum) status = `<div class="alert">Nog ${u(mi.minimum-mi.tot)} u tot je minimum van ${mi.minimum} u.</div>`;
+  else if (mi.tot >= mi.doel) {
+    const g = g2 > 0 && mi.tot>=g2 ? g2 : g1 > 0 && mi.tot>=g1 ? g1 : null;
+    status = `<div class="okbox">Doel gehaald.${g ? ` Buffer boven de ${g}-grens: ${u(mi.tot-g)} u${mi.tot-g<2?' (krap: een dienst kan korter uitvallen)':''}.` : ''}</div>`;
+  } else status = `<div class="infobox">Nog ${u(mi.doel-mi.tot)} u tot je doel van ${mi.doel} u (minimum ${mi.minimum} u gehaald).</div>`;
+  const doelOpGrens = mi.doel===g1 || mi.doel===g2;
+  const markHtml = [g1,g2].filter(v => v > 0).map(v => `<span class="mark" style="left:${pos(v)}%"><b>${v}${mi.doel===v?' · doel':''}</b></span>`).join('')
+    + (doelOpGrens ? '' : `<span class="mark doel" style="left:${pos(mi.doel)}%"><b>doel ${mi.doel}</b></span>`);
+  // jaaroverzicht
+  const alle = [...new Set(D.diensten.map(x=>x.datum.slice(0,7)).concat(D.maanddoelen.map(m=>m.maand)).concat([vandaag().slice(0,7)]))].sort();
+  const lijst = []; for (let m = alle[0]; m <= alle[alle.length-1]; m = ymPlus(m,1)) lijst.push(m);
+  const maxU = Math.max(70, ...lijst.map(m=>maandInfo(m).tot));
+  const alleDiensten = D.diensten.filter(x => x.datum.startsWith(ym + '-')).sort((a,b)=>(a.datum+a.begin).localeCompare(b.datum+b.begin));
+  $('#maandInhoud').innerHTML = `
+    ${werkKop()}
+    <div class="card">
+      <div class="row"><div class="grow"><div class="sub">${esc(W())} · uren (netto)</div><div class="big">${u(mi.tot)}<span class="unit">u</span></div></div>
+        <button class="btn sec small" id="mDoel">Doel ${mi.doel} u</button></div>
+      <div class="track"><i class="gew" style="width:${pos(mi.gew)}%"></i><i class="gep" style="left:${pos(mi.gew)}%;width:${pos(gepland)}%"></i>${markHtml}</div>
+      <div class="legend"><span>gewerkt ${u(mi.gew)} u</span><span class="p">gepland ${u(gepland)} u</span></div>
+      ${status}
+      ${mi.extra ? `<div class="note">Doel inclusief ${mi.extra} u extra voor vakantiedagen (⚙︎ → Vakanties).</div>` : ''}
+    </div>
+    <h2>Diensten</h2>
+    <div class="card" style="padding:4px 12px">${alleDiensten.map(dienstItem).join('') || '<div class="empty">Nog geen diensten deze maand.</div>'}</div>
+    ${dienstzoeker(ym, mi)}
+    <div class="card">
+      <div class="row line"><div class="grow">Uurloon bij deze uren</div><div class="name">${euroC(mi.tarief)}</div></div>
+      <div class="row line"><div class="grow">Bruto (indicatie)</div><div class="name">≈ ${euro(mi.bruto)}</div></div>
+      <div class="row line"><div class="grow">Uitbetaald in</div><div class="name">${ymNaam(ymPlus(ym,1))}</div></div>
+      <div class="note">Netto krijg je minder door belasting. Uren zijn na aftrek van onbetaalde pauze.</div>
+    </div>
+    <details><summary>Alle maanden</summary>
+    <div class="card"><table><tr><th>Maand</th><th></th><th>Uren</th><th>Doel</th><th>Bruto</th></tr>
+      ${lijst.map(m => { const x = maandInfo(m); return `<tr data-m="${m}" style="cursor:pointer" class="${m===ym?'vandaag':''}">
+        <td>${MAANDEN[Number(m.slice(5))-1]} ${m.slice(2,4)}</td><td><span class="mini"><i style="width:${x.tot/maxU*100}%"></i></span></td>
+        <td>${u(x.tot)}</td><td>${x.doel}</td><td>${euro(x.bruto)}</td></tr>`; }).join('')}</table></div></details>`;
+  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="dNieuw">+ Dienst</button></div>`;
+  $('#dNieuw').onclick = () => openDienst({ datum: ym === vandaag().slice(0,7) ? vandaag() : ym + '-01' });
+  document.querySelectorAll('tr[data-m]').forEach(tr => tr.onclick = () => { ym = tr.dataset.m; renderMaand(); window.scrollTo(0,0); });
+  dienstKnoppen();
+  $('#mDoel').onclick = () => {
+    sheet(`<h3>Urendoel ${ymNaam(ym)}</h3>
+      <div class="row"><div class="grow"><label class="f">Doel (uur)</label><input id="gDoel" inputmode="decimal" value="${mi.doel}"></div>
+      <div class="grow"><label class="f">Minimum (uur)</label><input id="gMin" inputmode="decimal" value="${mi.minimum}"></div></div>
+      ${g1 > 0 || g2 > 0 ? `<div class="note">Bonusgrenzen: ${[g1,g2].filter(v => v > 0).join(' en ')} u. Plan liefst een paar uur boven een grens.</div>` : ''}
+      <div style="height:12px"></div><button class="btn" id="gOk">Opslaan</button><button class="btn ghost" id="gAnn">Annuleren</button>`);
+    $('#gAnn').onclick = closeSheet;
+    $('#gOk').onclick = async () => {
+      const doel = num($('#gDoel').value), minimum = num($('#gMin').value);
+      if (isNaN(doel) || isNaN(minimum)) return toast('Vul getallen in');
+      D = await api('bewaarMaanddoel', {maand:ym, doel, minimum}); closeSheet(); render(); toast('Doel opgeslagen ✓');
+    };
+  };
+}
+
+// ================= WEEK =================
+let wk = maandag(vandaag()), refl = null;
+/** Welke week het Week-scherm laat zien als je het opent.
+ *  Maandag t/m zaterdag: vorige week, zolang de reflectie daarvan nog leeg is.
+ *  Op zondag, of als vorige week al een reflectie heeft: deze week. */
+function startWeek(){
+  const nu = vandaag(), deze = maandag(nu), vorige = plus(deze, -7);
+  if (dt(nu).getDay() === 0) return deze;
+  const r = (D && D.reflecties || []).find(x => x.week === vorige);
+  return (r && (r.goed || r.beter || r.focus)) ? deze : vorige;
+}
+function weekTekst(ws){
+  const i = I(), zo = plus(wk,6), mi = maandInfo(wk.slice(0,7));
+  return [
+    `Weekreflectie week ${weekNr(wk)} (${dagKort(wk)} – ${dagKort(zo)})`,
+    (ws.modus ? `Toetsweekmodus: ${tentamenTekst(ws.doel.tentamens)}\n` : '')
+      + (ws.doel.vakantieDagen ? `Vakantie: ${ws.doel.vakanties.map(p => p.naam).join(', ')} (${ws.doel.vakantieDagen} van de 7 dagen)\n` : '')
+      + (ws.doel.uitjeDagen ? `Weg: ${ws.doel.uitjes.map(p => p.naam + ' (' + periodeTekst(p) + ')').join(', ')}\n` : '') + `Zelfstudie: ${uMin(ws.studie)} (doel ${uD(ws.doel.studie)})` + (Object.keys(ws.perVak).length ? ' — ' + Object.keys(ws.perVak).map(v=>v+' '+uMin(ws.perVak[v])).join(', ') : ''),
+    `Sportschool: ${ws.sport}× (doel ${ws.sportDoel})`,
+    `Gamen: ${uMin(ws.gamen)} (verdiend ${uMin(ws.verdiend)})`,
+    `Coderen (leerlijn): ${uMin(ws.coderen)} (doel ${uD(ws.codeDoel)})`,
+    ws.slaapGem !== null ? `Slaap: gemiddeld ${uMin(ws.slaapGem)} per nacht (${ws.slaapN} nachten ingevuld)` + (ws.bedGem!==null ? `, gemiddeld naar bed om ${uurTekst(ws.bedGem)}` : '') : '',
+    `${W()}: ${u(ws.werk)} u deze week · ${ymNaam(wk.slice(0,7))} totaal ${u(mi.tot)} u (doel ${mi.doel})`,
+    ws.les!==null ? `Lessen: ${u(ws.les)} u` : '',
+    notitiesWeek(ws).length ? 'Notities per dag:\n' + notitiesWeek(ws).map(d => `- ${dagKort(d.s)}: ${d.notitie}`).join('\n') : '',
+    `Wat ging goed: ${refl.goed || '-'}`,
+    `Wat kan beter: ${refl.beter || '-'}`,
+    `Focus volgende week: ${refl.focus || '-'}`,
+  ].filter(Boolean).join('\n');
+}
+/** Dagen van de week waarop je bij Vandaag een notitie hebt gezet. */
+const notitiesWeek = ws => ws.dagen.filter(d => d.notitie);
+function renderWeek(){
+  const i = I(), zo = plus(wk,6), nu = vandaag();
+  const ws = weekStats(wk);
+  $('#title').textContent = 'Week ' + weekNr(wk);
+  if (!refl || refl.week !== wk) { const r = D.reflecties.find(x=>x.week===wk) || {};
+    refl = {week:wk, goed:r.goed||'', beter:r.beter||'', focus:r.focus||''}; }
+  const begonnen = wk <= nu, bezig = begonnen && nu <= zo;
+  const sig = [];
+  if (begonnen) {
+    sig.push(ws.studie >= ws.doel.studie ? ['okbox','Studiedoel gehaald.']
+      : [bezig?'infobox':'alert', `Zelfstudie ${uMin(ws.studie)} van ${uD(ws.doel.studie)}${bezig?` — nog ${uD(ws.doel.studie-ws.studie)} te gaan`:''}.`]);
+    const achter = D.vakken.filter(v => ws.doel.perVak[v.vak] && (ws.perVak[v.vak]||0) < ws.doel.perVak[v.vak]);
+    if (!bezig && achter.length) sig.push(['alert', 'Achter op: ' + achter.map(v=>`${esc(v.vak)} (${uMin(ws.perVak[v.vak]||0)} / ${uD(ws.doel.perVak[v.vak])})`).join(', ') + '.']);
+    sig.push(ws.sport >= ws.sportDoel ? ['okbox','Sportdoel gehaald.']
+      : [bezig?'infobox':'alert', `Sportschool ${ws.sport} van ${ws.sportDoel}×${bezig?` — nog ${ws.sportDoel-ws.sport} te gaan`:''}.`]);
+    if (ws.gameOver < 0) sig.push(['alert', `${uMin(-ws.gameOver)} meer gegamed dan verdiend.`]);
+  }
+  if (ws.slaapGem !== null && ws.slaapN >= 3 && ws.slaapGem < i.slaapDoel - 0.5)
+    sig.push(['infobox', `Je slaapt gemiddeld ${uMin(ws.slaapGem)}, onder je doel van ${uMin(i.slaapDoel)}.`]);
+  if (ws.werk > 20) sig.push(['alert', `${u(ws.werk)} u ${esc(W())} deze week: check of studie, sport en rust niet in het gedrang komen.`]);
+  if (ws.laat) sig.push(['infobox', `${ws.laat} late dienst${ws.laat>1?'en':''}: plan de ochtend erna rustig.`]);
+  const dls = D.deadlines.filter(d => !d.klaar && d.datum >= wk && d.datum <= zo);
+  if (dls.length) sig.push(['infobox', 'Deadlines deze week: ' + dls.map(d => esc(deadlineNaam(d)) + ' (' + dagKort(d.datum) + ')').join(', ') + '.']);
+  if (ws.modus && ws.werk > 0) sig.push(['alert', `Toetsweekmodus en toch ${u(ws.werk)} u ${esc(W())}: check of je genoeg studietijd overhoudt.`]);
+
+  const reflVorige = wk === plus(maandag(nu), -7) && wk === startWeek();
+  $('#main').innerHTML = `
+    ${toetsBanner(ws.modus, ws.doel, 'deze week')}
+    ${vrijBanner(ws.doel, 'deze week')}
+    ${reflVorige ? '<div class="infobox">Je ziet vorige week, want de reflectie daarvan is nog niet opgeslagen. Tik › voor deze week.</div>' : ''}
+    <div class="daynav"><button class="nb" id="wPrev" aria-label="vorige week">‹</button>
+      <div class="lbl">${dagKort(wk)} – ${dagKort(zo)}</div><button class="nb" id="wNext" aria-label="volgende week">›</button></div>
+    <div class="card">
+      ${meter('<b>Zelfstudie</b>', ws.studie, ws.doel.studie, uMin(ws.studie)+' / '+uD(ws.doel.studie))}
+      <div style="padding-left:12px;border-left:3px solid var(--line);margin:4px 0 10px">${vakMeters(ws)}</div>
+      ${meter('Sportschool', ws.sport, ws.sportDoel, ws.sport+' / '+ws.sportDoel+'×')}
+      ${meter('Gamen (van verdiend)', ws.gamen, Math.max(ws.verdiend, 0.01), uMin(ws.gamen)+' / '+uMin(ws.verdiend), true)}
+      ${meter('Coderen', ws.coderen, ws.codeDoel, uMin(ws.coderen)+' / '+uD(ws.codeDoel))}
+      <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${ws.slaapGem===null?'–':uMin(ws.slaapGem)}</div></div>
+      <div class="row line"><div class="grow">Gemiddeld naar bed</div><div class="name">${ws.bedGem===null?'–':uurTekst(ws.bedGem)}</div></div>
+      <div class="row line"><div class="grow">${esc(W())}</div><div class="name">${u(ws.werk)} u</div></div>
+      <div class="row line"><div class="grow">Lessen (agenda)</div><div class="name">${ws.les===null?'…':u(ws.les)+' u'}</div></div>
+    </div>
+    ${sig.map(([c,t]) => `<div class="${c}">${t}</div>`).join('')}
+    <div class="card"><div class="tabelwrap"><table>
+      <tr><th>Dag</th><th>Les</th><th>Studie</th><th>Game</th><th>Code</th><th>Sport</th><th>${esc(W())}</th><th>Slaap</th></tr>
+      ${ws.dagen.map(d => `<tr data-d="${d.s}" style="cursor:pointer" class="${d.s===nu?'vandaag':''}">
+        <td>${DAGEN[dt(d.s).getDay()]} ${dt(d.s).getDate()}${d.uitje ? ' 🧳' : d.vakantie ? (d.vakantie.soort === 'zomer' ? ' ☀' : ' 🏖') : ''}</td><td>${d.les===null?(LESSEN?'–':'…'):d.les?u(d.les):'–'}</td>
+        <td>${d.studie?u(d.studie):'–'}</td><td>${d.gamen?u(d.gamen):'–'}</td><td>${d.coderen?u(d.coderen):'–'}</td><td>${d.sport?'✓':'–'}</td>
+        <td>${d.werk?u(d.werk)+(d.laat?' ☾':''):'–'}</td><td>${d.slaap?u(d.slaap):'–'}</td></tr>`).join('')}
+      <tr class="tot"><td>Totaal</td><td>${ws.les===null?'…':u(ws.les)}</td><td>${u(ws.studie)}</td><td>${u(ws.gamen)}</td><td>${u(ws.coderen)}</td><td>${ws.sport}×</td><td>${u(ws.werk)}</td>
+        <td>${ws.slaapGem===null?'–':'⌀ '+u(Math.round(ws.slaapGem*10)/10)}</td></tr>
+    </table></div><div class="note">Tik op een dag om hem in te vullen. ☾ = late dienst${ws.doel.vakantieDagen ? ', 🏖/☀ = vakantie' : ''}${ws.doel.uitjeDagen ? ', 🧳 = weg' : ''}.</div></div>
+    <h2>Reflectie</h2>
+    <div class="card">
+      ${notitiesWeek(ws).length ? `<label class="f" style="margin-top:0">Notities van deze week</label>
+        ${notitiesWeek(ws).map(d => `<div class="row line"><div class="name" style="min-width:64px">${dagKort(d.s)}</div><div class="grow">${esc(d.notitie)}</div></div>`).join('')}` : ''}
+      <label class="f" ${notitiesWeek(ws).length ? '' : 'style="margin-top:0"'}>Wat ging goed?</label><textarea id="rGoed">${esc(refl.goed)}</textarea>
+      <label class="f">Wat kan beter?</label><textarea id="rBeter">${esc(refl.beter)}</textarea>
+      <label class="f">Focus volgende week</label><textarea id="rFocus">${esc(refl.focus)}</textarea>
+      <div style="height:10px"></div>
+      <button class="btn sec" id="rKopie">Kopieer weekoverzicht voor Claude</button>
+    </div>`;
+  $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="rOpslaan">Reflectie opslaan</button></div>`;
+  $('#wPrev').onclick = () => verlaat(() => { wk = plus(wk,-7); renderWeek(); });
+  $('#wNext').onclick = () => verlaat(() => { wk = plus(wk,7); renderWeek(); });
+  document.querySelectorAll('tr[data-d]').forEach(tr => tr.onclick = () => verlaat(() => { dag = tr.dataset.d; view = 'vandaag'; render(); window.scrollTo(0,0); }));
+  [['rGoed','goed'],['rBeter','beter'],['rFocus','focus']].forEach(([id,k]) => $('#'+id).oninput = e => refl[k] = e.target.value);
+  $('#rKopie').onclick = async () => {
+    const tekst = weekTekst(ws);
+    try { await navigator.clipboard.writeText(tekst); toast('Gekopieerd: plak het in de chat met Claude'); }
+    catch(e) {
+      sheet(`<h3>Weekoverzicht</h3><div class="note">Kopiëren lukte niet automatisch. Selecteer de tekst en kopieer hem zelf.</div>
+        <textarea id="kTekst" style="min-height:220px" readonly>${esc(tekst)}</textarea>
+        <div style="height:10px"></div><button class="btn ghost" id="kDicht">Sluiten</button>`);
+      $('#kTekst').select(); $('#kDicht').onclick = closeSheet;
+    }
+  };
+  $('#rOpslaan').onclick = () => {
+    if (opslaanBezig) return;
+    const btn = $('#rOpslaan'); btn.disabled = true; btn.textContent = 'Opslaan…';
+    opslaanBezig = (async () => {
+      try { D = await api('bewaarReflectie', refl); refl = null; toast('Reflectie opgeslagen ✓'); } catch(e){}
+    })().finally(() => { opslaanBezig = null; if (!wachtend) render(); });
+  };
+}
+
+// ================= INSTELLINGEN =================
+const VELDEN = [
+  ['Doelen per week', [['sportDoel','Sportschool (keer)'],['verdienPer','Uur studie voor 1 uur gamen'],['gameMax','Gamen maximaal (uur)'],
+                       ['codeerDoel','Coderen (uur)'],['slaapDoel','Slaap per nacht (uur)']]],
+  ['Toetsweekmodus', [['toetsweekDagen','Aantal dagen vóór een tentamen (0 = uit)'],['toetsweekStudie','Studiedoel per week (uur)'],['toetsweekGameMax','Gamen maximaal per week (uur)']]],
+  ['Vakanties', [['vakantieStudie','Studiedoel per week in een schoolvakantie (uur; zomervakantie = 0)'],
+                 ['vakantieGameDag','Gamen per dag in vakanties (uur, hoeft niet verdiend)'],
+                 ['vakantieWerkExtra','Extra werkuren per vakantieweek (bovenop je maanddoel)']]],
+  ['Werk (uren en loon)', [['maandDoel','Standaard maanddoel (uur)'],['maandMinimum','Standaard minimum (uur)'],
+             ['grens1','Eerste bonusgrens (uur)'],['grens2','Tweede bonusgrens (uur)'],
+             ['loonBasis','Uurloon basis (€)'],['loon1','Uurloon vanaf grens 1 (€)'],['loon2','Uurloon vanaf grens 2 (€)'],
+             ['pauzeVanaf','Onbetaalde pauze bij diensten langer dan (uur)'],['pauzeMin','Pauze (minuten)']]],
+];
+const WEEKDAGEN = ['ma','di','wo','do','vr','za','zo'];
+const DAG_NAAM = {ma:'maandag',di:'dinsdag',wo:'woensdag',do:'donderdag',vr:'vrijdag',za:'zaterdag',zo:'zondag'};
+function leesTijden(str){ const o={}; String(str).split(';').forEach(p=>{ const [d,t]=p.split('='); if (d) o[d.trim()]=(t||'').trim(); }); return o; }
+function vakRij(v){ return `<div class="row line vakrow" data-oud="${esc(v.vak)}"><input class="vNaam grow" value="${esc(v.vak)}" placeholder="vak">
+  <input class="vDoel" inputmode="decimal" value="${String(v.weekdoel).replace('.',',')}" style="width:64px;text-align:right"><span class="sub">u/wk</span>
+  <button class="x vDel" aria-label="verwijderen">×</button></div>`; }
+function openInstellingen(){
+  const i = I(), tijden = leesTijden(i.herinnerTijden);
+  const tent = D.tentamens.slice().sort((a,b)=>a.datum.localeCompare(b.datum));
+  const vakLijst = periodes().filter(p => p.soort !== 'uitje').sort((a,b) => a.van.localeCompare(b.van));
+  const thema = opslag.get('planner-thema') || 'systeem';
+  sheet(`<h3>Instellingen</h3>
+    <div class="sub autostatus iStatus">Wijzigingen worden vanzelf opgeslagen.</div>
+    <h2>Weergave</h2>
+    <div class="card"><div class="seg" id="iThema">${[['licht','Licht'],['donker','Donker'],['systeem','Systeem']].map(([v,l]) =>
+      `<button data-v="${v}" class="${thema===v?'on':''}">${l}</button>`).join('')}</div>
+      <div class="note">Systeem volgt de instelling van je telefoon of pc. Wordt per apparaat onthouden.</div></div>
+    <h2>Vakken (zelfstudie per week)</h2>
+    <div class="card" id="iVakken">${D.vakken.map(vakRij).join('')}</div>
+    <button class="btn ghost" id="iVakAdd" style="padding:6px">+ Vak toevoegen</button>
+    <div class="note" id="iVakTot"></div>
+    ${VELDEN.map(([kop, velden]) => `<h2>${kop}</h2><div class="card">${velden.map(([k,l]) =>
+      `<div class="row line"><div class="grow">${l}</div><input data-k="${k}" inputmode="decimal" value="${String(i[k]).replace('.',',')}" style="width:92px;text-align:right"></div>`).join('')}</div>`).join('')}
+    <h2>Herinneringen (in je agenda)</h2>
+    <div class="card">
+      <div class="seg" id="iHer"><button data-v="uit" class="${i.herinneringen!=='aan'?'on':''}">Uit</button><button data-v="aan" class="${i.herinneringen==='aan'?'on':''}">Aan</button></div>
+      <div class="note">Een melding via een aparte agenda "Planner" in Google Agenda. Die wordt elke ochtend rond 06:00 klaargezet en verdwijnt vanzelf als je de dag al hebt ingevuld.</div>
+      <div class="note">Avondherinnering om je dag in te vullen. Laat een dag leeg om hem over te slaan (bijv. een vaste avond met vrienden).</div>
+      ${WEEKDAGEN.map(d => `<div class="row line"><div class="grow">${DAG_NAAM[d]}</div>
+        <input type="time" data-wd="${d}" value="${tijden[d]||''}" style="width:120px"><button class="x hLeeg" data-wd="${d}" aria-label="uit">×</button></div>`).join('')}
+      <div class="row line"><div class="grow">Ochtend: "gisteren nog invullen"<div class="sub">alleen als je het vergeten bent</div></div>
+        <input type="time" id="iOchtend" value="${i.ochtendTijd||''}" style="width:120px"><button class="x hLeeg" data-id="iOchtend" aria-label="uit">×</button></div>
+      <div class="row line"><div class="grow">Weekreflectie</div>
+        <select id="iRefDag" style="width:96px">${WEEKDAGEN.map(d=>`<option value="${d}" ${d===i.reflectieDag?'selected':''}>${d}</option>`).join('')}</select>
+        <input type="time" id="iRefTijd" value="${i.reflectieTijd||''}" style="width:120px"></div>
+      <div class="row line"><div class="grow">Deadlines: aantal dagen van tevoren</div>
+        <input id="iDlDagen" inputmode="numeric" value="${i.deadlineDagen}" style="width:60px;text-align:right"></div>
+      <div class="row line"><div class="grow">…om</div><input type="time" id="iDlTijd" value="${i.deadlineTijd||''}" style="width:120px"></div>
+      <div class="row line"><div class="grow">Op de dag van de deadline om</div><input type="time" id="iDlDag" value="${i.deadlineDagTijd||''}" style="width:120px"></div>
+      <label class="f">Overslaan als er op dat moment iets in mijn Google Agenda staat</label>
+      <div class="seg" id="iAfspraak"><button data-v="ja" class="${i.overslaanBijAfspraak==='ja'?'on':''}">Ja</button><button data-v="nee" class="${i.overslaanBijAfspraak!=='ja'?'on':''}">Nee</button></div>
+      <div class="note">Tijdens of vlak voor een dienst krijg je geen herinnering om in te vullen; wat je dan mist, komt de volgende ochtend. Deadline-herinneringen komen altijd.</div>
+      <button class="btn sec" id="iPlan" style="margin-top:8px">Bekijk herinneringen van vandaag</button>
+    </div>
+    <h2>Werk en agenda</h2>
+    <div class="card">
+      <label class="f" style="margin-top:0">Naam van je werk (zo heet het overal in de app)</label><input id="iWerkNaam" value="${esc(i.werkNaam)}" placeholder="Werk">
+      <label class="f">Avonden die je vrijhoudt (dienstzoeker raadt ze af)</label>
+      <div class="seg small" id="iVrijeAvond">${WEEKDAGEN.map(d => `<button data-v="${d}" class="${vrijeAvondenLijst().includes(d)?'on':''}">${d}</button>`).join('')}</div>
+      <label class="f">Naam van je lesrooster-agenda</label><input id="iAgenda" value="${esc(i.lesAgenda)}">
+      <label class="f">Diensten automatisch uit de agenda van mijn werk halen</label>
+      <div class="seg" id="iWerkImp"><button data-v="aan" class="${i.werkImport==='aan'?'on':''}">Aan</button><button data-v="uit" class="${i.werkImport!=='aan'?'on':''}">Uit</button></div>
+      <label class="f">Naam van je werkagenda (een stukje is genoeg)</label><input id="iWerkAgenda" value="${esc(i.werkAgenda)}">
+      <div class="note">${!D.werkInfo ? '' : D.werkInfo.gevonden ? '✓ Gevonden. Wordt bijgewerkt als je de app opent.' : 'Niet gevonden met deze naam.'}</div>
+      <label class="f">Tekst die in de agendatitel vóór de locatie staat (wordt weggehaald)</label><input id="iWerkTitel" value="${esc(i.werkTitelWeg)}" placeholder="bijv. Bedrijfsnaam personeel">
+      <div class="note">Een titel als "Bedrijfsnaam personeel Locatie - 150%" wordt dan locatie "Locatie" met 150% toeslag.</div>
+    </div>
+    ${IN_GOOGLE ? '' : `<h2>Koppeling</h2><div class="card"><div class="note" style="margin-top:0">Gekoppeld met je Google Sheet.</div>
+      <button class="btn danger" id="iOntkoppel">Ontkoppelen</button></div>`}
+    <h2>Schoolvakanties</h2>
+    <div class="card" style="padding:4px 12px">${vakLijst.map(p => `<div class="list-item" style="cursor:default"><div class="grow">
+      <div class="name">${p.soort === 'zomer' ? '☀ ' : '🏖 '}${esc(p.naam)}</div><div class="sub">${dagKort(p.van)} ${p.van.slice(0,4)} – ${dagKort(p.tot)} ${p.tot.slice(0,4)}${p.soort === 'zomer' ? ' · geen studiedoel' : ''}</div></div>
+      <button class="x" data-pdel="${p.id}" aria-label="verwijderen">×</button></div>`).join('') || '<div class="empty">Nog geen schoolvakanties.</div>'}</div>
+    <div class="card" data-geen-auto>
+      <label class="f" style="margin-top:0">Naam</label><input id="pNaam" placeholder="bijv. Kerstvakantie">
+      <div class="row"><div class="grow"><label class="f">Van</label><input type="date" id="pVan"></div>
+        <div class="grow"><label class="f">Tot en met</label><input type="date" id="pTot"></div></div>
+      <label class="f">Soort</label><div class="seg" id="pSoort"><button data-v="vakantie" class="on">Gewone vakantie</button><button data-v="zomer">Zomervakantie</button></div>
+      <div class="note">Staat "zomer" in de naam, dan wordt het vanzelf een zomervakantie (geen studiedoel). Een tentamen vlak na een vakantie zet de toetsweekmodus gewoon aan.</div>
+      <div style="height:10px"></div><button class="btn sec" id="pAdd">+ Schoolvakantie toevoegen</button>
+      <button class="btn ghost" id="pPlak" style="margin-top:4px">Meerdere tegelijk (rooster plakken)</button>
+    </div>
+    <h2>Uitjes</h2>
+    <div class="card">
+      <div class="note" style="margin-top:0">Je uitjes zelf plan je bij Maand → Uitjes. Hier stel je in hoe lang je dag is: vertrek je om 18:00 en loopt je dag van 08:00 tot 23:00, dan ben je 5 van de 15 uur weg en houd je 67% van je doelen.</div>
+      <div class="row line"><div class="grow">Mijn dag begint om</div><input type="time" id="iDagStart" value="${i.dagStart||'08:00'}" style="width:120px"></div>
+      <div class="row line"><div class="grow">Mijn dag eindigt om</div><input type="time" id="iDagEind" value="${i.dagEind||'23:00'}" style="width:120px"></div>
+    </div>
+    <h2>Tentamens</h2>
+    <div class="card" style="padding:4px 12px">${tent.map(t => `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">${esc(t.vak)}</div>
+      <div class="sub">${dagKort(t.datum)} ${t.datum.slice(0,4)}${t.tijd?' · '+t.tijd:''}${t.opmerking?' · '+esc(t.opmerking):''}</div></div>
+      <button class="x" data-del="${t.id}" aria-label="verwijderen">×</button></div>`).join('') || '<div class="empty">Geen tentamens.</div>'}</div>
+    <div class="card" data-geen-auto>
+      <div class="row"><div class="grow"><label class="f" style="margin-top:0">Datum</label><input type="date" id="tDatum"></div>
+        <div class="grow"><label class="f" style="margin-top:0">Tijd</label><input type="time" id="tTijd"></div></div>
+      <label class="f">Vak</label><input id="tVak" placeholder="bijv. Wiskunde">
+      <label class="f">Opmerking</label><input id="tOpm" placeholder="bijv. alleen indien nodig">
+      <div style="height:10px"></div><button class="btn sec" id="tAdd">+ Tentamen toevoegen</button>
+    </div>
+    <h2>Versie</h2>
+    <div class="card">
+      <div class="row line"><div class="grow">App <span class="sub">(index.html)</span></div><div class="name">${APP_VERSIE}</div></div>
+      <div class="row line"><div class="grow">Server <span class="sub">(Code.gs)</span></div><div class="name">${esc(D.versie || 'ouder dan 2026.11.15')}</div></div>
+      ${(D.versie || '') < SERVER_MIN ? `<div class="alert">Code.gs is ouder dan deze app verwacht (${SERVER_MIN}). Plak de nieuwste Code.gs en kies Implementeren → Implementaties beheren → Nieuwe versie.</div>` : ''}
+      ${IN_GOOGLE ? '' : '<button class="btn sec" id="iUpdate" style="margin-top:8px">Controleer op update</button><div class="note" id="iUpdateInfo"></div>'}
+    </div>
+    <div class="sub autostatus iStatus" style="text-align:center;margin-top:8px"></div>
+    <button class="btn ghost" id="iAnn">Sluiten</button>`);
+  if ($('#iUpdate')) $('#iUpdate').onclick = async () => {
+    const info = $('#iUpdateInfo'); info.textContent = 'Kijken op GitHub…';
+    try {
+      const html = await fetch('index.html', { cache: 'no-store' }).then(r => r.text());
+      const nieuw = (html.match(/APP_VERSIE = '([^']+)'/) || [])[1];
+      if (!nieuw) { info.textContent = 'Kon de versie op GitHub niet lezen.'; return; }
+      if (nieuw === APP_VERSIE) { info.textContent = '✓ Je hebt de nieuwste versie (' + nieuw + ').'; return; }
+      info.innerHTML = 'Nieuwe versie gevonden: <b>' + esc(nieuw) + '</b>.';
+      const b = $('#iUpdate'); b.textContent = 'Nu bijwerken';
+      b.onclick = async () => {
+        if (viesDag()) bewaarConcept();
+        try { const reg = await navigator.serviceWorker?.getRegistration(); if (reg) await reg.update(); } catch(e){}
+        location.reload();
+      };
+    } catch(e) { info.textContent = 'Geen verbinding met GitHub.'; }
+  };
+  const keuze = {herinneringen:i.herinneringen, werkImport:i.werkImport, overslaanBijAfspraak:i.overslaanBijAfspraak};
+  [['iHer','herinneringen'],['iWerkImp','werkImport'],['iAfspraak','overslaanBijAfspraak']].forEach(([id,k]) =>
+    document.querySelectorAll('#'+id+' button').forEach(b => b.onclick = () => { keuze[k] = b.dataset.v;
+      document.querySelectorAll('#'+id+' button').forEach(y => y.classList.toggle('on', y===b)); planI(); }));
+  document.querySelectorAll('#iVrijeAvond button').forEach(b => b.onclick = () => { b.classList.toggle('on'); planI(); });
+  document.querySelectorAll('.hLeeg').forEach(b => b.onclick = () => {
+    const el = b.dataset.wd ? $(`input[data-wd="${b.dataset.wd}"]`) : $('#'+b.dataset.id); el.value = ''; planI(); });
+  const vakTot = () => { const t = [...document.querySelectorAll('.vDoel')].reduce((s,el)=>s+(num(el.value)||0),0);
+    $('#iVakTot').textContent = 'Totaal zelfstudie: ' + u(t) + ' u per week'; };
+  const vakEvents = () => { document.querySelectorAll('.vDel').forEach(b => b.onclick = () => { b.closest('.vakrow').remove(); vakTot(); planI(); });
+    document.querySelectorAll('.vDoel').forEach(el => el.oninput = vakTot); vakTot(); };
+  vakEvents();
+  $('#iVakAdd').onclick = () => { $('#iVakken').insertAdjacentHTML('beforeend', vakRij({vak:'', weekdoel:2})); vakEvents(); };
+  $('#iAnn').onclick = closeSheet;
+  document.querySelectorAll('#iThema button').forEach(b => b.onclick = () => {
+    opslag.set('planner-thema', b.dataset.v); pasThemaToe();
+    document.querySelectorAll('#iThema button').forEach(y => y.classList.toggle('on', y===b));
+    render(); });
+  if ($('#iOntkoppel')) $('#iOntkoppel').onclick = () => {
+    const k = $('#iOntkoppel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Zeker? Tik nog een keer'; return; }
+    opslag.weg(CFG_KEY); opslag.weg(CACHE_KEY); location.reload(); };
+  $('#iPlan').onclick = async () => {
+    await sheetHaak();                      // eerst je wijzigingen opslaan, dan pas het plan ophalen
+    const r = await api('herinnerPlan', vandaag());
+    sheet(`<h3>Herinneringen vandaag</h3><div class="sub">Volgens de opgeslagen instellingen${I().herinneringen!=='aan'?' (staan nu <b>uit</b>)':''}</div>
+      <div class="card" style="padding:4px 12px">${r.plan.map(h => `<div class="list-item" style="cursor:default"><div class="grow">
+        <div class="name">${h.tijd||'—'} · ${({ochtend:'ochtend',avond:'avond',reflectie:'weekreflectie'})[h.soort] || esc(h.titel||'deadline')}</div>
+        <div class="sub">${h.stuur ? esc(h.tekst) : 'Overgeslagen: ' + esc(h.reden)}</div></div>
+        <span class="badge ${h.stuur?'':'none'}">${h.stuur ? 'agenda' : '—'}</span></div>`).join('')}</div>
+      <button class="btn ghost" id="pTerug">Terug</button>`);
+    $('#pTerug').onclick = openInstellingen;
+  };
+  // ---- automatisch opslaan: 1,5 s na de laatste wijziging, en meteen als het venster dicht gaat ----
+  let iTimer = null, iBezig = null, laatst = JSON.stringify(verzamel().o || null), vorige = JSON.parse(laatst || '{}');
+  const status = (t, fout) => document.querySelectorAll('.iStatus').forEach(el => { el.textContent = t; el.classList.toggle('fout', !!fout); });
+  /** Leest alle velden uit. Geeft { o } of { fout: 'tekst' }. */
+  function verzamel(){
+    const o = Object.assign({lesAgenda: $('#iAgenda').value.trim(), werkAgenda: $('#iWerkAgenda').value.trim(),
+      werkNaam: $('#iWerkNaam').value.trim() || 'Werk', werkTitelWeg: $('#iWerkTitel').value.trim(),
+      vrijeAvonden: [...document.querySelectorAll('#iVrijeAvond button.on')].map(b => b.dataset.v).join(','),
+      dienstenInAgenda: i.dienstenInAgenda}, keuze);
+    for (const el of document.querySelectorAll('.sheet input[data-k]')) {
+      const v = num(el.value); if (el.value.trim()==='' || isNaN(v)) return { fout: 'Controleer: ' + el.closest('.row').textContent.trim() };
+      o[el.dataset.k] = v;
+    }
+    o.herinnerTijden = WEEKDAGEN.map(d => d + '=' + ($(`input[data-wd="${d}"]`).value || '')).join(';');
+    o.ochtendTijd = $('#iOchtend').value || '';
+    o.reflectieDag = $('#iRefDag').value; o.reflectieTijd = $('#iRefTijd').value || '';
+    o.deadlineDagen = Math.max(0, Math.round(num($('#iDlDagen').value) || 0));
+    o.deadlineTijd = $('#iDlTijd').value || ''; o.deadlineDagTijd = $('#iDlDag').value || '';
+    o.dagStart = $('#iDagStart').value || '08:00'; o.dagEind = $('#iDagEind').value || '23:00';
+    o.vakken = [...document.querySelectorAll('.vakrow')].map(r => ({vak: r.querySelector('.vNaam').value.trim(), weekdoel: num(r.querySelector('.vDoel').value) || 0}))
+      .filter(v => v.vak);
+    if (new Set(o.vakken.map(v=>v.vak.toLowerCase())).size !== o.vakken.length) return { fout: 'Een vak staat er dubbel in' };
+    // hernoemde vakken: de server zet je oude uren, deadlines en tentamens over naar de nieuwe naam
+    o.hernoem = [...document.querySelectorAll('.vakrow')]
+      .map(r => ({van: r.dataset.oud || '', naar: r.querySelector('.vNaam').value.trim()}))
+      .filter(h => h.van && h.naar && h.van !== h.naar);
+    return { o };
+  }
+  /** Versturen. Eén verzoek tegelijk; wat intussen veranderde gaat in de volgende ronde mee. */
+  function bewaarI(o){
+    if (iBezig) return iBezig.then(() => bewaarI(o));
+    const tekst = JSON.stringify(o);
+    if (tekst === laatst) return Promise.resolve(true);
+    status('Opslaan…');
+    const rijen = [...document.querySelectorAll('.vakrow')];
+    iBezig = api('bewaarInstellingen', o).then(d => {
+      D = d; laatst = tekst;
+      rijen.forEach(r => { const n = r.querySelector('.vNaam').value.trim(); if (n) r.dataset.oud = n; });   // hernoemd = nu de oude naam
+      if (o.werkImport !== vorige.werkImport || o.werkAgenda !== vorige.werkAgenda || o.werkTitelWeg !== vorige.werkTitelWeg) werkSync(false);
+      if (o.lesAgenda !== vorige.lesAgenda) { LESSEN = null; opslag.weg(LES_KEY); haalLessenOp(); }
+      vorige = o;
+      status('Opgeslagen ✓'); achtergrondRender();
+      return true;
+    }).catch(() => { status('Niet opgeslagen: probeer het nog eens', true); return false; })
+      .finally(() => { iBezig = null; });
+    return iBezig;
+  }
+  function planI(){
+    clearTimeout(iTimer);
+    const r = verzamel();
+    if (r.fout) { status(r.fout, true); return; }
+    if (JSON.stringify(r.o) === laatst) { status('Opgeslagen ✓'); return; }
+    status('Slaat zo op…');
+    iTimer = setTimeout(() => bewaarI(r.o), 1500);
+  }
+  // elk veld (behalve "tentamen toevoegen") start het wachten
+  const host = $('.sheet');
+  ['input', 'change'].forEach(soort => host.addEventListener(soort, e => {
+    if (e.target.closest('[data-geen-auto]') || !e.target.matches('input, select')) return;
+    planI();
+  }));
+  // venster dicht of vervangen: meteen opslaan (de velden worden nu nog uitgelezen, versturen gebeurt daarna)
+  sheetSluitHaak = () => {
+    clearTimeout(iTimer);
+    const r = verzamel();
+    if (r.fout) { toast('Niet opgeslagen. ' + r.fout); return Promise.resolve(false); }
+    return bewaarI(r.o).then(ok => { if (!ok) toast('Instellingen niet opgeslagen'); return ok; });
+  };
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!b.dataset.zeker) { b.dataset.zeker = 1; b.textContent = 'zeker?'; b.style.fontSize = '14px'; return; }
+    D = await api('verwijderTentamen', b.dataset.del); render(); openInstellingen(); toast('Tentamen verwijderd');
+  });
+  // ---- schoolvakanties ----
+  let pSoortGekozen = false;                          // zelf op Gewoon/Zomer getikt? dan niet meer automatisch omzetten
+  const zetSoort = v => document.querySelectorAll('#pSoort button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  document.querySelectorAll('#pSoort button').forEach(b => b.onclick = () => { pSoortGekozen = true; zetSoort(b.dataset.v); });
+  $('#pNaam').oninput = () => { if (!pSoortGekozen) zetSoort(isZomerNaam($('#pNaam').value) ? 'zomer' : 'vakantie'); };
+  $('#pAdd').onclick = async () => {
+    const x = { soort: ($('#pSoort button.on') || {}).dataset?.v || 'vakantie', naam: $('#pNaam').value.trim(), van: $('#pVan').value, tot: $('#pTot').value || $('#pVan').value };
+    if (!x.naam || !x.van) return toast('Vul in elk geval naam en begindatum in');
+    if (x.tot < x.van) return toast('De einddatum ligt vóór de begindatum');
+    D = await api('bewaarPeriode', x); render(); openInstellingen(); toast('Schoolvakantie toegevoegd ✓');
+  };
+  $('#pPlak').onclick = () => vakantiesPlakken();
+  document.querySelectorAll('[data-pdel]').forEach(b => b.onclick = async () => {
+    if (!b.dataset.zeker) { b.dataset.zeker = 1; b.textContent = 'zeker?'; b.style.fontSize = '14px'; return; }
+    D = await api('verwijderPeriode', b.dataset.pdel); render(); openInstellingen(); toast('Schoolvakantie verwijderd');
+  });
+  $('#tAdd').onclick = async () => {
+    const t = {datum:$('#tDatum').value, tijd:$('#tTijd').value, vak:$('#tVak').value.trim(), opmerking:$('#tOpm').value.trim()};
+    if (!t.datum || !t.vak) return toast('Vul in elk geval datum en vak in');
+    D = await api('bewaarTentamen', t); render(); openInstellingen(); toast('Tentamen toegevoegd ✓');
+  };
+}
+
+// ================= 24-UURS TIJDVELDEN =================
+// <input type="time"> volgt de taal van het apparaat (soms AM/PM). Daarom maken we er tekstvelden van
+// die altijd 24 uur gebruiken: typ 2340, 23:40 of 9 (= 09:00).
+function normTijd(v){
+  const s = String(v || '').trim(); if (!s) return '';
+  let h, m;
+  const d = s.match(/^(\d{1,2})[:.,h ]?(\d{2})?$/);
+  if (d) { h = +d[1]; m = d[2] ? +d[2] : 0; }
+  else if (/^\d{3}$/.test(s)) { h = +s[0]; m = +s.slice(1); }
+  else return null;
+  if (s.length === 3 && /^\d{3}$/.test(s)) { h = +s[0]; m = +s.slice(1); }
+  if (h > 23 || m > 59) return null;
+  return pad(h) + ':' + pad(m);
+}
+function maakTijdveld(el){
+  el.type = 'text'; el.classList.add('tijd');
+  el.setAttribute('inputmode', 'numeric'); el.setAttribute('maxlength', '5'); el.setAttribute('placeholder', '––:––');
+  // telefoon/tablet: geen toetsenbord maar een kiezer (uur, dan minuten); op de pc kun je gewoon typen
+  if (window.matchMedia && matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) {
+    el.readOnly = true;
+    el.addEventListener('click', () => tijdKiezer(el));
+  }
+  el.setAttribute('autocomplete', 'off');
+  el.addEventListener('input', () => {
+    el.classList.remove('fout');
+    if (/^\d{4}$/.test(el.value)) { el.value = el.value.slice(0,2) + ':' + el.value.slice(2); el.dispatchEvent(new Event('input')); }  // 2340 → 23:40
+  });
+  el.addEventListener('blur', () => {
+    const n = normTijd(el.value);
+    if (n === null) { el.classList.add('fout'); toast('Ongeldige tijd: gebruik uu:mm, bijv. 23:40'); el.value = ''; }
+    else if (n !== el.value) { el.value = n; el.dispatchEvent(new Event('input')); }
+  });
+}
+/** Kiezer: eerst het uur, dan de minuten (per 5). Ligt boven een eventueel open venster. */
+function tijdKiezer(el){
+  const oud = normTijd(el.value) || '';
+  let uur = oud ? +oud.slice(0,2) : null, min = oud ? +oud.slice(3) : null, stap = 'uur', precies = min !== null && min % 5 !== 0;
+  const bg = document.createElement('div'); bg.className = 'kiezer-bg';
+  const teken = () => {
+    const mm = min === null ? null : Math.round(min/5)*5 % 60;
+    bg.innerHTML = `<div class="kiezer" role="dialog" aria-label="Tijd kiezen">
+      <div class="kop"><div class="groot"><span class="${stap==='uur'?'actief':''} ${uur===null?'leeg':''}" data-stap="uur">${uur===null?'--':pad(uur)}</span>:<span class="${stap==='min'?'actief':''} ${min===null?'leeg':''}" data-stap="min">${min===null?'--':pad(min)}</span></div>
+        <button class="btn ghost small" data-k="wis">Wissen</button></div>
+      <div class="row"><div class="lbl grow">${stap==='uur' ? 'Kies het uur' : 'Kies de minuten'}</div>
+        ${stap==='min' ? `<button class="btn ghost small" data-k="precies">${precies ? 'Per 5 minuten' : 'Op de minuut'}</button>` : ''}</div>
+      ${stap==='uur'
+        ? `<div class="rooster u">${[...Array(24)].map((_,i)=>`<button data-u="${i}" class="${i===uur?'on':''}">${pad(i)}</button>`).join('')}</div>`
+        : precies
+          ? `<div class="rooster m60">${[...Array(60)].map((_,i)=>`<button data-m="${i}" class="${i===min?'on':''}">${pad(i)}</button>`).join('')}</div>`
+          : `<div class="rooster m">${[...Array(12)].map((_,i)=>`<button data-m="${i*5}" class="${i*5===mm?'on':''}">:${pad(i*5)}</button>`).join('')}</div>`}
+      <div class="row"><button class="btn ghost" data-k="annuleer">Annuleren</button><button class="btn" data-k="ok" ${uur===null?'disabled':''}>Klaar</button></div></div>`;
+  };
+  const sluit = () => bg.remove();
+  const kies = () => { el.value = pad(uur) + ':' + pad(min === null ? 0 : min); el.classList.remove('fout');
+    el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); sluit(); };
+  bg.addEventListener('click', e => {
+    const t = e.target.closest('button,[data-stap]');
+    if (e.target === bg) return sluit();
+    if (!t) return;
+    if (t.dataset.stap) { stap = t.dataset.stap === 'min' && uur !== null ? 'min' : 'uur'; return teken(); }
+    if (t.dataset.u !== undefined) { uur = +t.dataset.u; stap = 'min'; return teken(); }
+    if (t.dataset.m !== undefined) { min = +t.dataset.m; return kies(); }          // na de minuten meteen klaar
+    if (t.dataset.k === 'wis') { el.value = ''; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); return sluit(); }
+    if (t.dataset.k === 'annuleer') return sluit();
+    if (t.dataset.k === 'precies') { precies = !precies; return teken(); }
+    if (t.dataset.k === 'ok' && uur !== null) return kies();
+  });
+  teken(); document.body.appendChild(bg);
+}
+
+// Datums: altijd dd-mm-jjjj op het scherm. Het originele veld wordt verborgen en houdt de waarde als jjjj-mm-dd,
+// zodat de rest van de code gewoon .value kan blijven lezen.
+const isoNaarNL = s => /^\d{4}-\d{2}-\d{2}$/.test(s||'') ? s.slice(8,10) + '-' + s.slice(5,7) + '-' + s.slice(0,4) : '';
+function nlNaarIso(v){
+  const s = String(v || '').trim(); if (!s) return '';
+  let d, m, y;
+  const a = s.match(/^(\d{1,2})[-/. ](\d{1,2})(?:[-/. ](\d{2}|\d{4}))?$/), b = s.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (a) { d = +a[1]; m = +a[2]; y = a[3] ? +a[3] : new Date().getFullYear(); if (y < 100) y += 2000; }
+  else if (b) { d = +b[1]; m = +b[2]; y = +b[3]; }
+  else return null;
+  const t = new Date(y, m-1, d);
+  if (t.getFullYear() !== y || t.getMonth() !== m-1 || t.getDate() !== d) return null;   // bijv. 31-02 bestaat niet
+  return y + '-' + pad(m) + '-' + pad(d);
+}
+function maakDatumveld(el){
+  const wrap = document.createElement('div'); wrap.className = 'datumveld';
+  if (el.getAttribute('style')) wrap.setAttribute('style', el.getAttribute('style'));
+  const tekst = document.createElement('input');
+  tekst.className = 'datum'; tekst.setAttribute('inputmode', 'numeric'); tekst.setAttribute('placeholder', 'dd-mm-jjjj');
+  tekst.setAttribute('maxlength', '10'); tekst.setAttribute('autocomplete', 'off'); tekst.value = isoNaarNL(el.value);
+  const knop = document.createElement('button'); knop.type = 'button'; knop.className = 'kal'; knop.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'; knop.setAttribute('aria-label', 'kalender');
+  const nat = document.createElement('input'); nat.type = 'date'; nat.className = 'native'; nat.dataset.native = '1'; nat.tabIndex = -1; nat.value = el.value;
+  el.parentNode.insertBefore(wrap, el); wrap.append(tekst, knop, nat, el);
+  el.type = 'hidden';
+  const zet = iso => { if (iso === el.value) return; el.value = iso; nat.value = iso;
+    el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); };
+  tekst.addEventListener('input', () => {
+    tekst.classList.remove('fout');
+    const c = tekst.value.replace(/\D/g, '');
+    if (/^\d{8}$/.test(tekst.value)) tekst.value = c.slice(0,2) + '-' + c.slice(2,4) + '-' + c.slice(4);   // 28112026 → 28-11-2026
+    const iso = nlNaarIso(tekst.value); if (iso && tekst.value.length >= 8) zet(iso);
+  });
+  tekst.addEventListener('blur', () => {
+    const iso = nlNaarIso(tekst.value);
+    if (iso === null) { tekst.classList.add('fout'); toast('Ongeldige datum: gebruik dd-mm-jjjj'); tekst.value = isoNaarNL(el.value); return; }
+    tekst.value = isoNaarNL(iso); zet(iso);
+  });
+  knop.onclick = () => { try { nat.showPicker(); } catch(e) { tekst.focus(); } };
+  nat.addEventListener('change', () => { if (nat.value) { tekst.value = isoNaarNL(nat.value); tekst.classList.remove('fout'); zet(nat.value); } });
+}
+new MutationObserver(() => {
+  document.querySelectorAll('input[type="time"]').forEach(maakTijdveld);
+  document.querySelectorAll('input[type="date"]:not([data-native])').forEach(maakDatumveld);
+}).observe(document.body, { childList: true, subtree: true });
+
+// ================= THEMA =================
+function pasThemaToe(){
+  const k = opslag.get('planner-thema') || 'systeem';
+  const donker = k === 'donker' || (k === 'systeem' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.thema = donker ? 'donker' : 'licht';
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = donker ? '#121718' : '#f1f4f2';
+}
+if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { pasThemaToe(); if (D) render(); }); } catch(e){} }
+pasThemaToe();
+
+// ================= GRAFIEKEN (eigen SVG, geen library) =================
+// Kleuren: gevalideerd categorisch palet, per thema eigen stappen (licht/donker).
+const PAL = { licht:['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'],
+              donker:['#3987e5','#d95926','#199e70','#c98500','#d55181','#0ca30c','#9085e9','#e66767'] };
+const ZACHT = { licht:'#86b6ef', donker:'#184f95' };   // lichtere stap van dezelfde blauwe tint (gepland)
+const donker = () => document.documentElement.dataset.thema === 'donker';
+const kleur = n => PAL[donker() ? 'donker' : 'licht'][n];
+const GRAF = {};
+function mooiMax(v){ const p = Math.pow(10, Math.floor(Math.log10(v))); for (const f of [1,2,2.5,4,5,10]) if (f*p >= v) return f*p; return 10*p; }
+function rond(x, y, w, h, r){ r = Math.min(r, h, w/2); if (h <= 0) return '';
+  return `M${x},${y+h}V${y+r}Q${x},${y} ${x+r},${y}H${x+w-r}Q${x+w},${y} ${x+w},${y+r}V${y+h}Z`; }
+function legenda(items){ return items.length < 2 && !items.some(x => x.soort) ? '' : `<div class="legenda">${items.map(x =>
+  `<span><i class="${x.soort||''}" style="${x.kleur?'background:'+x.kleur:''}"></i>${esc(x.naam)}</span>`).join('')}</div>`; }
+function tabel(kop, rijen){ return `<details><summary>Als tabel</summary><div class="tabelwrap"><table><tr>${kop.map(k=>`<th>${esc(k)}</th>`).join('')}</tr>
+  ${rijen.map(r => `<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table></div></details>`; }
+
+/** Staafgrafiek (optioneel gestapeld), met streepjes (bijv. doel per week) en referentielijnen. */
+function staven(id, o){
+  const W = 340, H = 170, L = 28, R = 6, T = 14, B = 22, pw = W-L-R, ph = H-T-B, n = o.labels.length;
+  const tot = o.labels.map((_,i) => o.series.reduce((t,s) => t + (s.waarden[i]||0), 0));
+  const max = mooiMax(Math.max(1, ...tot, ...(o.refs||[]).map(r=>r.waarde), ...(o.streep ? o.streep.waarden.filter(v=>v!=null) : [])) * 1.05);
+  const y = v => T + ph - v/max*ph, slot = pw/n, bw = Math.min(26, slot*0.6);
+  let svg = [0, max/2, max].map(v => `<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L-5}" y="${y(v)+4}" text-anchor="end">${u(v)}</text>`).join('');
+  o.labels.forEach((lab, i) => {
+    const x = L + i*slot + (slot-bw)/2; let acc = 0;
+    const seg = o.series.map(s => ({ s, v: s.waarden[i]||0 })).filter(z => z.v > 0);
+    seg.forEach((z, k) => {
+      const yb = y(acc) - (acc > 0 ? 2 : 0), yt = y(acc + z.v), h = yb - yt;       // 2px ruimte tussen segmenten
+      svg += k === seg.length-1 ? `<path d="${rond(x, yt, bw, h, 4)}" fill="${z.s.kleur}"/>` : `<rect x="${x}" y="${yt}" width="${bw}" height="${Math.max(0,h)}" fill="${z.s.kleur}"/>`;
+      acc += z.v;
+    });
+    if (o.streep && o.streep.waarden[i] != null) svg += `<line class="tick" x1="${x-3}" x2="${x+bw+3}" y1="${y(o.streep.waarden[i])}" y2="${y(o.streep.waarden[i])}"/>`;
+    if (n <= 12 || i % 2 === 0) svg += `<text class="ax" x="${x+bw/2}" y="${H-6}" text-anchor="middle">${esc(lab)}</text>`;
+    svg += `<rect data-i="${i}" x="${L+i*slot}" y="${T}" width="${slot}" height="${ph}" fill="transparent"/>`;
+  });
+  // referentielijnen; het label staat in de legenda, alleen 'inline' labels links in de grafiek
+  (o.refs||[]).forEach(r => svg += `<line class="ref" x1="${L}" x2="${W-R}" y1="${y(r.waarde)}" y2="${y(r.waarde)}"/>`
+    + (r.inline ? `<text class="ax" x="${L+4}" y="${y(r.waarde)-4}">${esc(r.label)}</text>` : ''));
+  GRAF[id] = { n, tip: i => `<b>${esc(o.labels[i])}</b>` + o.series.map(s => `<br>${esc(s.naam)}: ${u(s.waarden[i]||0)} ${o.eenheid||''}`).join('')
+    + (o.streep && o.streep.waarden[i] != null ? `<br>${esc(o.streep.naam)}: ${u(o.streep.waarden[i])} ${o.eenheid||''}` : ''), x: i => (L + (i+0.5)*slot)/W, y: i => y(tot[i])/H };
+  const leg = o.series.map(s => ({naam:s.naam, kleur:s.kleur})).concat(o.streep ? [{naam:o.streep.naam, soort:'lijn'}] : [])
+    .concat((o.refs||[]).length ? [{naam: o.refs.every(r=>r.inline) ? 'bonusgrenzen' : o.refs.map(r=>r.label).join(' / '), soort:'stip'}] : []);
+  return `<div class="card grafiek" data-g="${id}"><div class="gt">${esc(o.titel)}</div>${o.sub?`<div class="gs">${esc(o.sub)}</div>`:''}
+    ${legenda(leg)}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.titel)}">${svg}</svg><div class="tip"></div>
+    ${tabel(['', ...o.series.map(s=>s.naam), ...(o.streep?[o.streep.naam]:[])],
+      o.labels.map((l,i) => [esc(l), ...o.series.map(s => u(s.waarden[i]||0)), ...(o.streep ? [o.streep.waarden[i]==null?'–':u(o.streep.waarden[i])] : [])]))}</div>`;
+}
+
+/** Lijngrafiek met gaten waar niets is ingevuld. */
+function lijn(id, o){
+  const W = 340, H = 160, L = 28, R = 6, T = 14, B = 22, pw = W-L-R, ph = H-T-B, n = o.labels.length;
+  const vals = o.waarden.filter(v => v != null);
+  const lo = Math.max(0, Math.floor(Math.min(...vals, ...(o.refs||[]).map(r=>r.waarde)) - 1)), hi = Math.ceil(Math.max(...vals, ...(o.refs||[]).map(r=>r.waarde)) + 0.5);
+  const y = v => T + ph - (v-lo)/(hi-lo)*ph, x = i => L + (n === 1 ? pw/2 : i*pw/(n-1));
+  let svg = [lo, (lo+hi)/2, hi].map(v => `<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L-5}" y="${y(v)+4}" text-anchor="end">${o.fmt ? o.fmt(v) : u(Math.round(v*10)/10)}</text>`).join('');
+  (o.refs||[]).forEach(r => svg += `<line class="ref" x1="${L}" x2="${W-R}" y1="${y(r.waarde)}" y2="${y(r.waarde)}"/>`);
+  let pad = '', vorige = false;
+  o.waarden.forEach((v, i) => { if (v == null) { vorige = false; return; } pad += (vorige ? 'L' : 'M') + x(i) + ',' + y(v); vorige = true; });
+  svg += `<path d="${pad}" fill="none" stroke="${o.kleur}" stroke-width="2" stroke-linejoin="round"/>`;
+  o.waarden.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="${o.kleur}" stroke="var(--card)" stroke-width="2"/>`; });
+  o.labels.forEach((lab, i) => { if (i % 2 === 0 || i === n-1) svg += `<text class="ax" x="${x(i)}" y="${H-6}" text-anchor="middle">${esc(lab)}</text>`;
+    svg += `<rect data-i="${i}" x="${x(i) - pw/(2*Math.max(1,n-1))}" y="${T}" width="${pw/Math.max(1,n-1)}" height="${ph}" fill="transparent"/>`; });
+  const toon = v => o.tipFmt ? o.tipFmt(v) : o.fmt ? o.fmt(v) : u(v) + ' ' + (o.eenheid||'');
+  GRAF[id] = { n, tip: i => `<b>${esc(o.labels[i])}</b><br>${o.waarden[i]==null ? 'niet ingevuld' : toon(o.waarden[i])}`,
+               x: i => x(i)/W, y: i => (o.waarden[i]==null ? T+ph/2 : y(o.waarden[i]))/H };
+  return `<div class="card grafiek" data-g="${id}"><div class="gt">${esc(o.titel)}</div>${o.sub?`<div class="gs">${esc(o.sub)}</div>`:''}
+    ${(o.refs||[]).length ? legenda([{naam:o.reeks||'per nacht', kleur:o.kleur}, {naam:o.refs.map(r=>r.label).join(' / '), soort:'stip'}]) : ''}
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.titel)}">${svg}</svg><div class="tip"></div>
+    ${tabel(['', o.eenheid || ''], o.labels.map((l,i) => [esc(l), o.waarden[i]==null?'–':(o.tipFmt ? o.tipFmt(o.waarden[i]) : o.fmt ? o.fmt(o.waarden[i]) : u(o.waarden[i]))]))}</div>`;
+}
+/** Tik of beweeg over een staaf/punt: waarde tonen. */
+function grafiekTips(){
+  document.querySelectorAll('.grafiek').forEach(g => {
+    const info = GRAF[g.dataset.g], tip = g.querySelector('.tip'), svg = g.querySelector('svg');
+    const toon = i => { const r = svg.getBoundingClientRect(), gr = g.getBoundingClientRect();
+      tip.innerHTML = info.tip(i); tip.style.display = 'block';
+      tip.style.left = (r.left - gr.left + info.x(i)*r.width) + 'px'; tip.style.top = (r.top - gr.top + info.y(i)*r.height - 8) + 'px'; };
+    g.querySelectorAll('[data-i]').forEach(el => { el.onpointerenter = () => toon(+el.dataset.i); el.onclick = () => toon(+el.dataset.i); });
+    svg.onpointerleave = () => tip.style.display = 'none';
+  });
+}
+
+// ================= TRENDS =================
+function weekCijfers(ma){       // zoals weekStats, maar zonder lessen op te halen
+  const perVak = {}; let gamen = 0, sport = 0, coderen = 0, studie = 0;
+  for (let i = 0; i < 7; i++) {
+    const s = plus(ma, i), r = D.dagen.find(x => x.datum === s) || {}, st = studieOp(s);
+    Object.keys(st).forEach(v => { perVak[v] = (perVak[v]||0) + st[v]; studie += st[v]; });
+    gamen += r.gamen || 0; coderen += r.coderen || 0; if (r.sport) sport++;
+  }
+  const doel = doelenVoor(ma, 7);
+  return { perVak, studie, gamen, sport, coderen, doel, verdiend: Math.min(doel.gameMax, studie / (I().verdienPer || 2)) + doel.gameVrij };
+}
+let trendWeken = 8;
+function renderTrends(){
+  $('#title').textContent = 'Trends';
+  const i = I(), nu = vandaag();
+  const weken = []; for (let k = trendWeken-1; k >= 0; k--) weken.push(plus(maandag(nu), -7*k));
+  const wc = weken.map(weekCijfers), lab = weken.map(ma => 'wk ' + weekNr(ma));
+  // vakken: vaste volgorde = volgorde bij ⚙︎ (kleur volgt het vak, niet de rangorde); meer dan 5 → "Overig"
+  const alle = D.vakken.map(v => v.vak).concat([...new Set(wc.flatMap(w => Object.keys(w.perVak)))].filter(v => !D.vakken.some(x => x.vak === v)));
+  const eigen = alle.slice(0, 5), rest = alle.slice(5);
+  const reeksen = eigen.map((v, k) => ({ naam: v, kleur: kleur(k), waarden: wc.map(w => w.perVak[v] || 0) }));
+  if (rest.length) reeksen.push({ naam: 'Overig', kleur: kleur(7), waarden: wc.map(w => rest.reduce((t,v) => t + (w.perVak[v]||0), 0)) });
+  // werkuren per maand: laatste 6 maanden + volgende
+  const mnd = []; for (let k = -5; k <= 1; k++) mnd.push(ymPlus(nu.slice(0,7), k));
+  const mi = mnd.map(maandInfo);
+  // slaap: laatste 14 nachten
+  const nachten = []; for (let k = 13; k >= 0; k--) nachten.push(plus(nu, -k));
+  const slaap = nachten.map(s => { const r = D.dagen.find(x => x.datum === s); return r && r.slaap ? r.slaap : null; });
+  const bed = nachten.map(s => { const r = D.dagen.find(x => x.datum === s); return r && r.bedtijd ? bedUur(r.bedtijd) : null; });
+  const leeg = !wc.some(w => w.studie || w.gamen || w.sport || w.coderen);
+  $('#main').innerHTML = `
+    <div class="seg" style="margin:10px 0">${[4,8,12].map(n => `<button data-tw="${n}" class="${n===trendWeken?'on':''}">${n} weken</button>`).join('')}</div>
+    ${leeg ? '<div class="infobox">Nog weinig ingevuld. De grafieken vullen zich vanzelf als je je dagen invult.</div>' : ''}
+    ${staven('studie', { titel: 'Zelfstudie per week', sub: 'Per vak · streepje = je weekdoel (hoger in toetsweekmodus)', labels: lab, series: reeksen, eenheid: 'u',
+       streep: { naam: 'doel', waarden: wc.map(w => w.doel.studie) } })}
+    ${staven('gamen', { titel: 'Gamen per week', sub: 'Streepje = verdiende gametijd', labels: lab, eenheid: 'u',
+       series: [{ naam: 'gegamed', kleur: kleur(1), waarden: wc.map(w => w.gamen) }], streep: { naam: 'verdiend', waarden: wc.map(w => w.verdiend) } })}
+    ${staven('sport', { titel: 'Sportschool per week', labels: lab, eenheid: '×',
+       series: [{ naam: 'keer', kleur: kleur(2), waarden: wc.map(w => w.sport) }], refs: [{ waarde: i.sportDoel, label: 'doel ' + i.sportDoel + '×' }] })}
+    ${staven('coderen', { titel: 'Coderen per week', labels: lab, eenheid: 'u',
+       series: [{ naam: 'uren', kleur: kleur(6), waarden: wc.map(w => w.coderen) }], refs: [{ waarde: i.codeerDoel, label: 'doel ' + u(i.codeerDoel) + ' u' }] })}
+    ${slaap.some(v => v != null) ? lijn('slaap', { titel: 'Slaap per nacht', sub: 'Laatste 14 nachten', labels: nachten.map(s => String(dt(s).getDate())),
+       waarden: slaap, eenheid: 'u', kleur: kleur(0), tipFmt: uMin, refs: [{ waarde: i.slaapDoel, label: 'doel ' + u(i.slaapDoel) + ' u' }] })
+       : '<div class="card"><div class="gt">Slaap per nacht</div><div class="note">Nog niets ingevuld. Vul bij Vandaag in hoe laat je naar bed ging en wakker werd.</div></div>'}
+    ${bed.some(v => v != null) ? lijn('bed', { titel: 'Hoe laat naar bed', sub: 'Laatste 14 nachten (datum = de ochtend erna)', labels: nachten.map(s => String(dt(s).getDate())),
+       waarden: bed, kleur: kleur(6), fmt: uurTekst }) : ''}
+    ${staven('werk', { titel: W() + ': uren per maand', sub: 'Netto, na pauze', labels: mnd.map(m => MAANDEN[Number(m.slice(5))-1]), eenheid: 'u',
+       series: [{ naam: 'gewerkt', kleur: kleur(0), waarden: mi.map(x => x.gew) }, { naam: 'gepland', kleur: ZACHT[donker()?'donker':'licht'], waarden: mi.map(x => x.tot - x.gew) }],
+       refs: [i.grens1, i.grens2].filter(v => v > 0).map(v => ({ waarde: v, label: String(v), inline: true })) })}`;
+  document.querySelectorAll('[data-tw]').forEach(b => b.onclick = () => { trendWeken = +b.dataset.tw; renderTrends(); });
+  grafiekTips();
+}
+
+// ================= sheet (pop-up van onderen) =================
+// Een venster kan iets nog willen opslaan voordat het dicht gaat of vervangen wordt (bijv. instellingen).
+let sheetSluitHaak = null;
+// ================= GEEN INVUL-SUGGESTIES =================
+/** Zet de browser-suggesties (eerder ingevulde waarden) uit voor elk invoerveld,
+ *  ook voor velden die later in een sheet verschijnen. */
+function geenSuggesties(root){
+  if (!root || !root.querySelectorAll) return;
+  const velden = root.matches && root.matches('input, textarea') ? [root] : root.querySelectorAll('input, textarea');
+  velden.forEach(el => el.setAttribute('autocomplete', 'off'));
+}
+new MutationObserver(lijst => lijst.forEach(m => m.addedNodes.forEach(geenSuggesties)))
+  .observe(document.documentElement, { childList: true, subtree: true });
+geenSuggesties(document);
+
+function sheetHaak(){ const h = sheetSluitHaak; sheetSluitHaak = null; return h ? h() : Promise.resolve(true); }
+function sheet(html){
+  sheetHaak();
+  $('#sheetHost').innerHTML = `<div class="sheet-bg"><div class="sheet">${html}</div></div>`;
+  $('.sheet-bg').onclick = e => { if (e.target.classList.contains('sheet-bg')) closeSheet(); };
+}
+function closeSheet(){ sheetHaak(); $('#sheetHost').innerHTML = ''; setTimeout(inhalen, 0); }
+
+// ================= NIET-OPGESLAGEN WIJZIGINGEN =================
+const CONCEPT_KEY = 'planner-concept';
+let uitgesteld = false;
+const opgeslagenRefl = w => { const r = D.reflecties.find(x => x.week === w) || {}; return {week:w, goed:r.goed||'', beter:r.beter||'', focus:r.focus||''}; };
+const viesRefl = () => !!(D && refl && JSON.stringify(refl) !== JSON.stringify(opgeslagenRefl(refl.week)));
+/** Ben je iets aan het invullen? Dan het scherm niet op de achtergrond opnieuw tekenen. */
+function bezig(){
+  if (document.querySelector('.sheet-bg, .kiezer-bg, .vraag-bg')) return true;
+  const a = document.activeElement;
+  return !!(a && $('#main') && $('#main').contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+}
+function achtergrondRender(){ if (bezig()) { uitgesteld = true; return; } uitgesteld = false; verversInv(); render(); }
+function inhalen(){ if (uitgesteld && !bezig()) { uitgesteld = false; verversInv(); render(); } }
+document.addEventListener('focusout', () => setTimeout(inhalen, 150));
+/** Weggaan van een dag/week met niet-opgeslagen wijzigingen: eerst vragen. */
+let opslaanBezig = null, wachtend = false;   // loopt er een opslag? dan eerst daarop wachten
+function verlaat(actie, annuleer, naFout){
+  if (opslaanBezig) {
+    wachtend = true; toast('Even wachten, wordt opgeslagen…');
+    opslaanBezig.then(() => { wachtend = false; verlaat(actie, annuleer, naFout); });
+    return;
+  }
+  // dag gewijzigd: niet vragen, gewoon meteen opslaan. Lukt dat niet, dan alsnog de vraag hieronder.
+  if (viesDag() && !naFout) {
+    wachtend = true;
+    nuOpslaan().then(ok => { wachtend = false; verlaat(actie, annuleer, !ok); });
+    return;
+  }
+  const soort = viesDag() ? 'dag' : viesRefl() ? 'refl' : null;
+  if (!soort) return actie();
+  const bg = document.createElement('div'); bg.className = 'kiezer-bg vraag-bg';
+  bg.innerHTML = `<div class="kiezer" role="dialog"><h3 style="margin:0 0 6px">Niet opgeslagen</h3>
+    <div class="note" style="margin:0 0 14px">Je hebt wijzigingen ${soort==='dag' ? 'voor ' + dagKort(inv.dag) : 'in je weekreflectie'} nog niet opgeslagen.</div>
+    <button class="btn" data-k="ok">Opslaan</button>
+    <button class="btn danger" data-k="weg" style="margin-top:8px">Niet opslaan</button>
+    <button class="btn ghost" data-k="terug">Annuleren</button></div>`;
+  const sluit = () => { bg.remove(); setTimeout(inhalen, 0); };
+  bg.onclick = async e => {
+    const k = (e.target.closest('[data-k]') || {}).dataset?.k;
+    if (e.target === bg || k === 'terug') { sluit(); if (annuleer) annuleer(); return; }
+    if (k === 'weg') { if (soort==='dag') laadInv(); else refl = null; opslag.weg(CONCEPT_KEY); sluit(); actie(); return; }
+    if (k === 'ok') {
+      e.target.disabled = true; e.target.textContent = 'Opslaan…';
+      try {
+        if (soort === 'dag') { D = await api('bewaarDag', dagPayload()); laadInv(); opslag.weg(CONCEPT_KEY); }
+        else { D = await api('bewaarReflectie', refl); refl = null; }
+        sluit(); toast('Opgeslagen ✓'); actie();
+      } catch(err) { sluit(); }
+    }
+  };
+  document.body.appendChild(bg);
+}
+// App sluiten of naar de achtergrond: niet-opgeslagen dag bewaren als concept (op de telefoon zie je geen waarschuwing)
+function bewaarConcept(){ if (viesDag()) opslag.set(CONCEPT_KEY, {inv}); }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden') return;
+  bewaarConcept();                    // eerst lokaal bewaren (vangnet als de app meteen wordt afgesloten)
+  if (viesDag()) nuOpslaan();         // en meteen proberen op te slaan, niet wachten op de timer
+});
+window.addEventListener('pagehide', bewaarConcept);
+window.addEventListener('beforeunload', e => { bewaarConcept(); if (viesDag() || viesRefl()) { e.preventDefault(); e.returnValue = ''; } });
+/** Bij openen: was er nog een concept? Dan terugzetten zodat je kunt opslaan of verwerpen. */
+function herstelConcept(){
+  const c = opslag.get(CONCEPT_KEY);
+  if (!c || !c.inv || !D) return false;
+  if (!D.vakken || JSON.stringify(c.inv) === JSON.stringify(opgeslagenInv(c.inv.dag))) { opslag.weg(CONCEPT_KEY); return false; }
+  if (viesDag()) return false;                       // je bent al iets anders aan het invullen
+  dag = c.inv.dag; inv = c.inv; invBasis = JSON.stringify(opgeslagenInv(dag)); view = 'vandaag'; render();
+  toast('Niet-opgeslagen wijzigingen teruggezet, worden nu opgeslagen'); planAuto(); return true;
+}
+
+// ================= TERUGKNOP (Android) =================
+// Een geïnstalleerde web-app sluit bij "terug" als er geen geschiedenis is. Daarom zetten we één extra stap
+// in de browsergeschiedenis (pushState). Terug haalt die stap weg (popstate): wij doen dan zelf "terug" binnen
+// de app en zetten de stap opnieuw klaar. Pas op Vandaag/vandaag, zonder open venster, mag terug de app sluiten.
+let viewStapel = [], laatsteView = null, terugBezig = false;
+function terugInApp(){
+  const venster = document.querySelector('.kiezer-bg');          // tijdkiezer of vraag: annuleren
+  if (venster) {
+    const knop = venster.querySelector('[data-k="annuleer"], [data-k="terug"]');
+    if (knop) knop.click(); else venster.remove();
+    return true;
+  }
+  if (document.querySelector('.sheet-bg')) { closeSheet(); return true; }   // los venster (instellingen, dienst…)
+  if (viewStapel.length) {                                        // vorig scherm
+    const vorige = viewStapel.pop();
+    verlaat(() => { terugBezig = true; view = vorige; render(); window.scrollTo(0,0); });
+    return true;
+  }
+  if (view !== 'vandaag' || dag !== vandaag()) {                  // anders: naar Vandaag, vandaag
+    verlaat(() => { terugBezig = true; view = 'vandaag'; dag = vandaag(); render(); window.scrollTo(0,0); });
+    return true;
+  }
+  return false;
+}
+if (!IN_GOOGLE) {
+  history.replaceState({planner: 'basis'}, '');
+  history.pushState({planner: 'stap'}, '');
+  window.addEventListener('popstate', () => {
+    if (terugInApp()) { history.pushState({planner: 'stap'}, ''); return; }
+    // op het startscherm: nog een keer terug sluit de app
+    toast('Nog een keer terug om af te sluiten');
+    if (viesDag()) nuOpslaan();
+    setTimeout(() => { if (history.state && history.state.planner === 'basis') history.pushState({planner: 'stap'}, ''); }, 2500);
+  });
+}
+
+// ================= AUTOMATISCH OPSLAAN (Vandaag) =================
+// Na elke wijziging wachten we even (debounce): tik je binnen AUTO_MS nog iets, dan begint het wachten opnieuw.
+// Zo worden tien tikken op + één verzoek naar de server in plaats van tien.
+const AUTO_MS = 2500;
+let autoTimer = null, autoStatus = '';
+const STATUS_TEKST = { wacht: '· slaat zo op', bezig: '· opslaan…', ok: '· opgeslagen ✓',
+                       offline: '· offline bewaard', fout: '· niet opgeslagen, tik om opnieuw' };
+function toonStatus(s){
+  autoStatus = s;
+  const el = $('#vStatus');
+  if (el) { el.textContent = STATUS_TEKST[s] || ''; el.className = 'sub autostatus ' + s; }
+}
+/** Na elke wijziging aanroepen: start (of herstart) het wachten. */
+function planAuto(){
+  clearTimeout(autoTimer);
+  if (!viesDag()) { if (autoStatus === 'wacht') toonStatus(''); return; }
+  toonStatus('wacht');
+  autoTimer = setTimeout(nuOpslaan, AUTO_MS);
+}
+/** Meteen opslaan. Geeft een Promise die true (gelukt of offline bewaard) of false (fout) oplevert. */
+function nuOpslaan(){
+  clearTimeout(autoTimer);
+  if (opslaanBezig) return opslaanBezig.then(() => viesDag() ? nuOpslaan() : true);   // één verzoek tegelijk
+  if (!viesDag()) return Promise.resolve(true);
+  const verstuurd = JSON.stringify(inv), welkeDag = inv.dag;
+  toonStatus('bezig');
+  opslaanBezig = api('bewaarDag', dagPayload()).then(d => {
+    D = d;
+    if (inv && inv.dag === welkeDag) {
+      if (JSON.stringify(inv) === verstuurd) { laadInv(); opslag.weg(CONCEPT_KEY); }
+      else invBasis = verstuurd;      // je tikte verder tijdens het opslaan: dat gaat in de volgende ronde mee
+    }
+    toonStatus((opslag.get(WACHT_KEY) || []).length ? 'offline' : 'ok');
+    return true;
+  }).catch(() => { bewaarConcept(); toonStatus('fout'); return false; })   // niet steeds opnieuw proberen: wacht op een tik of een nieuwe wijziging
+    .then(ok => { opslaanBezig = null; if (ok && viesDag()) planAuto(); if (!wachtend) achtergrondRender(); return ok; });
+  return opslaanBezig;
+}
+
+// ================= start =================
+/** Haalt nieuwe/gewijzigde diensten uit je werkagenda (op de achtergrond). */
+function werkSync(melden){
+  if (I().werkImport !== 'aan') return;
+  api('synchroniseerWerk').then(d => {
+    const n = d.werkInfo ? d.werkInfo.wijzigingen : 0;
+    D = d;
+    achtergrondRender();
+    if (melden && n) toast(n + (n===1?' dienst':' diensten') + ' bijgewerkt uit je werkagenda');
+  }).catch(()=>{});
+}
+function koppelScherm(fout){
+  const l = $('#loading'); if (l) l.remove();
+  document.querySelector('nav').style.display = 'none';
+  $('#title').textContent = 'Planner koppelen';
+  $('#main').innerHTML = `<div class="setup"><div class="card">
+    <div class="note" style="margin-top:0">Eenmalig: koppel de app aan je Google Sheet. Beide gegevens staan in je Apps Script (zie de uitleg).</div>
+    <label class="f">Web-app-URL (eindigt op /exec)</label><input id="kUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+    <label class="f">Geheime sleutel</label><input id="kSleutel" autocomplete="off">
+    ${fout ? `<div class="alert">${esc(fout)}</div>` : ''}
+    <div style="height:12px"></div><button class="btn" id="kOk">Koppelen</button></div></div>`;
+  $('#kOk').onclick = async () => {
+    const cfg = {url: $('#kUrl').value.trim(), sleutel: $('#kSleutel').value.trim()};
+    if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(cfg.url)) return toast('Die URL klopt niet: hij moet eindigen op /exec');
+    if (!cfg.sleutel) return toast('Vul de sleutel in');
+    const b = $('#kOk'); b.disabled = true; b.textContent = 'Controleren…';
+    try { const d = await roep('haalAlles', [], cfg); opslag.set(CFG_KEY, cfg); opslag.set(CACHE_KEY, d); location.reload(); }
+    catch(e){ koppelScherm(/sleutel/i.test(e.message) ? 'De sleutel klopt niet.' : 'Koppelen lukte niet: ' + e.message); }
+  };
+}
+function start(){
+  if (!IN_GOOGLE && !opslag.get(CFG_KEY)) return koppelScherm();
+  const cache = IN_GOOGLE ? null : opslag.get(CACHE_KEY);
+  LESSEN = opslag.get(LES_KEY);                       // lessen van de vorige keer, tot de nieuwe binnen zijn
+  if (cache) { D = cache; $('#loading').remove(); if (!herstelConcept()) render(); }      // direct de laatste stand tonen
+  api('haalAlles').then(d => {
+    D = d; const l = $('#loading'); if (l) l.remove();
+    haalLessenOp();                                   // lessen: één keer, bij het opstarten
+    if (!herstelConcept()) achtergrondRender();
+    werkSync(true);
+    verstuurWachtrij();
+  }).catch(() => { const l = $('#loading');
+    if (l) l.textContent = 'Laden lukte niet. Ververs de pagina.';
+    else toast('Geen verbinding: je ziet de laatste stand. Invullen kan gewoon.'); });
+}
+start();
+if (!IN_GOOGLE && 'serviceWorker' in navigator && location.protocol === 'https:')
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
