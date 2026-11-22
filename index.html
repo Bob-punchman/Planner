@@ -221,8 +221,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.22-2';
-const SERVER_MIN = '2026.11.22-1';   // deze app verwacht minstens deze Code.gs-versie (werknaam, schoolvakanties en uitjes)
+const APP_VERSIE = '2026.11.22-5';
+const SERVER_MIN = '2026.11.22-4';   // deze app verwacht minstens deze Code.gs-versie (studieplan: Klaar, game-agendamelding)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -300,7 +300,7 @@ function roep(fn, args, cfg){
     .then(r => r.json()).then(j => { if (!j.ok) throw new Error(j.fout || 'Onbekende fout'); return j.data; });
 }
 // Offline: deze schrijfacties worden bewaard en later verstuurd als er geen verbinding is.
-const OFFLINE_FN = ['bewaarDag', 'bewaarReflectie', 'bewaarDeadline', 'bewaarDienst'], WACHT_KEY = 'planner-wachtrij';
+const OFFLINE_FN = ['bewaarDag', 'bewaarReflectie', 'bewaarDeadline', 'bewaarDienst', 'bewaarPeriode', 'verwijderPeriode', 'bewaarKlaar', 'verwijderKlaar'], WACHT_KEY = 'planner-wachtrij';
 const isNetwerkFout = e => /Failed to fetch|NetworkError|Load failed|network/i.test(e && e.message || String(e));
 function lokaal(fn, a){             // laat de wijziging meteen zien, ook zonder verbinding
   const d = JSON.parse(JSON.stringify(D));
@@ -317,6 +317,15 @@ function lokaal(fn, a){             // laat de wijziging meteen zien, ook zonder
   } else if (fn === 'bewaarDeadline') {
     const x = Object.assign({}, a, {id: a.id || 'nieuw-' + Date.now()});
     d.deadlines = d.deadlines.filter(y => y.id !== x.id).concat([x]);
+  } else if (fn === 'bewaarPeriode') {  // uitje of vakantie toevoegen/wijzigen zonder bereik
+    const x = Object.assign({vertrek: '', terug: ''}, a, {id: a.id || 'nieuw-' + Date.now()});
+    d.periodes = (d.periodes || []).filter(y => y.id !== x.id).concat([x]);
+  } else if (fn === 'bewaarKlaar') {
+    d.klaar = (d.klaar || []).filter(y => y.id !== a.id).concat([Object.assign({}, a)]);
+  } else if (fn === 'verwijderKlaar') {
+    d.klaar = (d.klaar || []).filter(y => y.id !== a);
+  } else if (fn === 'verwijderPeriode') {
+    d.periodes = (d.periodes || []).filter(y => y.id !== a);
   } else if (fn === 'bewaarDienst') {   // bijv. "Gewerkt?" afvinken op locatie zonder bereik
     const oud = d.diensten.find(y => y.id === a.id) || {};
     const x = Object.assign({}, oud, a, {pauze: Number(a.pauze) || 0, toeslag: Number(a.toeslag) || 100, status: a.status || 'gepland'});
@@ -353,7 +362,7 @@ function api(fn, ...args){
 function inWachtrij(fn, args){
   // nieuw item zonder id: nu al een tijdelijk id geven, dat ook naar de server gaat.
   // Anders krijgt hij lokaal een ander id dan op de server, en komt hij na nog een wijziging dubbel in de sheet.
-  if ((fn === 'bewaarDeadline' || fn === 'bewaarDienst') && args[0] && !args[0].id)
+  if ((fn === 'bewaarDeadline' || fn === 'bewaarDienst' || fn === 'bewaarPeriode') && args[0] && !args[0].id)
     args = [Object.assign({}, args[0], {id: 'nieuw-' + Date.now()})].concat(args.slice(1));
   const rij = opslag.get(WACHT_KEY) || []; rij.push({fn, args}); opslag.set(WACHT_KEY, rij);
   const d = lokaal(fn, args[0]); opslag.set(CACHE_KEY, d);
@@ -451,7 +460,6 @@ function werkExtra(ym){
   return extra;
 }
 
-function basisDoel(){ const s = D.vakken.reduce((t,v)=>t+v.weekdoel,0); return s || 15; }
 /**
  * Toetsweekmodus voor dag s: alle tentamens binnen X dagen ná s (de tentamendag zelf telt niet).
  * Geeft { t, dagen } van het eerstvolgende (voor meldingen) en { alle } met elk tentamen en zijn afstand in dagen.
@@ -466,41 +474,192 @@ function toetsweek(s, weekVanaf, dagen){
   const alle = lijst.map(t => ({ t, dagen: dagenTot(s, t.datum) }));
   return { t: alle[0].t, dagen: alle[0].dagen, alle };
 }
-/**
- * Weekdoelen (basis voor dagDoel): in toetsweekmodus hoger studiedoel (extra uren naar het tentamenvak) en minder gamen.
- * In een schoolvakantie is het basisdoel lager (zomer: 0); de vakken houden onderling dezelfde verhouding.
- * gameDag = vrije gametijd per dag in een vakantie.
- */
-function doelen(modus, vak){
-  const i = I(), normaal = basisDoel(), perVak = {};
-  const basis = !vak ? normaal : vak.soort === 'zomer' ? 0 : Math.max(0, Number(i.vakantieStudie) || 0);
-  const factor = normaal ? basis / normaal : 0;
-  D.vakken.forEach(v => perVak[v.vak] = v.weekdoel * factor);
-  const gameDag = Math.max(0, Number(i.vakantieGameDag) || 0);
-  if (!modus) return { studie: basis, perVak, gameMax: i.gameMax, gameDag };
-  const studie = Math.max(basis, Number(i.toetsweekStudie) || basis), extra = studie - basis;
-  // extra tijd verdelen over alle komende tentamens: gewicht = 1 ÷ dagen tot het tentamen (dichterbij = meer)
-  const totGewicht = modus.alle.reduce((t, x) => t + 1 / x.dagen, 0);
-  modus.alle.forEach(x => {
-    const deel = extra * (1 / x.dagen) / totGewicht;
-    const raak = D.vakken.filter(v => x.t.vak.toLowerCase().includes(v.vak.toLowerCase()));
-    raak.forEach(v => perVak[v.vak] += deel / raak.length);
-  });
-  const toetsGame = Math.min(i.gameMax, Number(i.toetsweekGameMax) || i.gameMax);
-  return { studie, perVak, gameMax: toetsGame, gameDag: Math.min(gameDag, toetsGame / 7) };
+// ================= STUDIEPLAN =================
+// Idee: je besteedt per week X uur aan school (⚙︎, standaard 40), inclusief lessen.
+//   zelfstudie van de week = schooltijd − lesuren (uit je lesrooster-agenda)
+// Die uren worden over de dagen verdeeld naar gewicht (weekend nee/ja/lichter) × vrije tijd. Vrije tijd = je maximum
+// voor school + werk per dag (⚙︎), min lessen en diensten, keer het deel van de dag dat je niet weg bent (uitjes).
+// Past het niet, dan blijft er een "tekort" over (waarschuwing).
+// Per vak: je vakgewichten bij ⚙︎ zijn de verhouding; in de toetsweekmodus gaat een deel (⚙︎) naar de tentamenvakken.
+// "Klaar" (voor vandaag of tot een datum): die tijd gaat naar de andere vakken; is alles klaar, dan is het vrije tijd
+// en telt het niet als achterstand. Wat je op eerdere dagen niet haalde, schuift door naar de rest van de week.
+// Schoolvakantie zonder tentamen in de buurt: het vakantiedoel (⚙︎ → Vakanties); met tentamen = gewone schooldag.
+const isWeekend = s => [0, 6].includes(dt(s).getDay());
+function weekendGewicht(){
+  const m = I().weekendModus || 'licht';
+  return m === 'nee' ? 0 : m === 'ja' ? 1 : Math.max(0, Math.min(100, Number(I().weekendProcent) || 0)) / 100;
 }
+/** Lesuren op dag s; onbekend als het lesrooster (nog) niet geladen is of de dag buiten het opgehaalde bereik valt. */
+function lesUren(s){
+  const l = lessenOp(s);
+  if (!l || l.fout || l.buiten) return { uren: 0, onbekend: true };
+  return { uren: l.lessen.reduce((t, x) => t + x.uren, 0), onbekend: false };
+}
+const klaarLijst = () => (D && D.klaar) || [];
+/** Klaar-melding voor vak v op dag s (of null). */
+const klaarOp = (v, s) => klaarLijst().find(k => k.vak === v && k.van <= s && s <= k.tot) || null;
+/** Verhouding tussen de vakken (som = 1). In de toetsweekmodus gaat een deel naar de tentamenvakken (dichterbij = meer). */
+function vakVerdeling(m){
+  const tot = D.vakken.reduce((t, v) => t + (Number(v.weekdoel) || 0), 0), r = {};
+  D.vakken.forEach(v => r[v.vak] = tot ? (Number(v.weekdoel) || 0) / tot : 1 / D.vakken.length);
+  if (!m) return r;
+  const aandeel = Math.max(0, Math.min(100, Number(I().toetsweekAandeel) || 0)) / 100, gew = {};
+  let totG = 0;
+  m.alle.forEach(x => {
+    const raak = D.vakken.filter(v => x.t.vak.toLowerCase().includes(v.vak.toLowerCase()));
+    raak.forEach(v => { const g = 1 / x.dagen / raak.length; gew[v.vak] = (gew[v.vak] || 0) + g; totG += g; });
+  });
+  if (!totG) return r;
+  const uit = {};
+  Object.keys(r).forEach(v => uit[v] = r[v] * (1 - aandeel) + (gew[v] || 0) / totG * aandeel);
+  return uit;
+}
+// Het plan wordt per week één keer uitgerekend en onthouden, tot de gegevens, de lessen of de datum veranderen.
+let PLAN = { D: null, L: null, nu: '', w: {} };
+function weekPlan(ma){
+  if (PLAN.D !== D || PLAN.L !== LESSEN || PLAN.nu !== vandaag()) PLAN = { D, L: LESSEN, nu: vandaag(), w: {} };
+  return PLAN.w[ma] || (PLAN.w[ma] = maakWeekPlan(ma));
+}
+function maakWeekPlan(ma){
+  const i = I(), { a, b } = actieveDag(), nu = vandaag(), wkGew = weekendGewicht();
+  const maxDag = Math.min((b - a) / 60, Math.max(0, Number(i.maxPerDag) || 0) || 24);
+  const maxStudie = Math.max(0, Number(i.maxStudieDag) || 0) || 24;      // nooit meer zelfstudie op één dag
+  const vakken = D.vakken.map(v => v.vak);
+  const dagen = [...Array(7)].map((_, k) => {
+    const s = plus(ma, k), vak = vakantieOp(s), uit = uitjeOp(s), m = toetsweek(s), er = uit ? 1 - uit.deel : 1;
+    const les = lesUren(s), dienst = dienstenOp(s).reduce((t, x) => t + nettoU(x), 0);
+    const gedaanVak = studieOp(s), dagRij = D.dagen.find(x => x.datum === s) || {};
+    return { s, vak, uit, m, er, les: les.uren, lesOnbekend: les.onbekend, dienst,
+             school: !vak || !!m,                                   // vakantie met tentamen in de buurt = schooldag
+             gewicht: isWeekend(s) ? wkGew : 1,
+             vrij: Math.max(0, maxDag * er - les.uren - dienst),
+             cap: Math.min(Math.max(0, maxDag * er - les.uren - dienst), maxStudie * er),
+             split: vakVerdeling(m), gedaanVak, gedaan: Object.values(gedaanVak).reduce((x, y) => x + y, 0),
+             gamed: Number(dagRij.gamen) || 0,
+             klaar: vakken.filter(v => klaarOp(v, s)), doel: 0, perVak: {} };
+  });
+  // 1. zelfstudie voor de week: schooltijd (naar rato van de dagen die tellen) min lessen
+  const somGew = 5 + 2 * wkGew, schoolDagen = dagen.filter(d => d.school);
+  const schooltijd = schoolDagen.reduce((t, d) => t + (Number(i.schoolUren) || 0) * d.gewicht / somGew * d.er, 0);
+  const lesTot = schoolDagen.reduce((t, d) => t + d.les, 0);
+  const zelf = Math.max(0, schooltijd - lesTot);
+  // vakantiedagen zonder tentamen: het vakantiedoel (zomer 0)
+  dagen.filter(d => !d.school).forEach(d =>
+    d.doel = Math.min(d.cap, (d.vak.soort === 'zomer' ? 0 : (Number(i.vakantieStudie) || 0) / 7) * d.er));
+  // 2. verdelen naar gewicht × vrije tijd, maar nooit meer dan de vrije tijd van die dag ("water vullen")
+  let rest = zelf, open = schoolDagen.filter(d => d.gewicht > 0 && d.cap > 0.01);
+  for (let ronde = 0; ronde < 10 && rest > 0.001 && open.length; ronde++) {
+    const q = open.reduce((t, d) => t + d.gewicht * d.cap, 0);
+    let over = 0;
+    open.forEach(d => {
+      const bij = rest * d.gewicht * d.cap / q, ruimte = d.cap - d.doel;
+      if (bij > ruimte) { d.doel += ruimte; over += bij - ruimte; } else d.doel += bij;
+    });
+    rest = over;
+    open = open.filter(d => d.cap - d.doel > 0.01);
+  }
+  const tekort = rest > 0.05 ? rest : 0;
+  // 3. per vak, en "klaar": die tijd naar de andere vakken; alles klaar = vrije tijd
+  dagen.forEach(d => {
+    vakken.forEach(v => d.perVak[v] = d.doel * (d.split[v] || 0));
+    d.allesKlaar = vakken.length > 0 && vakken.every(v => d.klaar.includes(v));
+    if (!d.klaar.length) return;
+    let vrijgekomen = 0;
+    d.klaar.forEach(v => { const nieuw = Math.min(d.perVak[v], d.gedaanVak[v] || 0); vrijgekomen += d.perVak[v] - nieuw; d.perVak[v] = nieuw; });
+    const openV = vakken.filter(v => !d.klaar.includes(v)), som = openV.reduce((t, v) => t + (d.split[v] || 0), 0);
+    if (som > 0) openV.forEach(v => d.perVak[v] += vrijgekomen * d.split[v] / som);
+    d.doel = vakken.reduce((t, v) => t + d.perVak[v], 0);
+  });
+  // 4. plan vanaf vandaag: achterstand (of voorsprong) van eerdere dagen verdelen over de rest van de week
+  dagen.forEach(d => { d.plan = Object.assign({}, d.perVak); d.planTot = d.doel; });
+  const t = dagen.findIndex(d => d.s === nu);
+  if (t >= 0) {
+    const verder = dagen.slice(t);
+    vakken.forEach(v => {
+      let achter = 0;
+      for (let k = 0; k < t; k++) achter += dagen[k].perVak[v] - (dagen[k].gedaanVak[v] || 0);
+      if (dagen[t].klaar.includes(v)) achter = Math.min(achter, 0);   // klaar = niets meer te doen, ook niet van eerder
+      const toekomst = verder.reduce((x, d) => x + d.perVak[v], 0), restV = Math.max(0, toekomst + achter);
+      if (toekomst > 0.001) { verder.forEach(d => d.plan[v] = restV * d.perVak[v] / toekomst); return; }
+      // niets meer gepland voor dit vak, maar wel achterstand: verdelen over dagen waarop het vak niet klaar is
+      const kand = verder.filter(d => d.school && d.gewicht > 0 && d.vrij > 0.01 && !d.klaar.includes(v));
+      const q = kand.reduce((x, d) => x + d.gewicht * d.vrij, 0);
+      verder.forEach(d => d.plan[v] = q && kand.includes(d) ? restV * d.gewicht * d.vrij / q : 0);
+    });
+    verder.forEach(d => d.planTot = vakken.reduce((x, v) => x + d.plan[v], 0));
+    // nooit meer dan je maximum per dag: wat erboven komt (meestal inhaalwerk) schuift naar dagen met ruimte
+    const extraV = {}; vakken.forEach(v => extraV[v] = 0);
+    verder.forEach(d => {
+      if (d.planTot <= d.cap + 0.001) return;
+      const f = d.cap / d.planTot;
+      vakken.forEach(v => { extraV[v] += d.plan[v] * (1 - f); d.plan[v] *= f; });
+      d.planTot = d.cap;
+    });
+    let extra = vakken.reduce((x, v) => x + extraV[v], 0);
+    const extraTot = extra;
+    for (let ronde = 0; ronde < 10 && extra > 0.001; ronde++) {
+      const ontv = verder.filter(d => d.school && d.gewicht > 0 && d.cap - d.planTot > 0.01);
+      const q = ontv.reduce((x, d) => x + d.gewicht * (d.cap - d.planTot), 0);
+      if (!q) break;
+      let over = 0;
+      ontv.forEach(d => {
+        const bij = extra * d.gewicht * (d.cap - d.planTot) / q, past = Math.min(bij, d.cap - d.planTot);
+        over += bij - past;
+        // in dezelfde verhouding als de vakken die moesten wijken (geen vak dat op die dag klaar is)
+        const open = vakken.filter(v => !d.klaar.includes(v) && extraV[v] > 0), som = open.reduce((x, v) => x + extraV[v], 0);
+        if (som > 0) { open.forEach(v => d.plan[v] += past * extraV[v] / som); d.planTot += past; } else over += past;
+      });
+      extra = over;
+    }
+    dagen.inhaalTekort = extra > 0.05 ? extra : 0;               // achterstand die deze week niet meer past
+    dagen.inhaalVerschoven = extraTot;
+  }
+  // past de rest van deze week nog? (vandaag: alleen het deel van je dag dat nog over is)
+  let tekortNu = 0;
+  if (t >= 0) {
+    const nuMin = new Date().getHours() * 60 + new Date().getMinutes();
+    const restVandaag = Math.max(0, Math.min(1, (b - Math.max(a, nuMin)) / (b - a)));
+    const nodig = dagen.slice(t).reduce((x, d, k) => x + Math.max(0, d.planTot - (k === 0 ? d.gedaan : 0)), 0);
+    const vrij = dagen.slice(t).reduce((x, d, k) => x + (k === 0 ? Math.max(0, d.vrij - d.gedaan) * restVandaag : d.vrij), 0);
+    tekortNu = Math.max(nodig - vrij > 0.25 ? nodig - vrij : 0, dagen.inhaalTekort || 0);
+  }
+  // 5. gametijd (A): je dagdeel komt vrij naar rato van je dagplan. Niet gebruikt schuift door, maar het
+  //    doorgeschoven deel pas als je studie van die dag af is. Te veel = voorschot op de volgende dagen. Elke week opnieuw.
+  const G = Math.max(0, Number(i.gameMax) || 0), Gt = Math.min(G, Number(i.toetsweekGameMax) || G);
+  let saldo = 0;
+  dagen.forEach(d => {
+    d.gameDeel = (d.school ? (d.m ? Gt : G) / 7 : Math.max(0, Number(i.vakantieGameDag) || 0)) * d.er;
+    const p = d.s < nu ? d.doel : d.planTot;
+    d.studieAf = !d.school || d.allesKlaar || p < 0.01 || d.gedaan >= p - 0.01;
+    d.frac = d.studieAf ? 1 : Math.min(1, d.gedaan / p);
+    d.gameVrij = d.gameDeel * d.frac;
+    d.saldoIn = saldo;
+    d.wacht = saldo > 0 && !d.studieAf ? saldo : 0;                // staat klaar zodra je studie van die dag af is
+    d.gameBeschikbaar = d.gameVrij + (saldo > 0 ? (d.studieAf ? saldo : 0) : saldo) - d.gamed;
+    saldo += d.gameVrij - d.gamed;
+  });
+  const tot = (lijst, k) => lijst.reduce((x, d) => x + d[k], 0);
+  const totNu = dagen.filter(d => d.s <= nu);
+  const doel = tot(dagen, 'doel'), perVak = {};
+  vakken.forEach(v => perVak[v] = dagen.reduce((x, d) => x + d.perVak[v], 0));
+  return { ma, dagen, doel, perVak, zelf, les: lesTot, tekort, tekortNu,
+           lesOnbekend: dagen.some(d => d.school && d.gewicht > 0 && d.lesOnbekend),
+           dienst: tot(dagen, 'dienst'), vrij: tot(dagen, 'vrij'),
+           ruimte: tot(dagen, 'vrij') - doel - tekort,               // uren die er nog bij kunnen zonder dat je studie in de knel komt
+           game: { max: tot(dagen, 'gameDeel'), vrijgespeeld: tot(totNu, 'gameVrij'), gamed: tot(dagen, 'gamed') } };
+}
+/** Plan van één dag. */
+const dagPlan = s => weekPlan(maandag(s)).dagen.find(d => d.s === s);
+/** Vrije gametijd die je vandaag nog hebt (uren, kan negatief zijn = voorschot). Lopende timer telt niet mee. */
+const gameVandaag = () => dagPlan(vandaag()).gameBeschikbaar;
 /**
- * Doelen voor één dag: het weekdoel gedeeld door 7. Valt de dag binnen de toetsweekmodus
- * (vóór een tentamen, niet de tentamendag zelf), dan het toetsweekdoel gedeeld door 7.
- * Vakantie: lager weekdoel, en gamen is een vrije daglimiet (gameVrij) in plaats van verdienen (gameMax).
- * Uitje: alles keer het deel van de dag dat je er wél bent (beschikbaar).
+ * Doelen voor één dag, in de vorm die de rest van de app gebruikt (meters, meldingen, week- en maandtotaal).
+ * gameMax = gametijd die je verdient met studeren; gameVrij = vrije gametijd (vakantie).
  */
 function dagDoel(s){
-  const m = toetsweek(s), vak = vakantieOp(s), uit = uitjeOp(s), d = doelen(m, vak), perVak = {};
-  const er = uit ? 1 - uit.deel : 1;
-  Object.keys(d.perVak).forEach(v => perVak[v] = d.perVak[v] / 7 * er);
-  return { studie: d.studie / 7 * er, gameMax: vak ? 0 : d.gameMax / 7 * er, gameVrij: vak ? d.gameDag * er : 0,
-           perVak, modus: m, tentamens: m ? m.alle.map(x => x.t) : [], vakantie: vak, uitje: uit, beschikbaar: er };
+  const d = dagPlan(s);
+  return { studie: d.doel, perVak: d.perVak, gameMax: d.school ? d.gameDeel : 0, gameVrij: d.school ? 0 : d.gameDeel,
+           modus: d.m, tentamens: d.m ? d.m.alle.map(x => x.t) : [], vakantie: d.vak, uitje: d.uit, beschikbaar: d.er };
 }
 /** Doelen voor een reeks dagen (week of maand) = de optelsom van de dagdoelen. */
 function doelenVoor(van, aantal){
@@ -532,10 +691,10 @@ function vrijBanner(d, wat){
   const uit = [], studieT = d.modus ? 'studiedoel omhoog door de toetsweekmodus' : d.studie > 0.01 ? `studiedoel ${wat} ${uD(d.studie)}` : 'geen studiedoel';
   const icoon = l => l.some(p => p.soort === 'zomer') ? '☀' : '🏖';
   if (d.dagen > 1) {
-    if (d.vakantieDagen) uit.push(`<div class="infobox">${icoon(d.vakanties)} <b>${esc(d.vakanties.map(p => p.naam).join(', '))}</b>${d.vakantieDagen < d.dagen ? ` (${d.vakantieDagen} van de ${d.dagen} dagen)` : ''}: ${studieT}, ${uD(d.gameVrij)} vrije gametijd (hoeft niet verdiend).</div>`);
+    if (d.vakantieDagen) uit.push(`<div class="infobox">${icoon(d.vakanties)} <b>${esc(d.vakanties.map(p => p.naam).join(', '))}</b>${d.vakantieDagen < d.dagen ? ` (${d.vakantieDagen} van de ${d.dagen} dagen)` : ''}: ${studieT}${d.gameVrij > 0.01 ? `, ${uD(d.gameVrij)} vrije gametijd (hoeft niet verdiend)` : ''}.</div>`);
     if (d.uitjeDagen) uit.push(`<div class="infobox">🧳 Weg: ${esc(d.uitjes.map(p => p.naam + ' (' + periodeTekst(p) + ')').join(', '))}. Je doelen zijn daar al op aangepast.</div>`);
   } else {
-    if (d.vakantie) uit.push(`<div class="infobox">${icoon([d.vakantie])} <b>${esc(d.vakantie.naam)}</b>: ${studieT}, gamen max ${uD(d.gameVrij)} (hoeft niet verdiend).</div>`);
+    if (d.vakantie) uit.push(`<div class="infobox">${icoon([d.vakantie])} <b>${esc(d.vakantie.naam)}</b>: ${studieT}${d.gameVrij > 0.01 ? `, gamen max ${uD(d.gameVrij)} (hoeft niet verdiend)` : ''}.</div>`);
     if (d.uitje) uit.push(`<div class="infobox">🧳 <b>${esc(d.uitje.lijst.map(p => p.naam).join(', '))}</b>: ${d.uitje.deel >= 0.999
       ? 'je bent vandaag weg, dus geen doelen en geen herinneringen.'
       : `je bent ${procent(d.uitje.deel)} van je dag weg, je doelen gaan naar ${procent(1 - d.uitje.deel)}.`}</div>`);
@@ -557,10 +716,10 @@ function weekStats(ma){
   const som = k => dagen.reduce((t,d)=>t+(d[k]||0),0);
   const studie = som('studie'), gamen = som('gamen');
   const doel = doelenVoor(ma, 7), modus = doel.modus;   // weekdoel = optelsom van 7 dagdoelen
-  // gametijd = verdiend op gewone dagen (max) + vrije gametijd op vakantiedagen
-  const verdiend = Math.min(doel.gameMax, studie / (I().verdienPer || 2)) + doel.gameVrij;
+  // gametijd: vrijgespeeld volgens je dagplannen (zie STUDIEPLAN), max = je gamedoel van de week
+  const wp = weekPlan(ma), verdiend = wp.game.vrijgespeeld;
   const slaapDagen = dagen.filter(d => d.slaap > 0);
-  return { dagen, perVak, studie, gamen, verdiend, gameOver: verdiend - gamen, modus, doel, coderen: som('coderen'),
+  return { dagen, perVak, studie, gamen, verdiend, gameOver: verdiend - gamen, modus, doel, plan: wp, coderen: som('coderen'),
            sportDoel: Math.round(I().sportDoel * doel.beschikbaar / 7), codeDoel: I().codeerDoel * doel.beschikbaar / 7,
            slaapGem: slaapDagen.length ? slaapDagen.reduce((t,d)=>t+d.slaap,0) / slaapDagen.length : null, slaapN: slaapDagen.length,
            bedGem: (b => b.length ? b.reduce((t,x)=>t+bedUur(x.bedtijd),0) / b.length : null)(dagen.filter(d => d.bedtijd)),
@@ -605,16 +764,32 @@ let timerBezig = false;
 function verstreken(t){ return Math.max(0, (t.pauzeStart || Date.now()) - t.start - (Number(t.pauzeMs) || 0)); }
 function klok(t){ const sec = Math.floor(verstreken(t)/1000);
   return Math.floor(sec/3600)+':'+pad(Math.floor(sec/60)%60)+':'+pad(sec%60); }
-setInterval(() => { const el = document.getElementById('tKlok'); if (el && D && D.timer) el.textContent = klok(D.timer); }, 1000);
+// Gametimer-bewaking: is je vrije gametijd op, dan één keer trillen (⚙︎) en een melding met "Stop" / "Nog even door".
+const GM_KEY = 'planner-gamemelding';                    // { start, door }: voor welke timer de melding al kwam
+const gameOverUren = t => verstreken(t) / 36e5 - gameVandaag();
+setInterval(() => {
+  if (!D || !D.timer) return;
+  const t = D.timer, el = document.getElementById('tKlok'); if (el) el.textContent = klok(t);
+  if (t.soort !== 'gamen') return;
+  const over = gameOverUren(t), o = document.getElementById('tOver');
+  if (o) o.textContent = over > 0 ? '+' + uMin(over) + ' voorschot' : uMin(-over) + ' vrije gametijd over';
+  if (over > 0 && !t.pauzeStart && (opslag.get(GM_KEY) || {}).start !== t.start) {
+    opslag.set(GM_KEY, { start: t.start, door: false });
+    if (I().trillen !== 'uit') { try { navigator.vibrate && navigator.vibrate([250, 120, 250]); } catch(e){} }
+    achtergrondRender();
+  }
+}, 1000);
 const tril = () => { try { navigator.vibrate && navigator.vibrate(15); } catch(e){} };   // korte tik op Android
 function timerHtml(){
   const t = D.timer;
   if (t) { const p = !!t.pauzeStart;
     return `<div class="card timer ${p?'pauze':''}"><div class="row"><div class="grow">
       <div class="sub">${p ? 'Gepauzeerd' : 'Timer loopt'} · ${t.soort==='studie' ? 'studie '+esc(t.vak) : esc(t.soort)}${timerBezig ? ' · opslaan…' : ''}</div>
-      <div class="big" id="tKlok">${klok(t)}</div></div>
+      <div class="big" id="tKlok">${klok(t)}</div>${t.soort === 'gamen' ? `<div class="sub" id="tOver"></div>` : ''}</div>
       <button class="btn small sec" id="tPauze">${p ? '▶ Verder' : '⏸ Pauze'}</button>
       <button class="btn small" id="tStop">■ Stop</button></div>
+      ${t.soort === 'gamen' && gameOverUren(t) > 0 && !(opslag.get(GM_KEY) || {}).door ? `<div class="alert">🎮 Je vrije gametijd van vandaag is op.
+        <div class="row" style="margin-top:8px"><button class="btn small" id="tGStop">■ Stop timer</button><button class="btn small sec" id="tGDoor">Nog even door</button></div></div>` : ''}
       <button class="btn ghost" id="tAnn" style="padding:6px;margin-top:4px">Timer annuleren</button></div>`; }
   return `<div class="card"><div class="sub" style="margin-bottom:8px">Timer starten${timerBezig ? ' · opslaan…' : ''}</div><div class="chips">
     ${D.vakken.map(v=>`<button class="chip" data-tv="${esc(v.vak)}">▶ ${esc(v.vak)}</button>`).join('')}
@@ -631,19 +806,26 @@ async function timerActie(knop, nieuweTimer, melding, fn, ...args){
   finally { timerBezig = false; achtergrondRender(); }
 }
 function timerKnoppen(){
-  const start = (soort, vak, knop) => { const nu = Date.now();
-    timerActie(knop, {soort, vak, start: nu, pauzeMs: 0}, 'Timer gestart: ' + (vak || soort), 'startTimer', soort, vak, nu); };
+  const start = (soort, vak, knop) => {
+    const nu = Date.now(), vrij = soort === 'gamen' ? gameVandaag() : 0;
+    // gamen: agendamelding op het moment dat je vrije gametijd op is (server zet hem in je agenda "Planner")
+    const meldOp = soort === 'gamen' && vrij > 1 / 60 ? nu + vrij * 36e5 : 0;
+    const melding = soort === 'gamen' ? (vrij > 1 / 60 ? 'Gamen: ' + uMin(vrij) + ' vrij' : 'Let op: je vrije gametijd van vandaag is op') : 'Timer gestart: ' + (vak || soort);
+    timerActie(knop, {soort, vak, start: nu, pauzeMs: 0}, melding, 'startTimer', soort, vak, nu, meldOp); };
   document.querySelectorAll('[data-tv]').forEach(b => b.onclick = () => start('studie', b.dataset.tv, b));
   document.querySelectorAll('[data-tg]').forEach(g => g.onclick = () => start(g.dataset.tg, '', g));
   if ($('#tPauze')) $('#tPauze').onclick = e => {
     const t = D.timer, nu = Date.now();
+    const rest = t.soort === 'gamen' ? gameVandaag() - verstreken(t) / 36e5 : 0;   // vrije gametijd die nog over is
     if (t.pauzeStart) timerActie(e.currentTarget, Object.assign({}, t, {pauzeMs: (Number(t.pauzeMs)||0) + (nu - t.pauzeStart), pauzeStart: 0}),
-                                 '', 'hervatTimer', nu);
+                                 '', 'hervatTimer', nu, rest > 1 / 60 ? nu + rest * 36e5 : 0);
     else timerActie(e.currentTarget, Object.assign({}, t, {pauzeStart: nu}), '', 'pauzeerTimer', nu);
   };
   if ($('#tAnn')) $('#tAnn').onclick = () => {
     const k = $('#tAnn'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer: tijd niet opslaan'; return; }
     timerActie(k, null, 'Timer geannuleerd', 'annuleerTimer'); };
+  if ($('#tGDoor')) $('#tGDoor').onclick = () => { opslag.set(GM_KEY, { start: D.timer.start, door: true }); render(); };
+  if ($('#tGStop')) $('#tGStop').onclick = () => $('#tStop').click();
   if ($('#tStop')) $('#tStop').onclick = () => {
     tril();
     const t = D.timer, minuten = Math.round(verstreken(t)/60000);
@@ -755,10 +937,8 @@ function renderVandaag(){
     ${gister.length ? `<div class="alert">Late dienst gisteren (tot ${gister[gister.length-1].eind}): vandaag geen zwaar studieblok en geen vroege sportschool.</div>` : ''}
     ${(d => toetsBanner(d.modus, d, 'vandaag') + vrijBanner(d, 'vandaag'))(dagDoel(dag))}
     ${timerHtml()}
-    <div class="card count"><div class="grow"><div class="sub">Gametijd deze week</div>
-      <div class="sub">verdiend ${uMin(ws.verdiend)} · gebruikt ${uMin(ws.gamen)}</div>
-      <div class="note" style="margin:4px 0 0">${ws.doel.gameMax > 0.01 ? `Elke ${u(i.verdienPer)} u studie = 1 u gamen (max ${uD(ws.doel.gameMax)} deze week)` : ''}${ws.doel.gameMax > 0.01 && ws.doel.gameVrij ? ' + ' : ''}${ws.doel.gameVrij ? `${uD(ws.doel.gameVrij)} vrij in de vakantie` : ''}</div></div>
-      <div class="big ${ws.gameOver<0?'neg':''}">${uMin(ws.gameOver)}<span class="unit">over</span></div></div>
+    ${planKaart(dag)}
+    ${gameKaart(dag)}
     ${t ? `<div class="card count"><div class="grow"><div class="sub">Volgende tentamen</div><div class="name">${esc(t.vak)}${zelfdeDag ? ` <span class="sub">+${zelfdeDag} op dezelfde dag</span>` : ''}</div>
       <div class="sub">${dagKort(t.datum)}${t.tijd?' · '+t.tijd:''}${t.opmerking?' · '+esc(t.opmerking):''}</div>
       ${/indien nodig|her(toets|kansing)/i.test(t.vak+' '+t.opmerking) ? `<button class="btn sec small" id="tNiet" style="margin-top:8px">Niet nodig ✓</button>` : ''}</div>
@@ -799,6 +979,7 @@ function renderVandaag(){
     </div>`;
 
   timerKnoppen();
+  planKnoppen(dag);
   deadlineKnoppen();
   if ($('#tNiet')) $('#tNiet').onclick = async () => {
     const k = $('#tNiet'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Zeker? Tik nog een keer'; return; }
@@ -836,6 +1017,71 @@ function renderVandaag(){
   $('#vBed').oninput = slaapBij; $('#vOp').oninput = slaapBij; $('#vWakker').oninput = slaapBij;
   if ($('#vWakkerAan')) $('#vWakkerAan').onclick = () => {
     toonWakker = true; $('#vWakkerRij').style.display = ''; $('#vWakkerAan').remove(); $('#vWakker').focus(); };
+}
+
+// ================= STUDIEPLAN EN GAMETIJD (Vandaag) =================
+/** Kaart met het studieplan van dag s per vak, met "Klaar"-knoppen. */
+function planKaart(s){
+  if (!D.vakken.length) return '';
+  const wp = weekPlan(maandag(s)), d = wp.dagen.find(x => x.s === s), nu = vandaag();
+  const plan = s >= nu ? d.plan : d.perVak, tot = s >= nu ? d.planTot : d.doel;
+  const rij = v => {
+    const k = klaarOp(v, s), p = plan[v] || 0, g = d.gedaanVak[v] || 0;
+    if (p < 0.01 && g < 0.01 && !k) return '';
+    return `<div class="m"><div class="row"><div class="grow">${esc(v)}${k ? ` <span class="badge">✓ klaar${k.tot > s ? ' t/m ' + dagKort(k.tot) : ''}</span>` : ''}</div>
+        <div class="mv">${uMin(g)}${k ? '' : ' / ' + uD(p)}</div>
+        ${k ? `<button class="btn ghost small" data-klaarweg="${esc(k.id)}">ongedaan</button>` : `<button class="btn sec small" data-klaar="${esc(v)}">Klaar</button>`}</div>
+      ${k ? '' : `<div class="meter ${g >= p - 0.01 ? 'good' : ''}"><i style="width:${p > 0.01 ? Math.min(100, g / p * 100) : 100}%"></i></div>`}</div>`;
+  };
+  const rijen = D.vakken.map(v => rij(v.vak)).join('');
+  const meld = [];
+  if (d.allesKlaar) meld.push(['okbox', 'Alles klaar 🎉 De rest van de dag is vrij, en je gametijd ook.']);
+  else if (d.school && tot > 0.01 && d.gedaan >= tot - 0.01) meld.push(['okbox', 'Studie van deze dag af ✓ Je gametijd is vrij.']);
+  const tekort = s === nu ? wp.tekortNu : s > nu ? wp.tekort : 0;
+  if (tekort) meld.push(['alert', `Je studie past deze week niet: ±${uD(tekort)} te weinig tijd${wp.dienst ? ` (${u(wp.dienst)} u diensten deze week)` : ''}. Schuif of ruil een dienst als het kan.`]);
+  if (d.school && d.gewicht > 0 && d.lesOnbekend) meld.push(['note', 'Lesrooster van deze dag onbekend: je studiedoel kan te hoog zijn.']);
+  const leeg = !d.school ? (d.vak.soort === 'zomer' ? 'Zomervakantie: geen studie gepland.' : 'Vakantie: geen studie meer gepland.')
+             : d.gewicht === 0 ? 'Weekend: geen studie gepland (⚙︎ → Studie).' : 'Geen studie gepland.';
+  return `<h2>Studieplan ${s === nu ? 'vandaag' : dagKort(s)} <span class="sub">${uMin(d.gedaan)} / ${uD(tot)}</span></h2>
+    <div class="card">${rijen || `<div class="note" style="margin:0">${leeg}</div>`}
+      ${meld.map(([c, t]) => `<div class="${c}">${t}</div>`).join('')}
+      <div class="note">Klaar = niets meer te doen voor dat vak. De tijd gaat naar je andere vakken; is alles klaar, dan is het vrije tijd.</div></div>`;
+}
+function planKnoppen(s){
+  document.querySelectorAll('[data-klaar]').forEach(b => b.onclick = () => {
+    const v = b.dataset.klaar;
+    sheet(`<h3>${esc(v)} klaar</h3>
+      <div class="note">Niets meer te doen voor dit vak? De tijd gaat naar je andere vakken. Is alles klaar, dan is het vrije tijd en telt het niet als achterstand.</div>
+      <div style="height:8px"></div><button class="btn" id="kDag">Klaar voor ${s === vandaag() ? 'vandaag' : dagKort(s)}</button>
+      <label class="f">Of klaar tot en met</label><input type="date" id="kTot" value="${plus(s, 1)}">
+      <button class="btn sec" id="kTotOk" style="margin-top:8px">Klaar tot deze datum</button>
+      <button class="btn ghost" id="kAnn">Annuleren</button>`);
+    const bewaar = async tot => {
+      if (!tot || tot < s) return toast('Kies een datum vanaf ' + dagKort(s));
+      try { D = await api('bewaarKlaar', { id: v + '|' + s, vak: v, van: s, tot }); closeSheet(); render(); tril(); toast(v + ' klaar ✓'); } catch(e){}
+    };
+    $('#kDag').onclick = () => bewaar(s);
+    $('#kTotOk').onclick = () => bewaar($('#kTot').value);
+    $('#kAnn').onclick = closeSheet;
+  });
+  document.querySelectorAll('[data-klaarweg]').forEach(b => b.onclick = async () => {
+    b.classList.add('bezig');
+    try { D = await api('verwijderKlaar', b.dataset.klaarweg); render(); toast('Weer open'); } catch(e){ b.classList.remove('bezig'); }
+  });
+}
+/** Gametijd van dag s: vrijgespeeld naar rato van je studieplan, plus wat er van eerdere dagen doorschuift. */
+function gameKaart(s){
+  const wp = weekPlan(maandag(s)), d = wp.dagen.find(x => x.s === s), g = wp.game, nu = vandaag();
+  if (s > nu) return `<div class="card"><div class="sub">Gametijd ${dagKort(s)}</div><div class="note" style="margin:4px 0 0">Dagdeel ${uD(d.gameDeel)}. Komt die dag vrij naarmate je studie af is.</div></div>`;
+  const over = d.gameBeschikbaar;
+  const uitleg = !d.school ? 'Vakantie: vrij tot je daglimiet.' : d.studieAf ? 'Je studie is af: je dagdeel is helemaal vrij.'
+               : `${procent(d.frac)} van je studieplan gedaan, dus ${procent(d.frac)} van je dagdeel vrij.`;
+  const saldo = d.saldoIn > 0.01 ? (d.studieAf ? `Plus ${uMin(d.saldoIn)} doorgeschoven van eerdere dagen.` : `Nog ${uMin(d.saldoIn)} van eerdere dagen staat klaar zodra je studie af is.`)
+              : d.saldoIn < -0.01 ? `Min ${uMin(-d.saldoIn)} voorschot van eerdere dagen.` : '';
+  return `<div class="card"><div class="row"><div class="grow"><div class="sub">Gametijd ${s === nu ? 'vandaag' : dagKort(s)}</div>
+      <div class="sub">vrijgespeeld ${uMin(d.gameVrij)} van ${uD(d.gameDeel)} · gebruikt ${uMin(d.gamed)}</div></div>
+      <div class="big ${over < 0 ? 'neg' : ''}">${uMin(over)}<span class="unit">over</span></div></div>
+    <div class="note" style="margin:6px 0 0">${uitleg}${saldo ? ' ' + saldo : ''} Deze week ${uMin(g.gamed)} van max ${uD(g.max)}.</div></div>`;
 }
 
 // ================= DEADLINES =================
@@ -1019,6 +1265,79 @@ function meerdereDeadlines(terugNaarLijst){
   };
 }
 
+// ================= GEGEVENS DOWNLOADEN =================
+// Tabbladnaam (zoals in de sheet) → waar die gegevens in D staan.
+const EXPORT_TABS = { Diensten: 'diensten', Dagen: 'dagen', Studie: 'studie', Vakken: 'vakken', Reflectie: 'reflecties',
+                      Maanddoelen: 'maanddoelen', Tentamens: 'tentamens', Deadlines: 'deadlines', Periodes: 'periodes' };
+/** Bestand laten downloaden dat in het geheugen is gemaakt (Blob), zonder server. */
+function downloadBestand(naam, inhoud, type){
+  const url = URL.createObjectURL(new Blob([inhoud], { type: type + ';charset=utf-8' }));
+  const a = document.createElement('a'); a.href = url; a.download = naam; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  toast('Gedownload: ' + naam);
+}
+/**
+ * Lijst objecten → CSV zoals Nederlandse Excel/LibreOffice het verwacht: puntkomma tussen kolommen,
+ * komma in getallen, UTF-8 met BOM (anders worden ë en € rare tekens). Cellen met ; " of een regelovergang tussen aanhalingstekens.
+ */
+function naarCsv(rijen){
+  const kol = [...new Set(rijen.flatMap(r => Object.keys(r)))];
+  const cel = v => {
+    const s = v === null || v === undefined ? '' : typeof v === 'number' ? String(v).replace('.', ',')
+            : typeof v === 'boolean' ? (v ? 'ja' : '') : typeof v === 'object' ? JSON.stringify(v) : String(v);
+    return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  return '\ufeff' + [kol.join(';')].concat(rijen.map(r => kol.map(k => cel(r[k])).join(';'))).join('\r\n');
+}
+
+// ================= TENTAMENS PLAKKEN =================
+/**
+ * Zelfde herkenning als bij deadlines (datum vooraan, optionele tijd), de rest is het vak.
+ * Tekst tussen haakjes aan het eind wordt de opmerking: "26-01 13:30 Wiskunde (herkansing)".
+ * Een tijdvak als "09:00-11:00" mag: de eindtijd wordt overgeslagen.
+ */
+function leesTentamenRegels(tekst){
+  return leesDeadlineRegels(tekst, '-').map(x => {
+    if (x.fout) return x.fout === 'geen omschrijving' ? Object.assign({}, x, { fout: 'geen vak' }) : x;
+    let vak = x.wat.replace(/^[-–]?\s*\d{1,2}[:.]\d{2}\s*[-–:|]?\s*/, '');
+    const m = vak.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+    vak = (m ? m[1] : vak).trim();
+    if (!vak) return { regel: x.regel, fout: 'geen vak' };
+    return { regel: x.regel, datum: x.datum, tijd: x.tijd === '-' ? '' : x.tijd, vak, opmerking: m ? m[2].trim() : '' };
+  });
+}
+function tentamensPlakken(){
+  sheet(`<h3>Tentamens plakken</h3>
+    <label class="f" style="margin-top:0">Plak je tentamenrooster: één tentamen per regel, datum vooraan</label>
+    <textarea id="tpTekst" rows="7" placeholder="ma 19 jan 09:00-11:00 Wiskunde&#10;21-01 13:30 Scheikunde&#10;9-02 Wiskunde (herkansing)"></textarea>
+    <div class="note">Tijd mag weg. Tekst tussen haakjes aan het eind wordt de opmerking, bijv. (herkansing) of (alleen indien nodig).</div>
+    <div id="tpVoorbeeld"></div>
+    <div style="height:10px"></div><button class="btn" id="tpOk" disabled>Toevoegen</button>
+    <button class="btn ghost" id="tpAnn">Annuleren</button>`);
+  let goed = [];
+  const bestaat = x => D.tentamens.some(t => t.datum === x.datum && t.vak.trim().toLowerCase() === x.vak.toLowerCase());
+  const toon = () => {
+    const regels = leesTentamenRegels($('#tpTekst').value);
+    goed = regels.filter(x => !x.fout && !bestaat(x));
+    $('#tpVoorbeeld').innerHTML = regels.length ? `<div class="card" style="padding:4px 12px">${regels.map(x => x.fout
+      ? `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">⚠ ${esc(x.regel)}</div><div class="sub">${x.fout}: wordt overgeslagen</div></div></div>`
+      : `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">📚 ${esc(x.vak)}</div>
+          <div class="sub">${dagKort(x.datum)} ${x.datum.slice(0,4)}${x.tijd ? ' · ' + x.tijd : ''}${x.opmerking ? ' · ' + esc(x.opmerking) : ''}${bestaat(x) ? ' · staat er al' : ''}</div></div>
+          <span class="badge ${bestaat(x) ? 'none' : ''}">${bestaat(x) ? '—' : 'nieuw'}</span></div>`).join('')}</div>` : '';
+    const b = $('#tpOk'); b.disabled = !goed.length;
+    b.textContent = goed.length ? `${goed.length} ${goed.length === 1 ? 'tentamen' : 'tentamens'} toevoegen` : 'Toevoegen';
+  };
+  $('#tpTekst').oninput = toon;
+  $('#tpAnn').onclick = openInstellingen;
+  $('#tpOk').onclick = async () => {
+    if (!goed.length) return;
+    const b = $('#tpOk'), n = goed.length; b.disabled = true; b.textContent = 'Toevoegen…';
+    try { D = await api('bewaarTentamens', goed.map(({datum, tijd, vak, opmerking}) => ({datum, tijd, vak, opmerking}))); render(); openInstellingen();
+          toast(n + (n === 1 ? ' tentamen' : ' tentamens') + ' toegevoegd ✓'); }
+    catch(e){ toon(); }
+  };
+}
+
 // ================= SCHOOLVAKANTIES PLAKKEN =================
 /**
  * Leest een geplakt vakantierooster: één vakantie per regel, met een naam en één of twee datums. Herkent o.a.
@@ -1172,6 +1491,9 @@ function openDienst(x){
     $('#sInfo').innerHTML = `<div class="row"><div class="grow"><div class="sub">Netto</div><div class="name">${u(nettoU(d))} u</div></div>
       <div style="text-align:right"><div class="sub">${ymNaam(ym)} wordt</div><div class="name">${u(na)} u</div></div></div>
       ${isLaat(d) ? '<div class="note">⚠︎ Eindigt laat: de ochtend erna geen zwaar studieblok of vroege sportschool.</div>' : ''}
+      ${(() => { const wp = weekPlan(maandag(d.datum)), oud = !nieuw && maandag(x.datum) === maandag(d.datum) ? nettoU(x) : 0;
+                 const r = wp.ruimte + oud - nettoU(d);
+                 return r < -0.25 ? `<div class="alert">Met deze dienst past je studie in week ${weekNr(d.datum)} niet meer (±${uD(-r)} tekort).</div>` : ''; })()}
       ${(() => { const w = uitjeOp(d.datum); return w ? `<div class="alert">🧳 Je bent dan weg: ${esc(w.lijst.map(p => p.naam + ' (' + periodeTekst(p) + ')').join(', '))}.</div>` : ''; })()}
       ${(() => { const m = toetsweek(d.datum); return m ? `<div class="alert">📚 Toetsweekmodus: ${esc(m.t.vak)} ${m.dagen===1?'morgen':'over '+m.dagen+' dagen'}. Weet je zeker dat je deze dienst wilt?</div>` : ''; })()}
       ${grensTekst(na)}`;
@@ -1223,12 +1545,27 @@ function dagAdvies(s){
   if (onbekend) { op.push('lesrooster onbekend, check het zelf'); score -= 0.5; }
   if (vrijeAvond(s)) { op.push("avond houd je vrij"); score -= 0.5; }
   if (weg) { op.push('weg: ' + weg.lijst.map(p => p.naam).join(', ')); score -= 1; }
+  const ruimte = weekPlan(maandag(s)).ruimte;                 // past je studie die week nog met een dienst van ±6 u erbij?
+  if (ruimte < 6) { op.push(ruimte <= 0 ? 'studie past die week al niet' : 'studie past dan niet meer'); score -= 2; }
   const m = toetsweek(s, false, Math.min(7, Number(I().toetsweekDagen) || 7));   // jouw regel: de week ervóór geen diensten
   if (m) { op.push(m.t.vak + ' over ' + m.dagen + ' d'); score -= 2; }
+  const vk = vakantieOp(s);                                   // vakantie zonder tentamen in de buurt: goede dag voor extra uren
+  if (vk && !m) { op.push(vk.soort === 'zomer' ? 'zomervakantie' : 'vakantie'); score += 0.5; }
   const dl = D.deadlines.find(d => !d.klaar && (d.datum === s || d.datum === plus(s,1)));
   if (dl) { op.push('deadline ' + (dl.datum === s ? 'vandaag' : 'morgen')); score -= 1; }
   if (dienstenOp(plus(s,-1)).some(isLaat)) op.push('na late dienst: niet vroeg');
   return { s, wat, op, score };
+}
+/** Per week, een maand vooruit: lessen, studie, diensten en hoeveel uur werk er nog bij kan. */
+function ruimteKaart(){
+  const weken = []; for (let k = 0; k < 5; k++) weken.push(plus(maandag(vandaag()), 7 * k));
+  const rij = ma => { const wp = weekPlan(ma), r = wp.ruimte;
+    return `<tr><td>wk ${weekNr(ma)} <span class="sub">${dt(ma).getDate()}/${dt(ma).getMonth()+1}</span></td>
+      <td>${wp.lesOnbekend ? '?' : u(Math.round(wp.les * 10) / 10)}</td><td>${u(Math.round((wp.doel + wp.tekort) * 10) / 10)}</td><td>${u(Math.round(wp.dienst * 10) / 10)}</td>
+      <td><span class="badge ${r < 0 ? 'warn' : r < 6 ? 'none' : ''}">${r < 0 ? 'vol: −' + u(Math.round(-r)) : '±' + u(Math.floor(r))} u</span></td></tr>`; };
+  return `<h2>Ruimte voor diensten</h2><div class="card"><div class="tabelwrap"><table>
+      <tr><th>Week</th><th>Les</th><th>Studie</th><th>${esc(W())}</th><th>Ruimte</th></tr>${weken.map(rij).join('')}</table></div>
+    <div class="note">Ruimte = hoeveel uur werk er nog bij kan zonder dat je studie in de knel komt, binnen je maximum van ${u(I().maxPerDag)} u school + werk per dag (⚙︎ → Studie). ? = lesrooster nog onbekend.</div></div>`;
 }
 function dienstzoeker(ym, mi){
   const nu = vandaag();
@@ -1262,14 +1599,14 @@ function maandCijfers(ym){
     const r = D.dagen.find(x => x.datum === s) || {}, st = studieOp(s), dl = dagDoel(s);   // maanddoel = optelsom van de dagdoelen
     Object.keys(st).forEach(v => { perVak[v] = (perVak[v]||0) + st[v]; studie += st[v]; });
     Object.keys(dl.perVak).forEach(v => doelVak[v] = (doelVak[v]||0) + dl.perVak[v]);
-    dStudie += dl.studie; dGame += dl.gameMax; dVrij += dl.gameVrij; er += dl.beschikbaar;
+    dStudie += dl.studie; er += dl.beschikbaar; if (s <= nu) dVrij += dagPlan(s).gameVrij;
     gamen += r.gamen || 0; coderen += r.coderen || 0; if (r.sport) sport++;
     if (r.slaap) slaap.push(r.slaap); if (r.bedtijd) bed.push(bedUur(r.bedtijd));
   }
   const gem = a => a.length ? a.reduce((t,x)=>t+x,0) / a.length : null;
   return { dagen, dagenTotNu, perVak, doelVak, studie, gamen, coderen, sport,
            doelStudie: dStudie, doelSport: i.sportDoel / 7 * er, doelCode: i.codeerDoel / 7 * er,
-           verdiend: Math.min(dGame, studie / (i.verdienPer || 2)) + dVrij, slaapGem: gem(slaap), slaapN: slaap.length, bedGem: gem(bed) };
+           verdiend: dVrij, slaapGem: gem(slaap), slaapN: slaap.length, bedGem: gem(bed) };
 }
 function renderMaand(){
   $('#title').textContent = 'Maand';
@@ -1306,7 +1643,7 @@ function maandOverzicht(mi){
   const sig = [];
   if (!lopend && ym < nu.slice(0,7)) {
     if (mc.studie < mc.doelStudie) sig.push(['alert', `Zelfstudie ${uMin(mc.studie)} van ±${uD(mc.doelStudie)}.`]);
-    if (mc.gamen > mc.verdiend) sig.push(['alert', `${uD(mc.gamen - mc.verdiend)} meer gegamed dan verdiend.`]);
+    if (mc.gamen > mc.verdiend) sig.push(['alert', `${uD(mc.gamen - mc.verdiend)} meer gegamed dan vrijgespeeld.`]);
   } else if (lopend) {
     const verwacht = mc.doelStudie / mc.dagen * mc.dagenTotNu;
     if (mc.studie < verwacht - 2) sig.push(['infobox', `Je loopt ±${uD(verwacht - mc.studie)} achter op je studie voor deze maand.`]);
@@ -1317,7 +1654,7 @@ function maandOverzicht(mi){
       ${meter('<b>Zelfstudie</b>', mc.studie, mc.doelStudie, uMin(mc.studie) + ' / ' + uD(mc.doelStudie)) + pro(mc.doelStudie)}
       <div style="padding-left:12px;border-left:3px solid var(--line);margin:4px 0 10px">${vakMeterM}</div>
       ${meter('Sportschool', mc.sport, mc.doelSport, mc.sport + ' / ' + Math.round(mc.doelSport) + '×') + pro(mc.doelSport)}
-      ${meter('Gamen (van verdiend)', mc.gamen, Math.max(mc.verdiend, 0.01), uMin(mc.gamen) + ' / ' + uD(mc.verdiend), true)}
+      ${meter('Gamen (vrijgespeeld)', mc.gamen, Math.max(mc.verdiend, 0.01), uMin(mc.gamen) + ' / ' + uD(mc.verdiend), true)}
       ${meter('Coderen', mc.coderen, mc.doelCode, uMin(mc.coderen) + ' / ' + uD(mc.doelCode))}
       <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${mc.slaapGem===null?'–':uMin(mc.slaapGem)}</div></div>
       <div class="row line"><div class="grow">Gemiddeld naar bed</div><div class="name">${mc.bedGem===null?'–':uurTekst(mc.bedGem)}</div></div>
@@ -1444,6 +1781,7 @@ function maandWerk(mi){
     <h2>Diensten</h2>
     <div class="card" style="padding:4px 12px">${alleDiensten.map(dienstItem).join('') || '<div class="empty">Nog geen diensten deze maand.</div>'}</div>
     ${dienstzoeker(ym, mi)}
+    ${ruimteKaart()}
     <div class="card">
       <div class="row line"><div class="grow">Uurloon bij deze uren</div><div class="name">${euroC(mi.tarief)}</div></div>
       <div class="row line"><div class="grow">Bruto (indicatie)</div><div class="name">≈ ${euro(mi.bruto)}</div></div>
@@ -1493,7 +1831,9 @@ function weekTekst(ws){
       + (ws.doel.vakantieDagen ? `Vakantie: ${ws.doel.vakanties.map(p => p.naam).join(', ')} (${ws.doel.vakantieDagen} van de 7 dagen)\n` : '')
       + (ws.doel.uitjeDagen ? `Weg: ${ws.doel.uitjes.map(p => p.naam + ' (' + periodeTekst(p) + ')').join(', ')}\n` : '') + `Zelfstudie: ${uMin(ws.studie)} (doel ${uD(ws.doel.studie)})` + (Object.keys(ws.perVak).length ? ' — ' + Object.keys(ws.perVak).map(v=>v+' '+uMin(ws.perVak[v])).join(', ') : ''),
     `Sportschool: ${ws.sport}× (doel ${ws.sportDoel})`,
-    `Gamen: ${uMin(ws.gamen)} (verdiend ${uMin(ws.verdiend)})`,
+    `Gamen: ${uMin(ws.gamen)} (vrijgespeeld ${uMin(ws.verdiend)}, max ${uD(ws.plan.game.max)})` + (ws.plan.game.gamed > ws.plan.game.max + 0.01 ? `, ${uMin(ws.plan.game.gamed - ws.plan.game.max)} boven je gamedoel` : ''),
+    klaarTekst(wk) ? 'Klaar gemeld: ' + klaarTekst(wk) : '',
+    ws.plan.dagen.some(d => d.allesKlaar) ? 'Dagen met alles klaar: ' + ws.plan.dagen.filter(d => d.allesKlaar).map(d => dagKort(d.s)).join(', ') : '',
     `Coderen (leerlijn): ${uMin(ws.coderen)} (doel ${uD(ws.codeDoel)})`,
     ws.slaapGem !== null ? `Slaap: gemiddeld ${uMin(ws.slaapGem)} per nacht (${ws.slaapN} nachten ingevuld)` + (ws.bedGem!==null ? `, gemiddeld naar bed om ${uurTekst(ws.bedGem)}` : '') : '',
     `${W()}: ${u(ws.werk)} u deze week · ${ymNaam(wk.slice(0,7))} totaal ${u(mi.tot)} u (doel ${mi.doel})`,
@@ -1503,6 +1843,36 @@ function weekTekst(ws){
     `Wat kan beter: ${refl.beter || '-'}`,
     `Focus volgende week: ${refl.focus || '-'}`,
   ].filter(Boolean).join('\n');
+}
+/**
+ * Hoeveel weken op rij (terug vanaf week ma) haalde je een doel? gehaald(w) geeft true, false of null.
+ * null = die week had geen doel (bijv. zomervakantie): telt niet mee en breekt de reeks ook niet.
+ */
+function reeks(ma, gehaald){
+  let n = 0;
+  for (let k = 0; k < 52; k++) {
+    const r = gehaald(weekCijfers(plus(ma, -7 * k)));
+    if (r === null) continue;
+    if (!r) break;
+    n++;
+  }
+  return n;
+}
+/** Vergelijking met vorige week over evenveel dagen (lopende week: t/m dezelfde weekdag). */
+function vergelijkVorige(ma, dagen){
+  const som = (start, wat) => { let t = 0; for (let k = 0; k < dagen; k++) t += wat(plus(start, k)); return t; };
+  const studie = s => Object.values(studieOp(s)).reduce((a, b) => a + b, 0);
+  const sport = s => (D.dagen.find(x => x.datum === s) || {}).sport ? 1 : 0;
+  const vorige = plus(ma, -7);
+  const dS = som(ma, studie) - som(vorige, studie), dP = som(ma, sport) - som(vorige, sport);
+  const teken = (x, f) => (x > 0.001 ? '+' : x < -0.001 ? '−' : '±') + f(Math.abs(x));
+  return `<div class="note">Vergeleken met vorige week${dagen < 7 ? ' (zelfde aantal dagen)' : ''}: studie ${teken(dS, uMin)}, sport ${teken(dP, x => x + '×')}</div>`;
+}
+/** "Wiskunde (di, do), Scheikunde (vr)": op welke dagen je een vak klaar meldde (voor het weekoverzicht). */
+function klaarTekst(ma){
+  const per = {};
+  weekPlan(ma).dagen.forEach(d => d.klaar.forEach(v => (per[v] = per[v] || []).push(DAGEN[dt(d.s).getDay()])));
+  return Object.keys(per).map(v => v + ' (' + per[v].join(', ') + ')').join(', ');
 }
 /** Dagen van de week waarop je bij Vandaag een notitie hebt gezet. */
 const notitiesWeek = ws => ws.dagen.filter(d => d.notitie);
@@ -1521,12 +1891,25 @@ function renderWeek(){
     if (!bezig && achter.length) sig.push(['alert', 'Achter op: ' + achter.map(v=>`${esc(v.vak)} (${uMin(ws.perVak[v.vak]||0)} / ${uD(ws.doel.perVak[v.vak])})`).join(', ') + '.']);
     sig.push(ws.sport >= ws.sportDoel ? ['okbox','Sportdoel gehaald.']
       : [bezig?'infobox':'alert', `Sportschool ${ws.sport} van ${ws.sportDoel}×${bezig?` — nog ${ws.sportDoel-ws.sport} te gaan`:''}.`]);
-    if (ws.gameOver < 0) sig.push(['alert', `${uMin(-ws.gameOver)} meer gegamed dan verdiend.`]);
+    const gm = ws.plan.game;
+    if (gm.gamed > gm.max + 0.01) sig.push(['alert', `${uMin(gm.gamed - gm.max)} boven je gamedoel van ${uD(gm.max)} deze week.`]);
+    else if (ws.gameOver < -0.01) sig.push(['infobox', `${uMin(-ws.gameOver)} voorschot op je gametijd: dat gaat van de komende dagen af.`]);
+    const tk = bezig ? ws.plan.tekortNu : wk > nu ? ws.plan.tekort : 0;
+    if (tk) sig.push(['alert', `Je studie past deze week niet: ±${uD(tk)} te weinig tijd (${u(ws.plan.dienst)} u ${esc(W())}).`]);
   }
   if (ws.slaapGem !== null && ws.slaapN >= 3 && ws.slaapGem < i.slaapDoel - 0.5)
     sig.push(['infobox', `Je slaapt gemiddeld ${uMin(ws.slaapGem)}, onder je doel van ${uMin(i.slaapDoel)}.`]);
   if (ws.werk > 20) sig.push(['alert', `${u(ws.werk)} u ${esc(W())} deze week: check of studie, sport en rust niet in het gedrang komen.`]);
   if (ws.laat) sig.push(['infobox', `${ws.laat} late dienst${ws.laat>1?'en':''}: plan de ochtend erna rustig.`]);
+  if (begonnen) {
+    // reeksen: deze week telt mee als hij al gehaald is, anders tellen we vanaf vorige week
+    const rStudie = reeks(bezig && ws.studie < ws.doel.studie ? plus(wk, -7) : wk, w => w.doel.studie < 0.1 ? null : w.studie >= w.doel.studie - 0.01);
+    const rSport = reeks(bezig && ws.sport < ws.sportDoel ? plus(wk, -7) : wk, w => { const d = Math.round(i.sportDoel * w.doel.beschikbaar / 7); return d < 1 ? null : w.sport >= d; });
+    const vuur = [];
+    if (rStudie >= 2) vuur.push(`${rStudie} weken op rij je studiedoel gehaald`);
+    if (rSport >= 2) vuur.push(`${rSport} weken op rij je sportdoel gehaald`);
+    if (vuur.length) sig.push(['okbox', '🔥 ' + vuur.join(' · ')]);
+  }
   const dls = D.deadlines.filter(d => !d.klaar && d.datum >= wk && d.datum <= zo);
   if (dls.length) sig.push(['infobox', 'Deadlines deze week: ' + dls.map(d => esc(deadlineNaam(d)) + ' (' + dagKort(d.datum) + ')').join(', ') + '.']);
   if (ws.modus && ws.werk > 0) sig.push(['alert', `Toetsweekmodus en toch ${u(ws.werk)} u ${esc(W())}: check of je genoeg studietijd overhoudt.`]);
@@ -1542,12 +1925,13 @@ function renderWeek(){
       ${meter('<b>Zelfstudie</b>', ws.studie, ws.doel.studie, uMin(ws.studie)+' / '+uD(ws.doel.studie))}
       <div style="padding-left:12px;border-left:3px solid var(--line);margin:4px 0 10px">${vakMeters(ws)}</div>
       ${meter('Sportschool', ws.sport, ws.sportDoel, ws.sport+' / '+ws.sportDoel+'×')}
-      ${meter('Gamen (van verdiend)', ws.gamen, Math.max(ws.verdiend, 0.01), uMin(ws.gamen)+' / '+uMin(ws.verdiend), true)}
+      ${meter('Gamen (vrijgespeeld)', ws.gamen, Math.max(ws.verdiend, 0.01), uMin(ws.gamen)+' / '+uMin(ws.verdiend), true)}
       ${meter('Coderen', ws.coderen, ws.codeDoel, uMin(ws.coderen)+' / '+uD(ws.codeDoel))}
       <div class="row line" style="border-top:1px solid var(--line);margin-top:6px"><div class="grow">Slaap gemiddeld</div><div class="name">${ws.slaapGem===null?'–':uMin(ws.slaapGem)}</div></div>
       <div class="row line"><div class="grow">Gemiddeld naar bed</div><div class="name">${ws.bedGem===null?'–':uurTekst(ws.bedGem)}</div></div>
       <div class="row line"><div class="grow">${esc(W())}</div><div class="name">${u(ws.werk)} u</div></div>
       <div class="row line"><div class="grow">Lessen (agenda)</div><div class="name">${ws.les===null?'…':u(ws.les)+' u'}</div></div>
+      ${begonnen ? vergelijkVorige(wk, bezig ? dagenTot(wk, nu) + 1 : 7) : ''}
     </div>
     ${sig.map(([c,t]) => `<div class="${c}">${t}</div>`).join('')}
     <div class="card"><div class="tabelwrap"><table>
@@ -1588,9 +1972,11 @@ function renderWeek(){
 
 // ================= INSTELLINGEN =================
 const VELDEN = [
-  ['Doelen per week', [['sportDoel','Sportschool (keer)'],['verdienPer','Uur studie voor 1 uur gamen'],['gameMax','Gamen maximaal (uur)'],
+  ['Studie', [['schoolUren','Schooltijd per week, inclusief lessen (uur)'],['maxStudieDag','Maximaal zelfstudie per dag (uur)'],['maxPerDag','Maximaal school + werk per dag (uur)'],
+              ['weekendProcent','Weekenddag telt voor (% van een doordeweekse dag, bij "lichter")']]],
+  ['Doelen per week', [['gameMax','Gamen per week (uur)'],['sportDoel','Sportschool (keer)'],
                        ['codeerDoel','Coderen (uur)'],['slaapDoel','Slaap per nacht (uur)']]],
-  ['Toetsweekmodus', [['toetsweekDagen','Aantal dagen vóór een tentamen (0 = uit)'],['toetsweekStudie','Studiedoel per week (uur)'],['toetsweekGameMax','Gamen maximaal per week (uur)']]],
+  ['Toetsweekmodus', [['toetsweekDagen','Aantal dagen vóór een tentamen (0 = uit)'],['toetsweekAandeel','Deel van je studietijd voor tentamenvakken (%)'],['toetsweekGameMax','Gamen per week in de toetsweekmodus (uur)']]],
   ['Vakanties', [['vakantieStudie','Studiedoel per week in een schoolvakantie (uur; zomervakantie = 0)'],
                  ['vakantieGameDag','Gamen per dag in vakanties (uur, hoeft niet verdiend)'],
                  ['vakantieWerkExtra','Extra werkuren per vakantieweek (bovenop je maanddoel)']]],
@@ -1603,7 +1989,7 @@ const WEEKDAGEN = ['ma','di','wo','do','vr','za','zo'];
 const DAG_NAAM = {ma:'maandag',di:'dinsdag',wo:'woensdag',do:'donderdag',vr:'vrijdag',za:'zaterdag',zo:'zondag'};
 function leesTijden(str){ const o={}; String(str).split(';').forEach(p=>{ const [d,t]=p.split('='); if (d) o[d.trim()]=(t||'').trim(); }); return o; }
 function vakRij(v){ return `<div class="row line vakrow" data-oud="${esc(v.vak)}"><input class="vNaam grow" value="${esc(v.vak)}" placeholder="vak">
-  <input class="vDoel" inputmode="decimal" value="${String(v.weekdoel).replace('.',',')}" style="width:64px;text-align:right"><span class="sub">u/wk</span>
+  <input class="vDoel" inputmode="decimal" value="${String(v.weekdoel).replace('.',',')}" style="width:64px;text-align:right"><span class="sub">deel</span>
   <button class="x vDel" aria-label="verwijderen">×</button></div>`; }
 function openInstellingen(){
   const i = I(), tijden = leesTijden(i.herinnerTijden);
@@ -1616,7 +2002,7 @@ function openInstellingen(){
     <div class="card"><div class="seg" id="iThema">${[['licht','Licht'],['donker','Donker'],['systeem','Systeem']].map(([v,l]) =>
       `<button data-v="${v}" class="${thema===v?'on':''}">${l}</button>`).join('')}</div>
       <div class="note">Systeem volgt de instelling van je telefoon of pc. Wordt per apparaat onthouden.</div></div>
-    <h2>Vakken (zelfstudie per week)</h2>
+    <h2>Vakken (verdeling van je studietijd)</h2>
     <div class="card" id="iVakken">${D.vakken.map(vakRij).join('')}</div>
     <button class="btn ghost" id="iVakAdd" style="padding:6px">+ Vak toevoegen</button>
     <div class="note" id="iVakTot"></div>
@@ -1642,6 +2028,17 @@ function openInstellingen(){
       <div class="seg" id="iAfspraak"><button data-v="ja" class="${i.overslaanBijAfspraak==='ja'?'on':''}">Ja</button><button data-v="nee" class="${i.overslaanBijAfspraak!=='ja'?'on':''}">Nee</button></div>
       <div class="note">Tijdens of vlak voor een dienst krijg je geen herinnering om in te vullen; wat je dan mist, komt de volgende ochtend. Deadline-herinneringen komen altijd.</div>
       <button class="btn sec" id="iPlan" style="margin-top:8px">Bekijk herinneringen van vandaag</button>
+    </div>
+    <h2>Weekend en gametimer</h2>
+    <div class="card">
+      <label class="f" style="margin-top:0">Weekend telt mee voor studie</label>
+      <div class="seg" id="iWeekend">${[['nee','Nee'],['licht','Lichter'],['ja','Ja']].map(([v,l]) => `<button data-v="${v}" class="${(i.weekendModus||'licht')===v?'on':''}">${l}</button>`).join('')}</div>
+      <div class="note">Lichter: een weekenddag krijgt het percentage bij Studie van een doordeweekse dag.</div>
+      <label class="f">Trillen als je vrije gametijd op is</label>
+      <div class="seg" id="iTril"><button data-v="aan" class="${i.trillen!=='uit'?'on':''}">Aan</button><button data-v="uit" class="${i.trillen==='uit'?'on':''}">Uit</button></div>
+      <label class="f">Agendamelding als je gametijd op is</label>
+      <div class="seg" id="iGameMeld"><button data-v="aan" class="${i.gameMelding!=='uit'?'on':''}">Aan</button><button data-v="uit" class="${i.gameMelding==='uit'?'on':''}">Uit</button></div>
+      <div class="note">Bij het starten van de gametimer zet de app een afspraak "🎮 Gametijd op" in je agenda "Planner". Je telefoon geeft dan een melding, ook als de app dicht is. Stop je eerder, dan verdwijnt hij weer.</div>
     </div>
     <h2>Werk en agenda</h2>
     <div class="card">
@@ -1687,6 +2084,14 @@ function openInstellingen(){
       <label class="f">Vak</label><input id="tVak" placeholder="bijv. Wiskunde">
       <label class="f">Opmerking</label><input id="tOpm" placeholder="bijv. alleen indien nodig">
       <div style="height:10px"></div><button class="btn sec" id="tAdd">+ Tentamen toevoegen</button>
+      <button class="btn ghost" id="tPlak" style="margin-top:4px">Meerdere tegelijk (rooster plakken)</button>
+    </div>
+    <h2>Gegevens</h2>
+    <div class="card" data-geen-auto>
+      <div class="note" style="margin-top:0">Download je gegevens als back-up, of één tabblad om te openen in Excel of LibreOffice. Je geheime sleutel zit er niet in.</div>
+      <button class="btn sec" id="xJson">Alles downloaden (JSON)</button>
+      <div class="row" style="margin-top:8px"><select id="xTab" class="grow">${Object.keys(EXPORT_TABS).map(t => `<option>${t}</option>`).join('')}</select>
+        <button class="btn sec small" id="xCsv">CSV downloaden</button></div>
     </div>
     <h2>Versie</h2>
     <div class="card">
@@ -1713,15 +2118,18 @@ function openInstellingen(){
       };
     } catch(e) { info.textContent = 'Geen verbinding met GitHub.'; }
   };
-  const keuze = {herinneringen:i.herinneringen, werkImport:i.werkImport, overslaanBijAfspraak:i.overslaanBijAfspraak};
-  [['iHer','herinneringen'],['iWerkImp','werkImport'],['iAfspraak','overslaanBijAfspraak']].forEach(([id,k]) =>
+  const keuze = {herinneringen:i.herinneringen, werkImport:i.werkImport, overslaanBijAfspraak:i.overslaanBijAfspraak,
+                 weekendModus:i.weekendModus||'licht', trillen:i.trillen||'aan', gameMelding:i.gameMelding||'aan'};
+  [['iHer','herinneringen'],['iWerkImp','werkImport'],['iWeekend','weekendModus'],['iTril','trillen'],['iGameMeld','gameMelding'],['iAfspraak','overslaanBijAfspraak']].forEach(([id,k]) =>
     document.querySelectorAll('#'+id+' button').forEach(b => b.onclick = () => { keuze[k] = b.dataset.v;
       document.querySelectorAll('#'+id+' button').forEach(y => y.classList.toggle('on', y===b)); planI(); }));
   document.querySelectorAll('#iVrijeAvond button').forEach(b => b.onclick = () => { b.classList.toggle('on'); planI(); });
   document.querySelectorAll('.hLeeg').forEach(b => b.onclick = () => {
     const el = b.dataset.wd ? $(`input[data-wd="${b.dataset.wd}"]`) : $('#'+b.dataset.id); el.value = ''; planI(); });
   const vakTot = () => { const t = [...document.querySelectorAll('.vDoel')].reduce((s,el)=>s+(num(el.value)||0),0);
-    $('#iVakTot').textContent = 'Totaal zelfstudie: ' + u(t) + ' u per week'; };
+    const rijen = [...document.querySelectorAll('.vakrow')].map(r => [r.querySelector('.vNaam').value.trim(), num(r.querySelector('.vDoel').value) || 0]).filter(x => x[0]);
+    $('#iVakTot').textContent = 'Verdeling van je studietijd: ' + (t ? rijen.map(([n, w]) => n + ' ' + Math.round(w / t * 100) + '%').join(', ') : '—')
+      + '. Hoeveel uur in totaal stel je in bij Studie.'; };
   const vakEvents = () => { document.querySelectorAll('.vDel').forEach(b => b.onclick = () => { b.closest('.vakrow').remove(); vakTot(); planI(); });
     document.querySelectorAll('.vDoel').forEach(el => el.oninput = vakTot); vakTot(); };
   vakEvents();
@@ -1833,6 +2241,12 @@ function openInstellingen(){
     if (!b.dataset.zeker) { b.dataset.zeker = 1; b.textContent = 'zeker?'; b.style.fontSize = '14px'; return; }
     D = await api('verwijderPeriode', b.dataset.pdel); render(); openInstellingen(); toast('Schoolvakantie verwijderd');
   });
+  $('#tPlak').onclick = () => tentamensPlakken();
+  $('#xJson').onclick = () => downloadBestand('planner-backup-' + vandaag() + '.json',
+    JSON.stringify(Object.assign({ export: new Date().toISOString(), app: APP_VERSIE }, D), null, 2), 'application/json');
+  $('#xCsv').onclick = () => { const t = $('#xTab').value, rijen = D[EXPORT_TABS[t]] || [];
+    if (!rijen.length) return toast('Dat tabblad is leeg');
+    downloadBestand('planner-' + t.toLowerCase() + '-' + vandaag() + '.csv', naarCsv(rijen), 'text/csv'); };
   $('#tAdd').onclick = async () => {
     const t = {datum:$('#tDatum').value, tijd:$('#tTijd').value, vak:$('#tVak').value.trim(), opmerking:$('#tOpm').value.trim()};
     if (!t.datum || !t.vak) return toast('Vul in elk geval datum en vak in');
@@ -2056,7 +2470,7 @@ function weekCijfers(ma){       // zoals weekStats, maar zonder lessen op te hal
     gamen += r.gamen || 0; coderen += r.coderen || 0; if (r.sport) sport++;
   }
   const doel = doelenVoor(ma, 7);
-  return { perVak, studie, gamen, sport, coderen, doel, verdiend: Math.min(doel.gameMax, studie / (I().verdienPer || 2)) + doel.gameVrij };
+  return { perVak, studie, gamen, sport, coderen, doel, verdiend: weekPlan(ma).game.vrijgespeeld };
 }
 let trendWeken = 8;
 function renderTrends(){
@@ -2082,8 +2496,8 @@ function renderTrends(){
     ${leeg ? '<div class="infobox">Nog weinig ingevuld. De grafieken vullen zich vanzelf als je je dagen invult.</div>' : ''}
     ${staven('studie', { titel: 'Zelfstudie per week', sub: 'Per vak · streepje = je weekdoel (hoger in toetsweekmodus)', labels: lab, series: reeksen, eenheid: 'u',
        streep: { naam: 'doel', waarden: wc.map(w => w.doel.studie) } })}
-    ${staven('gamen', { titel: 'Gamen per week', sub: 'Streepje = verdiende gametijd', labels: lab, eenheid: 'u',
-       series: [{ naam: 'gegamed', kleur: kleur(1), waarden: wc.map(w => w.gamen) }], streep: { naam: 'verdiend', waarden: wc.map(w => w.verdiend) } })}
+    ${staven('gamen', { titel: 'Gamen per week', sub: 'Streepje = vrijgespeelde gametijd', labels: lab, eenheid: 'u',
+       series: [{ naam: 'gegamed', kleur: kleur(1), waarden: wc.map(w => w.gamen) }], streep: { naam: 'vrijgespeeld', waarden: wc.map(w => w.verdiend) } })}
     ${staven('sport', { titel: 'Sportschool per week', labels: lab, eenheid: '×',
        series: [{ naam: 'keer', kleur: kleur(2), waarden: wc.map(w => w.sport) }], refs: [{ waarde: i.sportDoel, label: 'doel ' + i.sportDoel + '×' }] })}
     ${staven('coderen', { titel: 'Coderen per week', labels: lab, eenheid: 'u',
