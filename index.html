@@ -221,7 +221,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.24-2';
+const APP_VERSIE = '2026.11.24-3';
 const SERVER_MIN = '2026.11.22-4';   // deze app verwacht minstens deze Code.gs-versie (studieplan: Klaar, game-agendamelding)
 
 // ================= data & helpers =================
@@ -754,6 +754,7 @@ function render(){
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v===view));
   $('#stickyHost').innerHTML = '';
   ({vandaag:renderVandaag, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
+  planWeekSync();
 }
 
 // ================= TIMER =================
@@ -1852,26 +1853,54 @@ function startWeek(){
   const r = (D && D.reflecties || []).find(x => x.week === vorige);
   return (r && (r.goed || r.beter || r.focus)) ? deze : vorige;
 }
-function weekTekst(ws){
-  const i = I(), zo = plus(wk,6), mi = maandInfo(wk.slice(0,7));
+/** Tekst van het weekoverzicht. ma = maandag van de week, r = reflectie van die week (standaard: wat je nu ziet). */
+function weekTekst(ws, ma = wk, r = refl){
+  r = r || {};
+  const i = I(), zo = plus(ma,6), mi = maandInfo(ma.slice(0,7));
   return [
-    `Weekreflectie week ${weekNr(wk)} (${dagKort(wk)} – ${dagKort(zo)})`,
+    `Weekreflectie week ${weekNr(ma)} (${dagKort(ma)} – ${dagKort(zo)})`,
     (ws.modus ? `Toetsweekmodus: ${tentamenTekst(ws.doel.tentamens)}\n` : '')
       + (ws.doel.vakantieDagen ? `Vakantie: ${ws.doel.vakanties.map(p => p.naam).join(', ')} (${ws.doel.vakantieDagen} van de 7 dagen)\n` : '')
       + (ws.doel.uitjeDagen ? `Weg: ${ws.doel.uitjes.map(p => p.naam + ' (' + periodeTekst(p) + ')').join(', ')}\n` : '') + `Zelfstudie: ${uMin(ws.studie)} (doel ${uD(ws.doel.studie)})` + (Object.keys(ws.perVak).length ? ' — ' + Object.keys(ws.perVak).map(v=>v+' '+uMin(ws.perVak[v])).join(', ') : ''),
     `Sportschool: ${ws.sport}× (doel ${ws.sportDoel})`,
     `Gamen: ${uMin(ws.gamen)} (vrijgespeeld ${uMin(ws.verdiend)}, max ${uD(ws.plan.game.max)})` + (ws.plan.game.gamed > ws.plan.game.max + 0.01 ? `, ${uMin(ws.plan.game.gamed - ws.plan.game.max)} boven je gamedoel` : ''),
-    klaarTekst(wk) ? 'Klaar gemeld: ' + klaarTekst(wk) : '',
+    klaarTekst(ma) ? 'Klaar gemeld: ' + klaarTekst(ma) : '',
     ws.plan.dagen.some(d => d.allesKlaar) ? 'Dagen met alles klaar: ' + ws.plan.dagen.filter(d => d.allesKlaar).map(d => dagKort(d.s)).join(', ') : '',
     `Coderen (leerlijn): ${uMin(ws.coderen)} (doel ${uD(ws.codeDoel)})`,
     ws.slaapGem !== null ? `Slaap: gemiddeld ${uMin(ws.slaapGem)} per nacht (${ws.slaapN} nachten ingevuld)` + (ws.bedGem!==null ? `, gemiddeld naar bed om ${uurTekst(ws.bedGem)}` : '') : '',
-    `${W()}: ${u(ws.werk)} u deze week · ${ymNaam(wk.slice(0,7))} totaal ${u(mi.tot)} u (doel ${mi.doel})`,
+    `${W()}: ${u(ws.werk)} u deze week · ${ymNaam(ma.slice(0,7))} totaal ${u(mi.tot)} u (doel ${mi.doel})`,
     ws.les!==null ? `Lessen: ${u(ws.les)} u` : '',
     notitiesWeek(ws).length ? 'Notities per dag:\n' + notitiesWeek(ws).map(d => `- ${dagKort(d.s)}: ${d.notitie}`).join('\n') : '',
-    `Wat ging goed: ${refl.goed || '-'}`,
-    `Wat kan beter: ${refl.beter || '-'}`,
-    `Focus volgende week: ${refl.focus || '-'}`,
+    `Wat ging goed: ${r.goed || '-'}`,
+    `Wat kan beter: ${r.beter || '-'}`,
+    `Focus volgende week: ${r.focus || '-'}`,
   ].filter(Boolean).join('\n');
+}
+// ================= WEEKOVERZICHT NAAR DE SERVER =================
+// Het script op de pc (weekoverzicht.py) zet deze tekst in Obsidian. Zo staan de berekeningen van de app
+// (doelen, vrijgespeelde gametijd, toetsweekmodus) er ook in. Stil op de achtergrond, alleen als de tekst veranderd is.
+const WO_KEY = 'planner-weekoverzicht-verstuurd';
+let woTimer = null, woBezig = false;
+function planWeekSync(){ clearTimeout(woTimer); woTimer = setTimeout(syncWeekoverzicht, 5000); }
+async function syncWeekoverzicht(){
+  // pas als de lessen binnen zijn (anders klopt het studieplan niet) en de server bewaarWeekoverzicht kent
+  if (woBezig || !D || !LESSEN || LESSEN.fout || !(String(D.versie || '') >= '2026.11.24-1')) return;
+  if (!IN_GOOGLE && !opslag.get(CFG_KEY)) return;
+  woBezig = true;
+  const verstuurd = opslag.get(WO_KEY) || {}, nu = maandag(vandaag());
+  try {
+    for (const ma of [plus(nu, -7), nu]) {
+      const tekst = weekTekst(weekStats(ma), ma, D.reflecties.find(x => x.week === ma));
+      if (verstuurd[ma] === tekst) continue;
+      await roep('bewaarWeekoverzicht', [{ week: ma, tekst }]);
+      verstuurd[ma] = tekst;
+    }
+  } catch (e) { /* offline of fout: bij de volgende wijziging opnieuw, zonder melding */ }
+  finally {
+    Object.keys(verstuurd).forEach(w => { if (w < plus(nu, -14)) delete verstuurd[w]; });
+    opslag.set(WO_KEY, verstuurd);
+    woBezig = false;
+  }
 }
 /**
  * Hoeveel weken op rij (terug vanaf week ma) haalde je een doel? gehaald(w) geeft true, false of null.
