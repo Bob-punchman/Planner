@@ -195,6 +195,64 @@
   .datumveld input.native{position:absolute;right:0;bottom:0;width:46px;height:100%;opacity:0;pointer-events:none}
   input.tijd.fout{border-color:var(--warn);background:var(--warn-soft)}
   .x{border:0;background:none;color:var(--warn);font-size:20px;padding:4px 8px;cursor:pointer}
+  /* ===== Rooster ===== */
+  main.breed{max-width:1700px}
+  .rooster-zij h2:first-child{margin-top:6px}
+  /* breed scherm (pc/laptop): rooster links, takenlijsten rechts ernaast. Smal (telefoon): onder elkaar */
+  @media (min-width: 900px){
+    .rooster-wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+    .rooster-zij{position:sticky;top:64px;max-height:calc(100vh - 150px);overflow:auto;padding-right:2px}
+  }
+  .wk{display:grid;grid-template-columns:46px repeat(7,minmax(0,1fr));background:var(--card);border:1px solid var(--line);
+    border-radius:var(--radius);overflow:hidden}
+  .wkkop{padding:6px 5px;border-left:1px solid var(--line);border-bottom:1px solid var(--line);font-size:14px;cursor:pointer;min-width:0}
+  .wkkop.leeg{border-left:0;cursor:default}
+  .wkkop.vandaag,.dagkol.vandaag{background:var(--hl)}
+  .wkkop .sub{font-size:12px}
+  .kopchip{display:inline-block;font-size:11.5px;background:var(--soft);border-radius:6px;padding:1px 5px;margin:2px 2px 0 0;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}
+  .kopchips{margin:-2px 2px 6px}
+  .kopchips .kopchip{font-size:13px;padding:2px 7px}
+  .te-weinig{color:var(--warn);font-weight:600}
+  .urenkol{position:relative}
+  .uurlbl{position:absolute;right:5px;font-size:11px;color:var(--muted);transform:translateY(-1px);font-variant-numeric:tabular-nums}
+  /* lijnen per uur (doorgetrokken) en per half uur (licht), getekend als achtergrond in plaats van losse vakjes */
+  .dagkol{position:relative;border-left:1px solid var(--line);cursor:copy;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(var(--track) 1px,transparent 1px);
+    background-size:100% 44px,100% 22px}
+  .blok{position:absolute;border-radius:6px;padding:2px 5px;font-size:12px;line-height:1.25;overflow:hidden;cursor:pointer;
+    border-left:3px solid var(--line);background:var(--soft);color:var(--ink);z-index:1}
+  .blok .bt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .blok .bs{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .blok.les{background:var(--soft);border-left-color:var(--muted);cursor:default}
+  .blok.werk{background:var(--accent-soft);border-left-color:var(--accent)}
+  .blok.studie{background:var(--info-soft);border-left-color:var(--info)}
+  .blok.sport{background:var(--ok-soft);border-left-color:var(--ok)}
+  .blok.coderen{background:var(--soft);border-left-color:var(--game)}
+  .blok.taak{background:var(--warn-soft);border-left-color:var(--warn)}
+  .blok.anders{background:var(--card);border:1px dashed var(--line);border-left:3px solid var(--muted)}
+  .blok.klaar{opacity:.55}
+  .blok.klaar .bt{text-decoration:line-through}
+  .nu-lijn{position:absolute;left:0;right:0;height:2px;background:var(--warn);z-index:2;pointer-events:none}
+  .nu-lijn::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--warn)}
+  .bolletje{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;background:var(--muted);vertical-align:middle}
+  .bolletje.studie{background:var(--info)} .bolletje.sport{background:var(--ok)} .bolletje.coderen{background:var(--game)}
+  .bolletje.taak{background:var(--warn)} .bolletje.werk{background:var(--accent)}
+  .ag .vink{width:28px;height:28px;font-size:14px;align-self:center}
+  .ag .vink-plek{width:28px;flex:none}
+  .ag .tijd{min-width:92px}
+  .ag.blokrij.klaar .grow{text-decoration:line-through;color:var(--muted)}
+  .ag.blokrij{align-items:center}
+  .taak .vink{width:28px;height:28px;font-size:14px}
+  .taak.klaar .tnaam{text-decoration:line-through;color:var(--muted)}
+  .vakgroep{padding:6px 0 4px;border-bottom:1px solid var(--line)}
+  .vakgroep:last-of-type{border-bottom:0}
+  .vakkop{gap:4px}
+  .vakgroep .dl{padding:5px 0 5px 8px;border-bottom:0}
+  .mini-knop{border:1px solid var(--line);background:var(--field);color:var(--accent);border-radius:8px;width:30px;height:28px;
+    font:inherit;font-size:15px;cursor:pointer;flex:none}
+  .mini-knop:disabled{opacity:.35;cursor:default}
+  @media (max-width: 899px){ .seg.small button{padding:6px 10px} }
 </style>
 <script>
   // thema meteen toepassen (voordat de app tekent): licht, donker of systeem
@@ -212,6 +270,7 @@
 <div id="stickyHost"></div>
 <nav id="nav">
   <button data-v="vandaag"><span class="i">✓</span>Vandaag</button>
+  <button data-v="rooster"><span class="i">▦</span>Rooster</button>
   <button data-v="week"><span class="i">◷</span>Week</button>
   <button data-v="maand"><span class="i">▤</span>Maand</button>
   <button data-v="trends"><span class="i">↗</span>Trends</button>
@@ -221,8 +280,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.24-3';
-const SERVER_MIN = '2026.11.22-4';   // deze app verwacht minstens deze Code.gs-versie (studieplan: Klaar, game-agendamelding)
+const APP_VERSIE = '2026.11.24-4';
+const SERVER_MIN = '2026.11.24-3';   // deze app verwacht minstens deze Code.gs-versie (rooster: Blokken en Taken)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -753,7 +812,8 @@ function render(){
   }
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v===view));
   $('#stickyHost').innerHTML = '';
-  ({vandaag:renderVandaag, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
+  $('#main').classList.toggle('breed', view === 'rooster' && weekModus());   // weekrooster mag de hele breedte gebruiken
+  ({vandaag:renderVandaag, rooster:renderRooster, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
   planWeekSync();
 }
 
@@ -946,6 +1006,10 @@ function renderVandaag(){
     `<div class="ag"><span class="tijd">${l.begin}–${l.eind}</span><span class="grow">${esc(l.titel)}</span></div>`}));
   ds.forEach(x => agenda.push({t:x.begin, html:
     `<div class="ag werk"><span class="tijd">${x.begin}–${x.eind}</span><span class="grow">${esc(W())}${x.waar?' · '+esc(x.waar):''}</span><span class="sub">${u(nettoU(x))} u</span></div>`}));
+  // je eigen blokken uit het rooster (tik = wijzigen of afvinken)
+  blokken().filter(b => b.datum === dag).forEach(b => agenda.push({t:b.begin, html:
+    `<div class="ag blokrij ${b.klaar ? 'klaar' : ''}" data-blok="${b.id}" style="cursor:pointer"><span class="tijd">${b.begin}–${b.eind}</span>
+      <span class="grow"><span class="bolletje ${b.soort}"></span>${b.klaar ? '✓ ' : ''}${esc(blokNaam(b))}</span></div>`}));
   agenda.sort((a,b)=>a.t.localeCompare(b.t));
   const ws = weekStats(maandag(dag)), i = I();
   const komend = komendeTentamens(dag), t = komend[0];
@@ -1002,6 +1066,7 @@ function renderVandaag(){
   timerKnoppen();
   planKnoppen(dag);
   deadlineKnoppen();
+  document.querySelectorAll('#main [data-blok]').forEach(el => el.onclick = () => openBlok(blokken().find(b => b.id === el.dataset.blok)));
   if ($('#tNiet')) $('#tNiet').onclick = async () => {
     const k = $('#tNiet'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Zeker? Tik nog een keer'; return; }
     D = await api('verwijderTentamen', t.id); render(); toast(t.vak + ' verwijderd. Gefeliciteerd!');
@@ -2778,6 +2843,460 @@ function reflNuOpslaan(){
   }).catch(() => { toonReflStatus('fout'); return false; })
     .then(ok => { reflBezig = null; if (ok && viesRefl()) planRefl(); if (!wachtend) achtergrondRender(); return ok; });
   return reflBezig;
+}
+
+// ================= ROOSTER (week op de pc, dag op de telefoon) =================
+// Lessen (lesrooster-agenda), diensten en je eigen blokken (tabblad Blokken) in één rooster per uur.
+// Breed scherm (pc/laptop, vanaf 900 pixels): weekrooster. Smal scherm (telefoon): dagrooster.
+// Met de knoppen Auto / Dag / Week kun je dat zelf kiezen; dat wordt per apparaat onthouden.
+const ROOSTER_KEY = 'planner-rooster-modus', SLOT = 22;          // SLOT = hoogte (pixels) van een half uur
+const BREED = window.matchMedia ? matchMedia('(min-width: 900px)') : { matches: false };
+let rd = vandaag();                                                 // dag die het rooster laat zien (week = de week van rd)
+let roosterModus = opslag.get(ROOSTER_KEY) || 'auto';               // 'auto', 'dag' of 'week'
+const weekModus = () => roosterModus === 'week' || (roosterModus === 'auto' && BREED.matches);
+// draai je de telefoon of maak je het venster smaller/breder, dan past het rooster zich aan
+if (BREED.addEventListener) BREED.addEventListener('change', () => { if (view === 'rooster' && roosterModus === 'auto') achtergrondRender(); });
+
+const BLOK_SOORT = { studie: 'Studie', sport: 'Sport', coderen: 'Coderen', taak: 'Taak', anders: 'Anders' };
+const blokken = () => (D && D.blokken) || [];
+const roosterKlaar = () => !!(D && Array.isArray(D.blokken) && Array.isArray(D.taken));   // nieuwe Code.gs al online?
+const hm = m => pad(Math.floor(((m % 1440) + 1440) % 1440 / 60)) + ':' + pad(m % 60);
+/** Begin en eind in minuten; eindigt hij na middernacht, dan telt het eind door (02:00 → 26:00). */
+function minuten(x){ const b = mins(x.begin); let e = mins(x.eind); if (e <= b) e += 1440; return { b, e }; }
+const blokUren = x => { const m = minuten(x); return (m.e - m.b) / 60; };
+const blokNaam = b => b.wat || (b.soort === 'studie' ? (b.vak || 'Studie') : BLOK_SOORT[b.soort] || 'Blok');
+
+/** Alles met een tijd op dag s: lessen, diensten en blokken. */
+function roosterItems(s){
+  const uit = [], lo = lessenOp(s);
+  if (lo && lo.lessen) lo.lessen.forEach(l => uit.push(Object.assign(minuten(l), { soort: 'les', titel: l.titel, tijd: l.begin + '–' + l.eind })));
+  dienstenOp(s).forEach(x => uit.push(Object.assign(minuten(x), { soort: 'werk', titel: W() + (x.waar ? ' · ' + x.waar : ''),
+    tijd: x.begin + '–' + x.eind, dienst: x.id })));
+  blokken().filter(b => b.datum === s).forEach(b => uit.push(Object.assign(minuten(b), { soort: b.soort, titel: blokNaam(b),
+    sub: b.soort === 'studie' && b.vak && b.wat && b.wat !== b.vak ? b.vak : '', tijd: b.begin + '–' + b.eind, blok: b.id, klaar: b.klaar })));
+  return uit.sort((a, b) => a.b - b.b || b.e - a.e);
+}
+/** Dingen zonder (echte) duur op dag s: deadlines, tentamens, vakantie, weg. */
+function roosterKop(s){
+  const uit = [];
+  const vak = vakantieOp(s); if (vak) uit.push((vak.soort === 'zomer' ? '☀ ' : '🏖 ') + vak.naam);
+  const weg = uitjeOp(s); if (weg) uit.push('🧳 ' + weg.lijst.map(p => p.naam).join(', '));
+  D.tentamens.filter(t => t.datum === s).forEach(t => uit.push('📚 ' + t.vak + (t.tijd ? ' ' + t.tijd : '')));
+  D.deadlines.filter(d => d.datum === s && !d.klaar).forEach(d => uit.push('⏰ ' + deadlineNaam(d) + (d.tijd && d.tijd !== '23:59' ? ' ' + d.tijd : '')));
+  return uit;
+}
+/** Studie op dag s: hoeveel heb je met blokken gepland, en wat zegt het studieplan? */
+function studieVanDag(s){
+  const wp = weekPlan(maandag(s)), d = wp.dagen.find(x => x.s === s);
+  const gepland = blokken().filter(b => b.datum === s && b.soort === 'studie').reduce((t, b) => t + blokUren(b), 0);
+  return { gepland, plan: d ? (s >= vandaag() ? d.planTot : d.doel) : 0, gedaan: d ? d.gedaan : 0 };
+}
+function studieRegel(s){
+  const x = studieVanDag(s);
+  if (x.plan < 0.01 && x.gepland < 0.01) return '';
+  const weinig = s >= vandaag() && x.gepland < x.plan - 0.25;
+  return `<span class="${weinig ? 'te-weinig' : ''}" title="studieblokken gepland / studieplan">📚 ${uMin(x.gepland)} / ${uD(x.plan)}</span>`;
+}
+
+/**
+ * Overlappende items naast elkaar zetten: elk item krijgt een baan (l) en het aantal banen in zijn groepje (n).
+ * Een groepje = items die (via elkaar) overlappen.
+ */
+function banen(items){
+  let groep = [], eindGroep = -1, banenEind = [];
+  const sluit = () => { const n = Math.max(1, banenEind.length); groep.forEach(x => x.n = n); groep = []; banenEind = []; eindGroep = -1; };
+  items.forEach(x => {
+    if (groep.length && x.b >= eindGroep) sluit();
+    let l = banenEind.findIndex(e => e <= x.b);
+    if (l < 0) { l = banenEind.length; banenEind.push(x.e); } else banenEind[l] = x.e;
+    x.l = l; groep.push(x); eindGroep = Math.max(eindGroep, x.e);
+  });
+  sluit();
+  return items;
+}
+
+function renderRooster(){
+  $('#title').textContent = 'Rooster';
+  const wkMa = maandag(rd), nu = vandaag();
+  const keuze = `<div class="seg small" id="rModus" style="flex:none">${[['auto','Auto'],['dag','Dag'],['week','Week']].map(([v, l]) =>
+    `<button data-v="${v}" class="${roosterModus === v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const oud = roosterKlaar() ? '' : `<div class="alert">Je Code.gs is nog niet bijgewerkt: blokken en taken kun je pas opslaan als de nieuwe versie online staat (⚙︎ → Versie).</div>`;
+  const lesInfo = LESSEN === null ? '<div class="note">Lessen laden…</div>' : LESSEN && LESSEN.fout ? `<div class="note">${esc(LESSEN.fout)}</div>` : '';
+  let links;
+  if (weekModus()) {
+    const zo = plus(wkMa, 6);
+    const gepland = [...Array(7)].reduce((t, _, k) => t + studieVanDag(plus(wkMa, k)).gepland, 0);
+    const wp = weekPlan(wkMa), doel = wp.dagen.reduce((t, d) => t + (d.s >= nu ? d.planTot : d.doel), 0);
+    links = `<div class="daynav"><button class="nb" id="rPrev" aria-label="vorige week">‹</button>
+        <div class="lbl">Week ${weekNr(wkMa)} · ${dagKort(wkMa)} – ${dagKort(zo)}</div>
+        <button class="nb" id="rNext" aria-label="volgende week">›</button></div>
+      <div class="row" style="flex-wrap:wrap;margin:4px 0 8px">
+        ${maandag(nu) !== wkMa ? '<button class="btn ghost small" id="rNu">Deze week</button>' : ''}
+        <button class="btn sec small" id="rNieuw">+ Blok</button>
+        <button class="btn ghost small" id="rKopie">Blokken van vorige week overnemen</button>
+        <div class="grow"></div>${keuze}</div>
+      ${oud}${lesInfo}
+      <div class="note" style="margin:0 2px 6px">Studie gepland deze week: <b>${uMin(gepland)}</b> van je studieplan ${uD(doel)}.
+        Klik in een leeg vak om een blok te plannen, klik op een blok om het te wijzigen of af te vinken.</div>
+      ${weekRooster(wkMa)}`;
+  } else {
+    const kop = roosterKop(rd), st = studieRegel(rd);
+    links = `<div class="daynav"><button class="nb" id="rPrev" aria-label="vorige dag">‹</button>
+        <input type="date" id="rDatum" value="${rd}" style="flex:1">
+        <button class="nb" id="rNext" aria-label="volgende dag">›</button></div>
+      <div class="row" style="margin:4px 0 8px">
+        ${rd !== nu ? '<button class="btn ghost small" id="rNu">Vandaag</button>' : ''}
+        <button class="btn sec small" id="rNieuw">+ Blok</button><div class="grow"></div>${keuze}</div>
+      ${oud}${lesInfo}
+      <h2>${DAGEN_LANG[dt(rd).getDay()].replace(/^./, c => c.toUpperCase())} ${dt(rd).getDate()} ${MAANDEN[dt(rd).getMonth()]}
+        ${st ? `<span class="sub">${st}</span>` : ''}</h2>
+      ${kop.length ? `<div class="kopchips">${kop.map(k => `<span class="kopchip">${esc(k)}</span>`).join('')}</div>` : ''}
+      ${dagRooster(rd)}`;
+  }
+  $('#main').innerHTML = `<div class="rooster-wrap"><div class="rooster-hoofd">${links}</div>
+    <div class="rooster-zij">${takenKaarten()}</div></div>`;
+  roosterKnoppen();
+  takenKnoppen();
+}
+
+/** Weekrooster: tijdkolom + 7 dagkolommen, items absoluut gepositioneerd op hun tijd. */
+function weekRooster(ma){
+  const { a, b } = actieveDag(), dagen = [...Array(7)].map((_, k) => plus(ma, k)), nu = vandaag();
+  const per = dagen.map(s => banen(roosterItems(s)));
+  // bereik: je actieve dag (⚙︎), uitgebreid als er iets eerder begint of later eindigt; altijd hele uren
+  let start = Math.min(a, ...per.flat().map(x => x.b)), eind = Math.max(b, ...per.flat().map(x => x.e));
+  start = Math.max(0, Math.floor(start / 60) * 60); eind = Math.min(start + 26 * 60, Math.ceil(eind / 60) * 60);
+  const hoogte = (eind - start) / 30 * SLOT;
+  const nuMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const uren = [...Array((eind - start) / 60)].map((_, i) => `<div class="uurlbl" style="top:${i * 2 * SLOT}px">${hm(start + i * 60)}</div>`).join('');
+  const kop = dagen.map(s => {
+    const k = roosterKop(s), st = studieRegel(s);
+    return `<div class="wkkop ${s === nu ? 'vandaag' : ''}" data-dag="${s}"><div class="name">${DAGEN[dt(s).getDay()]} ${dt(s).getDate()}</div>
+      ${st ? `<div class="sub">${st}</div>` : ''}
+      ${k.map(x => `<div class="kopchip">${esc(x)}</div>`).join('')}</div>`;
+  }).join('');
+  const kolommen = dagen.map((s, k) => `<div class="dagkol ${s === nu ? 'vandaag' : ''}" data-s="${s}" data-start="${start}" style="height:${hoogte}px">
+      ${per[k].map(x => itemHtml(x, start)).join('')}
+      ${s === nu && nuMin >= start && nuMin <= eind ? `<div class="nu-lijn" style="top:${(nuMin - start) / 30 * SLOT}px"></div>` : ''}</div>`).join('');
+  return `<div class="wk"><div class="wkkop leeg"></div>${kop}
+    <div class="urenkol" style="height:${hoogte}px">${uren}</div>${kolommen}</div>`;
+}
+function itemHtml(x, start){
+  const top = (x.b - start) / 30 * SLOT, h = Math.max(SLOT - 4, (x.e - x.b) / 30 * SLOT - 2);
+  const data = x.blok ? `data-blok="${x.blok}"` : x.dienst ? `data-dienst="${x.dienst}"` : '';
+  return `<div class="blok ${x.soort} ${x.klaar ? 'klaar' : ''}" ${data} title="${esc(x.tijd + ' ' + x.titel)}"
+    style="top:${top}px;height:${h}px;left:calc(${x.l / x.n * 100}% + 2px);width:calc(${100 / x.n}% - 4px)">
+    <div class="bt">${x.klaar ? '✓ ' : ''}${esc(x.titel)}</div>${h > SLOT ? `<div class="bs">${esc(x.tijd)}${x.sub ? ' · ' + esc(x.sub) : ''}</div>` : ''}</div>`;
+}
+/** Dagrooster (telefoon): een lijst op tijd, met een vinkje bij je eigen blokken. */
+function dagRooster(s){
+  const items = roosterItems(s);
+  if (!items.length) return `<div class="card"><div class="empty">Nog niets gepland. Tik op + Blok.</div></div>`;
+  return `<div class="card">${items.map(x => x.blok
+    ? `<div class="ag blokrij ${x.soort} ${x.klaar ? 'klaar' : ''}"><button class="vink" data-bvink="${x.blok}" aria-label="afvinken">${x.klaar ? '✓' : ''}</button>
+        <span class="tijd">${x.tijd}</span><span class="grow" data-blok="${x.blok}" style="cursor:pointer"><span class="bolletje ${x.soort}"></span>${esc(x.titel)}${x.sub ? ` <span class="sub">${esc(x.sub)}</span>` : ''}</span></div>`
+    : `<div class="ag ${x.soort === 'werk' ? 'werk' : ''}" ${x.dienst ? `data-dienst="${x.dienst}" style="cursor:pointer"` : ''}><span class="vink-plek"></span>
+        <span class="tijd">${x.tijd}</span><span class="grow">${esc(x.titel)}</span></div>`).join('')}</div>`;
+}
+
+function roosterKnoppen(){
+  const stap = n => verlaat(() => { rd = plus(rd, n); render(); });
+  $('#rPrev').onclick = () => stap(weekModus() ? -7 : -1);
+  $('#rNext').onclick = () => stap(weekModus() ? 7 : 1);
+  if ($('#rNu')) $('#rNu').onclick = () => { rd = vandaag(); render(); };
+  if ($('#rDatum')) $('#rDatum').onchange = e => { if (e.target.value) { rd = e.target.value; render(); } };
+  document.querySelectorAll('#rModus button').forEach(b => b.onclick = () => { roosterModus = b.dataset.v; opslag.set(ROOSTER_KEY, roosterModus); render(); });
+  $('#rNieuw').onclick = () => openBlok(null, { datum: rd });
+  if ($('#rKopie')) $('#rKopie').onclick = () => neemVorigeWeekOver();
+  document.querySelectorAll('[data-blok]').forEach(el => el.onclick = e => { e.stopPropagation(); openBlok(blokken().find(b => b.id === el.dataset.blok)); });
+  document.querySelectorAll('[data-dienst]').forEach(el => el.onclick = e => { e.stopPropagation(); openDienst(D.diensten.find(x => x.id === el.dataset.dienst)); });
+  document.querySelectorAll('[data-bvink]').forEach(el => el.onclick = () => vinkBlokVraag(blokken().find(b => b.id === el.dataset.bvink)));
+  document.querySelectorAll('.wkkop[data-dag]').forEach(el => el.onclick = () => { rd = el.dataset.dag; roosterModus = 'dag'; opslag.set(ROOSTER_KEY, 'dag'); render(); });
+  // klik in een leeg stuk van een dagkolom: nieuw blok op dat halfuur
+  document.querySelectorAll('.dagkol').forEach(kol => kol.onclick = e => {
+    if (e.target !== kol) return;
+    const m = Number(kol.dataset.start) + Math.floor(e.offsetY / SLOT) * 30;
+    if (m >= 1440) return toast('Na middernacht: plan dat blok op de volgende dag');
+    openBlok(null, { datum: kol.dataset.s, begin: hm(m), eind: hm(Math.min(m + 60, 1439)) });
+  });
+}
+
+/** Blokken van de week ervóór kopiëren naar de week die je ziet (zonder vinkjes). Dubbele worden overgeslagen. */
+function neemVorigeWeekOver(){
+  if (!roosterKlaar()) return toast('Werk eerst je Code.gs bij');
+  const ma = maandag(rd), vorige = blokken().filter(b => b.datum >= plus(ma, -7) && b.datum < ma);
+  if (!vorige.length) return toast('Vorige week staan er geen blokken');
+  const nieuw = vorige.map(b => ({ datum: plus(b.datum, 7), begin: b.begin, eind: b.eind, wat: b.wat, soort: b.soort, vak: b.vak }))
+    .filter(n => !blokken().some(b => b.datum === n.datum && b.begin === n.begin && b.wat === n.wat));
+  if (!nieuw.length) return toast('Die blokken staan er al');
+  const k = $('#rKopie');
+  if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = `${nieuw.length} ${nieuw.length === 1 ? 'blok' : 'blokken'} overnemen? Klik nog een keer`; return; }
+  k.classList.add('bezig');
+  api('bewaarBlokken', nieuw).then(d => { D = d; render(); toast(nieuw.length + (nieuw.length === 1 ? ' blok' : ' blokken') + ' overgenomen ✓'); })
+    .catch(() => k.classList.remove('bezig'));
+}
+
+/** Alle vaknamen: je vakken, losse deadlines/tentamens en vakken met open studietaken. */
+function alleVakken(){
+  const uit = D.vakken.map(v => v.vak);
+  const bij = n => { n = String(n || '').trim(); if (n && !uit.some(x => x.toLowerCase() === n.toLowerCase())) uit.push(n); };
+  losseStudie(vandaag()).forEach(x => bij(x.naam));
+  (D.taken || []).filter(t => t.lijst === 'vak' && !t.klaar).forEach(t => bij(t.vak));
+  return uit;
+}
+/** Vakken in jouw volgorde (belangrijkste eerst); vakken die nog niet in je volgorde staan komen onderaan. */
+function vakPrio(){
+  const alle = alleVakken(), vast = String(I().vakPrio || '').split('|').filter(Boolean);
+  return vast.filter(v => alle.includes(v)).concat(alle.filter(v => !vast.includes(v)));
+}
+const openVakTaken = v => (D.taken || []).filter(t => t.lijst === 'vak' && t.vak === v && !t.klaar).sort((a, b) => a.volgorde - b.volgorde);
+/** Wat eerst? Het bovenste vak met een open taak, en die taak. */
+function eersteStudie(){
+  for (const v of vakPrio()) { const t = openVakTaken(v)[0]; if (t) return { vak: v, taak: t }; }
+  const v = vakPrio()[0];
+  return v ? { vak: v, taak: null } : null;
+}
+
+/** Blok maken of wijzigen. preset: vooraf ingevulde velden voor een nieuw blok (datum, begin, eind). */
+function openBlok(b, preset){
+  if (!roosterKlaar()) return toast('Werk eerst je Code.gs bij (⚙︎ → Versie)');
+  const nieuw = !b;
+  b = Object.assign({ datum: rd, begin: '', eind: '', wat: '', soort: 'studie', vak: '' }, preset || {}, b || {});
+  let soort = b.soort;
+  const vakken = alleVakken(), eerst = eersteStudie();
+  sheet(`<h3>${nieuw ? 'Nieuw blok' : 'Blok wijzigen'}</h3>
+    <div class="seg" id="bSoort">${Object.keys(BLOK_SOORT).map(k => `<button data-v="${k}" class="${soort === k ? 'on' : ''}">${BLOK_SOORT[k]}</button>`).join('')}</div>
+    <div id="bVakRij"><label class="f">Vak</label><select id="bVak"><option value="">Nog niet gekozen (gewoon "studie")</option>
+      ${vakken.map(v => `<option ${v === b.vak ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
+      ${eerst ? `<div class="note">Eerst aan de beurt: <b>${esc(eerst.vak)}</b>${eerst.taak ? ' · ' + esc(eerst.taak.wat) : ''}</div>` : ''}</div>
+    <label class="f">Wat <span class="sub">(mag leeg)</span></label><input id="bWat" value="${esc(b.wat)}" placeholder="bijv. hoofdstuk 3, beddengoed verschonen">
+    <label class="f">Datum</label><input type="date" id="bDatum" value="${b.datum}">
+    <div class="row"><div class="grow"><label class="f">Begin</label><input type="time" id="bBegin" value="${b.begin}"></div>
+      <div class="grow"><label class="f">Eind</label><input type="time" id="bEind" value="${b.eind}"></div></div>
+    <div class="note" id="bInfo"></div>
+    <button class="btn" id="bOk">Opslaan</button>
+    ${nieuw ? '' : `<button class="btn sec" id="bVink" style="margin-top:8px">${b.klaar ? 'Weer open zetten' : 'Afvinken'}</button>
+      <button class="btn danger" id="bDel" style="margin-top:8px">Verwijderen</button>`}
+    <button class="btn ghost" id="bAnn">Annuleren</button>`);
+  const info = () => {
+    $('#bVakRij').style.display = soort === 'studie' ? '' : 'none';
+    const x = { begin: $('#bBegin').value, eind: $('#bEind').value };
+    const ok = /^\d{2}:\d{2}$/.test(x.begin) && /^\d{2}:\d{2}$/.test(x.eind);
+    $('#bInfo').innerHTML = !ok ? 'Vul begin- en eindtijd in (uu:mm).'
+      : 'Duur: ' + uMin(blokUren(x)) + (mins(x.eind) <= mins(x.begin) ? ' (tot na middernacht)' : '')
+        + (b.klaar && b.gelogd ? '. Al afgevinkt: de tijd die toen is bijgeteld blijft staan.' : '');
+  };
+  document.querySelectorAll('#bSoort button').forEach(k => k.onclick = () => {
+    soort = k.dataset.v; document.querySelectorAll('#bSoort button').forEach(y => y.classList.toggle('on', y === k)); info(); });
+  // begin ingevuld en nog geen eind: standaard een uur later
+  $('#bBegin').addEventListener('change', () => { const v = $('#bBegin').value;
+    if (/^\d{2}:\d{2}$/.test(v) && !$('#bEind').value) { $('#bEind').value = hm(mins(v) + 60); } info(); });
+  ['#bBegin', '#bEind'].forEach(s => $(s).addEventListener('input', info));
+  info();
+  $('#bAnn').onclick = closeSheet;
+  $('#bOk').onclick = async () => {
+    const x = { id: b.id, datum: $('#bDatum').value, begin: $('#bBegin').value, eind: $('#bEind').value,
+                wat: $('#bWat').value.trim(), soort, vak: soort === 'studie' ? $('#bVak').value : '' };
+    if (!x.datum || !/^\d{2}:\d{2}$/.test(x.begin) || !/^\d{2}:\d{2}$/.test(x.eind)) return toast('Vul datum, begin- en eindtijd in');
+    if (x.begin === x.eind) return toast('Begin en eind zijn hetzelfde');
+    const k = $('#bOk'); k.disabled = true; k.textContent = 'Opslaan…';
+    try { D = await api('bewaarBlok', x); closeSheet(); render(); toast('Opgeslagen ✓'); }
+    catch(e){ k.disabled = false; k.textContent = 'Opslaan'; }
+  };
+  if (!nieuw) {
+    $('#bVink').onclick = () => { closeSheet(); vinkBlokVraag(b); };
+    $('#bDel').onclick = async () => {
+      const k = $('#bDel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer om te verwijderen'; return; }
+      k.classList.add('bezig');
+      try { D = await api('verwijderBlok', b.id); closeSheet(); laadInvAlsSchoon(b.datum); render(); toast('Blok verwijderd' + (b.gelogd ? ' (en de gelogde tijd eraf)' : '')); }
+      catch(e){ k.classList.remove('bezig'); }
+    };
+  }
+}
+
+/**
+ * Afvinken = loggen. Studie en coderen: kiezen of de tijd van het blok meetelt (of dat je de timer al gebruikte).
+ * Sport: telt als sportschool-dag. Taak en anders: alleen een vinkje.
+ */
+function vinkBlokVraag(b){
+  if (!b) return;
+  if (b.klaar) return zetBlokKlaar(b, false);
+  if (b.soort === 'sport') return zetBlokKlaar(b, true, true);
+  if (b.soort !== 'studie' && b.soort !== 'coderen') return zetBlokKlaar(b, true, false);
+  const duur = uMin(blokUren(b)), eerst = eersteStudie();
+  const kies = b.soort === 'studie' && !b.vak;
+  sheet(`<h3>${esc(blokNaam(b))} afvinken</h3>
+    <div class="note">${b.begin}–${b.eind} · ${dagKort(b.datum)}</div>
+    ${kies ? `<label class="f">Voor welk vak telt deze tijd?</label><select id="vVak">${vakPrio().map(v =>
+      `<option ${eerst && v === eerst.vak ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>` : ''}
+    <div style="height:10px"></div>
+    <button class="btn" id="vLog">Klaar, ${duur} bijtellen${b.soort === 'coderen' ? ' bij coderen' : ''}</button>
+    <button class="btn sec" id="vZonder" style="margin-top:8px">Klaar, tijd al gelogd (timer)</button>
+    <button class="btn ghost" id="vAnn">Annuleren</button>
+    <div class="note">Bijtellen = de tijd van dit blok komt bij je studie (of coderen) van die dag, zoals bij de timer. Weer open zetten haalt hem er weer af.</div>`);
+  $('#vAnn').onclick = closeSheet;
+  $('#vLog').onclick = () => { const v = kies ? $('#vVak').value : ''; if (kies && !v) return toast('Kies een vak'); closeSheet(); zetBlokKlaar(b, true, true, v); };
+  $('#vZonder').onclick = () => { closeSheet(); zetBlokKlaar(b, true, false); };
+}
+/** Na een wijziging op de server: open dag op Vandaag opnieuw laden (alleen als je daar niets aan het veranderen bent). */
+function laadInvAlsSchoon(datum){ if (inv && inv.dag === datum && !viesDag()) laadInv(); }
+async function zetBlokKlaar(b, klaar, log, vak){
+  // nog niet-opgeslagen invoer voor die dag (Vandaag) eerst opslaan, anders overschrijft die straks de gelogde tijd
+  if (inv && inv.dag === b.datum && viesDag()) { const ok = await nuOpslaan(); if (!ok) return toast('Eerst je dag opslaan lukte niet. Probeer het zo opnieuw.'); }
+  D.blokken = blokken().map(x => x.id === b.id ? Object.assign({}, x, { klaar }) : x); render();   // meteen laten zien
+  try {
+    D = await api('vinkBlok', b.id, klaar, !!log, vak || '');
+    laadInvAlsSchoon(b.datum); achtergrondRender(); tril();
+    if (klaar) toastActie('Afgevinkt ✓ ' + blokNaam(b) + (log && b.soort !== 'sport' ? ' (' + uMin(blokUren(b)) + ' bijgeteld)' : log ? ' (sportschool ✓)' : ''),
+      'Ongedaan maken', () => zetBlokKlaar(Object.assign({}, b, { klaar: true }), false));
+  } catch(e) {
+    D.blokken = blokken().map(x => x.id === b.id ? Object.assign({}, x, { klaar: !klaar }) : x); render();
+  }
+}
+
+// ================= TAKEN (studie-to-do, deze week, deze maand) =================
+// lijst week/maand: eenmalig (periode = de week/maand waarvoor hij is) of herhalend (week, om de week, maand).
+// Een eenmalige taak die niet af is, schuift door naar de volgende week/maand ("van vorige week").
+// lijst vak: studietaken per vak, in de volgorde van je vakken (belangrijkste bovenaan).
+const ymVan = s => s.slice(0, 7);
+/** Begin van de periode waarin dag s valt, voor deze taak. */
+function periodeStart(t, s){
+  if (t.lijst === 'maand') return ymVan(s);
+  if (t.herhaal === '2weken') {
+    const begin = /^\d{4}-\d{2}-\d{2}$/.test(t.periode || '') ? maandag(t.periode) : maandag(s);
+    const n = Math.floor(dagenTot(begin, maandag(s)) / 14);
+    return plus(begin, n * 14);
+  }
+  return maandag(s);
+}
+/** Valt datum x in dezelfde periode als dag s? */
+function zelfdePeriode(t, x, s){
+  if (!x) return false;
+  if (t.lijst === 'maand') return ymVan(x) === ymVan(s);
+  if (t.herhaal === '2weken') { const p = periodeStart(t, s); return x >= p && x < plus(p, 14); }
+  return maandag(x) === maandag(s);
+}
+/** Hoe staat taak t ervoor op dag s? null = niet tonen. */
+function taakStand(t, s){
+  if (t.lijst === 'vak') return !t.klaar ? { klaar: false } : t.klaar === s ? { klaar: true } : null;
+  const nuP = t.lijst === 'maand' ? ymVan(s) : maandag(s);
+  const p = t.periode ? (t.lijst === 'maand' ? String(t.periode).slice(0, 7) : maandag(t.periode)) : nuP;
+  if (p > nuP) return null;                                      // begint pas later
+  if (t.herhaal) return { klaar: zelfdePeriode(t, t.klaar, s), herhaal: true };
+  if (p === nuP) return { klaar: !!t.klaar };
+  if (!t.klaar) return { klaar: false, oud: true };              // van een eerdere week/maand, nog niet af
+  return zelfdePeriode(t, t.klaar, s) ? { klaar: true, oud: true } : null;
+}
+const HERHAAL_TEKST = { week: 'elke week', '2weken': 'om de week', maand: 'elke maand' };
+function takenVan(lijst, s){
+  return (D.taken || []).filter(t => t.lijst === lijst).map(t => ({ t, st: taakStand(t, s) })).filter(x => x.st)
+    .sort((a, b) => a.st.klaar - b.st.klaar || a.t.volgorde - b.t.volgorde);
+}
+function taakRij(x){
+  const { t, st } = x;
+  const extra = [st.herhaal ? '↻ ' + HERHAAL_TEKST[t.herhaal] : '', st.oud && !st.klaar ? (t.lijst === 'maand' ? 'van vorige maand' : 'van vorige week') : '']
+    .filter(Boolean).join(' · ');
+  return `<div class="dl taak ${st.klaar ? 'klaar' : ''}"><button class="vink" data-tvink="${t.id}" aria-label="${st.klaar ? 'weer open' : 'klaar'}">${st.klaar ? '✓' : ''}</button>
+    <div class="grow" data-taak="${t.id}" style="cursor:pointer"><div class="tnaam">${esc(t.wat)}</div>${extra ? `<div class="sub">${extra}</div>` : ''}</div></div>`;
+}
+function takenKaarten(){
+  if (!roosterKlaar()) return '';
+  const s = rd, wk = takenVan('week', s), mnd = takenVan('maand', s), prio = vakPrio(), eerst = eersteStudie();
+  const vakGroep = (v, i) => {
+    const open = openVakTaken(v), af = (D.taken || []).filter(t => t.lijst === 'vak' && t.vak === v && t.klaar === s);
+    const dl = D.deadlines.filter(d => !d.klaar && (d.vak || d.wat) === v).sort((a, b) => a.datum.localeCompare(b.datum))[0];
+    const tt = komendeTentamens(vandaag()).find(t => t.vak === v);
+    const wanneerTekst = [dl ? '⏰ ' + dagKort(dl.datum) : '', tt ? '📚 ' + dagKort(tt.datum) : ''].filter(Boolean).join(' · ');
+    return `<div class="vakgroep"><div class="row vakkop"><div class="grow"><span class="name">${i + 1}. ${esc(v)}</span>
+        ${wanneerTekst ? `<span class="sub"> ${wanneerTekst}</span>` : ''}</div>
+      <button class="mini-knop" data-op="${i}" aria-label="hoger" ${i === 0 ? 'disabled' : ''}>↑</button>
+      <button class="mini-knop" data-neer="${i}" aria-label="lager" ${i === prio.length - 1 ? 'disabled' : ''}>↓</button>
+      <button class="mini-knop" data-tnieuwvak="${esc(v)}" aria-label="taak toevoegen">+</button></div>
+      ${open.concat(af).map(t => taakRij({ t, st: { klaar: !!t.klaar } })).join('')}</div>`;
+  };
+  return `<h2>Studie-to-do</h2><div class="card">
+      ${eerst && eerst.taak ? `<div class="infobox" style="margin-top:0">Eerst: <b>${esc(eerst.vak)}</b> · ${esc(eerst.taak.wat)}</div>` : ''}
+      ${prio.map(vakGroep).join('') || '<div class="note">Voeg vakken toe bij ⚙︎.</div>'}
+      <div class="note">Bovenaan = hoogste prioriteit (↑ ↓). Bij een studieblok kijk je hier wat eerst moet.</div></div>
+    <h2>${maandag(s) === maandag(vandaag()) ? 'Deze week' : 'Week ' + weekNr(s)}</h2><div class="card">
+      ${wk.map(taakRij).join('') || '<div class="note">Nog geen taken voor deze week.</div>'}
+      <button class="btn ghost small" data-tnieuw="week" style="margin-top:4px">+ Taak voor deze week</button></div>
+    <h2>${ymVan(s) === ymVan(vandaag()) ? 'Deze maand' : ymNaam(ymVan(s))}</h2><div class="card">
+      ${mnd.map(taakRij).join('') || '<div class="note">Nog geen taken voor deze maand.</div>'}
+      <button class="btn ghost small" data-tnieuw="maand" style="margin-top:4px">+ Taak voor deze maand</button></div>`;
+}
+function takenKnoppen(){
+  document.querySelectorAll('[data-tvink]').forEach(b => b.onclick = () => vinkTaak((D.taken || []).find(t => t.id === b.dataset.tvink)));
+  document.querySelectorAll('[data-taak]').forEach(el => el.onclick = () => openTaak((D.taken || []).find(t => t.id === el.dataset.taak)));
+  document.querySelectorAll('[data-tnieuw]').forEach(b => b.onclick = () => openTaak(null, { lijst: b.dataset.tnieuw }));
+  document.querySelectorAll('[data-tnieuwvak]').forEach(b => b.onclick = () => openTaak(null, { lijst: 'vak', vak: b.dataset.tnieuwvak }));
+  const schuif = (i, n) => {
+    const p = vakPrio(), j = i + n; if (j < 0 || j >= p.length) return;
+    [p[i], p[j]] = [p[j], p[i]];
+    D.instellingen.vakPrio = p.join('|'); render();              // meteen laten zien, daarna opslaan
+    api('bewaarVakPrio', p).then(d => { D = d; achtergrondRender(); }).catch(() => {});
+  };
+  document.querySelectorAll('[data-op]').forEach(b => b.onclick = () => schuif(+b.dataset.op, -1));
+  document.querySelectorAll('[data-neer]').forEach(b => b.onclick = () => schuif(+b.dataset.neer, 1));
+}
+/** Afvinken (of weer open). Bij herhalende taken telt de datum: klaar in deze periode = af tot de volgende. */
+function vinkTaak(t){
+  if (!t) return;
+  const st = taakStand(t, rd) || { klaar: !!t.klaar }, oud = t.klaar;
+  // datum van afvinken: vandaag, of (als je een andere week/maand bekijkt) een dag in die periode
+  const datum = t.lijst === 'vak' || zelfdePeriode(Object.assign({}, t, { herhaal: t.herhaal }), vandaag(), rd) ? vandaag() : rd;
+  const nieuw = Object.assign({}, t, { klaar: st.klaar ? '' : datum });
+  const zet = x => { D.taken = D.taken.map(y => y.id === x.id ? x : y); render(); return api('bewaarTaak', x).then(d => { D = d; achtergrondRender(); }); };
+  tril();
+  zet(nieuw).then(() => { if (!st.klaar) toastActie('Afgevinkt ✓ ' + t.wat, 'Ongedaan maken', () => zet(Object.assign({}, t, { klaar: oud || '' })).catch(() => {})); })
+    .catch(() => { D.taken = D.taken.map(y => y.id === t.id ? t : y); render(); });
+}
+function openTaak(t, preset){
+  if (!roosterKlaar()) return toast('Werk eerst je Code.gs bij (⚙︎ → Versie)');
+  const nieuw = !t;
+  t = Object.assign({ wat: '', lijst: 'week', vak: '', periode: '', herhaal: '', klaar: '' }, preset || {}, t || {});
+  let lijst = t.lijst, herhaal = t.herhaal;
+  const vakken = vakPrio();
+  sheet(`<h3>${nieuw ? 'Nieuwe taak' : 'Taak wijzigen'}</h3>
+    <label class="f">Wat</label><input id="tWat" value="${esc(t.wat)}" placeholder="bijv. financiën checken, opdracht 3 maken">
+    <label class="f">Lijst</label><div class="seg" id="tLijst">
+      ${[['week', 'Deze week'], ['maand', 'Deze maand'], ['vak', 'Studie (vak)']].map(([v, l]) => `<button data-v="${v}" class="${lijst === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div id="tVakRij"><label class="f">Vak</label><select id="tVak">${vakken.map(v => `<option ${v === t.vak ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+      <option value="__nieuw">Ander vak…</option></select>
+      <input id="tVakNieuw" placeholder="naam van het vak" style="display:none;margin-top:6px"></div>
+    <div id="tHerRij"><label class="f">Herhalen</label><div class="seg" id="tHer"></div></div>
+    <div style="height:12px"></div><button class="btn" id="tOk">Opslaan</button>
+    ${nieuw ? '' : '<button class="btn danger" id="tDel" style="margin-top:8px">Verwijderen</button>'}
+    <button class="btn ghost" id="tAnn">Annuleren</button>`);
+  const teken = () => {
+    $('#tVakRij').style.display = lijst === 'vak' ? '' : 'none';
+    $('#tHerRij').style.display = lijst === 'vak' ? 'none' : '';
+    const opties = lijst === 'maand' ? [['', 'Nee'], ['maand', 'Elke maand']] : [['', 'Nee'], ['week', 'Elke week'], ['2weken', 'Om de week']];
+    if (!opties.some(o => o[0] === herhaal)) herhaal = '';
+    $('#tHer').innerHTML = opties.map(([v, l]) => `<button data-v="${v}" class="${herhaal === v ? 'on' : ''}">${l}</button>`).join('');
+    document.querySelectorAll('#tHer button').forEach(b => b.onclick = () => { herhaal = b.dataset.v; teken(); });
+  };
+  document.querySelectorAll('#tLijst button').forEach(b => b.onclick = () => {
+    lijst = b.dataset.v; document.querySelectorAll('#tLijst button').forEach(y => y.classList.toggle('on', y === b)); teken(); });
+  $('#tVak').onchange = () => { $('#tVakNieuw').style.display = $('#tVak').value === '__nieuw' ? '' : 'none'; };
+  teken();
+  $('#tAnn').onclick = closeSheet;
+  $('#tOk').onclick = async () => {
+    const wat = $('#tWat').value.trim(); if (!wat) return toast('Wat moet er gebeuren?');
+    let vak = $('#tVak').value; if (vak === '__nieuw') vak = $('#tVakNieuw').value.trim();
+    if (lijst === 'vak' && !vak) return toast('Kies een vak');
+    // periode: bij een nieuwe taak (of een andere lijst) de week/maand die je nu bekijkt
+    const periode = lijst === 'vak' ? '' : (!nieuw && lijst === t.lijst && t.periode) ? t.periode : lijst === 'maand' ? ymVan(rd) : maandag(rd);
+    const x = Object.assign({}, t, { wat, lijst, vak: lijst === 'vak' ? vak : '', periode, herhaal: lijst === 'vak' ? '' : herhaal });
+    const k = $('#tOk'); k.disabled = true; k.textContent = 'Opslaan…';
+    try { D = await api('bewaarTaak', x); closeSheet(); render(); toast('Opgeslagen ✓'); }
+    catch(e){ k.disabled = false; k.textContent = 'Opslaan'; }
+  };
+  if (!nieuw) $('#tDel').onclick = async () => {
+    const k = $('#tDel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer om te verwijderen'; return; }
+    k.classList.add('bezig');
+    try { D = await api('verwijderTaak', t.id); closeSheet(); render(); toast('Taak verwijderd'); } catch(e){ k.classList.remove('bezig'); }
+  };
 }
 
 // ================= start =================
