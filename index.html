@@ -298,7 +298,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.24-5';
+const APP_VERSIE = '2026.11.24-6';
 const SERVER_MIN = '2026.11.24-4';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen)
 
 // ================= data & helpers =================
@@ -474,12 +474,13 @@ function lessenWeek(ma){
   if (LESSEN.fout) return { fout: LESSEN.fout };
   if (ma < maandag(LESSEN.van) || ma > LESSEN.tot)     // buiten wat bij het opstarten is opgehaald
     return { lessen: [], buiten: true };
-  const regels = D ? lesRegels() : [], gezien = new Set();
-  return { lessen: LESSEN.lessen.filter(l => {
-    if (l.datum < ma || l.datum > plus(ma, 6) || lesVerborgen(l, regels)) return false;
-    const k = [l.datum, l.begin, l.eind, l.titel, l.waar || ''].join('|');   // precies dezelfde les twee keer in de agenda: één keer tonen
-    if (gezien.has(k)) return false; gezien.add(k); return true;
-  }) };
+  const regels = D ? lesRegels() : [];
+  const lijst = LESSEN.lessen.filter(l => l.datum >= ma && l.datum <= plus(ma, 6) && !lesVerborgen(l, regels));
+  // Zelfde titel op dezelfde dag en ze overlappen (andere groep, tentamen met/zonder verlenging): alleen de langste tonen.
+  // Even lang (precies dubbel)? Dan de eerste.
+  const duur = l => minuten(l).e - minuten(l).b;
+  return { lessen: lijst.filter((l, i) => !lijst.some((x, j) => j !== i && x.datum === l.datum && x.titel === l.titel
+    && minuten(x).b < minuten(l).e && minuten(x).e > minuten(l).b && (duur(x) > duur(l) || (duur(x) === duur(l) && j < i)))) };
 }
 function lessenOp(s){ const w=lessenWeek(maandag(s)); if (!w || w.fout) return w; return {lessen: w.lessen.filter(l=>l.datum===s), buiten: w.buiten}; }
 
@@ -837,8 +838,8 @@ function render(){
   $('#stickyHost').innerHTML = '';
   lesKlik = [];
   // weekrooster en (op een breed scherm) Vandaag met kaarten naast elkaar mogen de hele breedte gebruiken
-  $('#main').classList.toggle('breed', (view === 'rooster' && weekModus()) || (view === 'vandaag' && BREED.matches));
-  if (indelen && indelen !== view) indelen = null;     // ander scherm gekozen tijdens indelen: indelen stoppen
+  $('#main').classList.toggle('breed', (view === 'rooster' && weekModus()) || (view !== 'rooster' && BREED.matches));
+  if (indelen && indelen.split('-')[0] !== view) { indelen = null; indelingConcept = null; }   // ander scherm gekozen: indelen stoppen
   ({vandaag:renderVandaag, rooster:renderRooster, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
   planWeekSync();
 }
@@ -1736,6 +1737,8 @@ function maandCijfers(ym){
 }
 function renderMaand(){
   $('#title').textContent = 'Maand';
+  // Overzicht en Werk mogen op een breed scherm in kolommen; Diensten en Uitjes zijn lijsten, die blijven smal
+  $('#main').classList.toggle('breed', BREED.matches && (maandTab === 'overzicht' || maandTab === 'werk'));
   const mi = maandInfo(ym), i = I();
   $('#main').innerHTML = `
     <div class="daynav" style="${maandTab==='diensten'||maandTab==='uitjes'?'display:none':''}"><button class="nb" id="mPrev" aria-label="vorige maand">‹</button>
@@ -1775,8 +1778,9 @@ function maandOverzicht(mi){
     if (mc.studie < verwacht - 2) sig.push(['infobox', `Je loopt ±${uD(verwacht - mc.studie)} achter op je studie voor deze maand.`]);
   }
   $('#maandInhoud').innerHTML = `
-    ${sig.map(([c,t]) => `<div class="${c}">${t}</div>`).join('')}
-    <div class="card">
+    ${indelingHtml('maand-overzicht', [
+      { id: 'meldingen', naam: 'Meldingen', html: sig.map(([c,t]) => `<div class="${c}">${t}</div>`).join('') },
+      { id: 'cijfers', naam: 'Cijfers', html: `<div class="card">
       ${meter('<b>Zelfstudie</b>', mc.studie, mc.doelStudie, uMin(mc.studie) + ' / ' + uD(mc.doelStudie)) + pro(mc.doelStudie)}
       <div style="padding-left:12px;border-left:3px solid var(--line);margin:4px 0 10px">${vakMeterM}</div>
       ${meter('Sportschool', mc.sport, mc.doelSport, mc.sport + ' / ' + Math.round(mc.doelSport) + '×') + pro(mc.doelSport)}
@@ -1786,18 +1790,20 @@ function maandOverzicht(mi){
       <div class="row line"><div class="grow">Gemiddeld naar bed</div><div class="name">${mc.bedGem===null?'–':uurTekst(mc.bedGem)}</div></div>
       <div class="row line"><div class="grow">${esc(W())}</div><div class="name">${u(mi.tot)} u</div></div>
       <div class="note">Doelen zijn je weekdoelen omgerekend naar ${mc.dagen} dagen (inclusief toetsweekmodus, vakanties en uitjes).</div>
-    </div>
-    <h2>Per week</h2>
+    </div>` },
+      { id: 'weken', naam: 'Per week', html: `<h2>Per week</h2>
     <div class="card"><div class="tabelwrap"><table>
       <tr><th>Week</th><th>Studie</th><th>Game</th><th>Code</th><th>Sport</th><th>${esc(W())}</th></tr>
       ${wc.map(({ma, w, werk}) => `<tr data-wk="${ma}" style="cursor:pointer" class="${ma===maandag(nu)?'vandaag':''}">
         <td>wk ${weekNr(ma)} <span class="sub">${dt(ma).getDate()}/${dt(ma).getMonth()+1}</span></td>
         <td>${w.studie?u(w.studie):'–'}</td><td>${w.gamen?u(w.gamen):'–'}</td><td>${w.coderen?u(w.coderen):'–'}</td><td>${w.sport?w.sport+'×':'–'}</td><td>${werk?u(werk):'–'}</td></tr>`).join('')}
-    </table></div><div class="note">Hele weken (ook de dagen buiten deze maand). Tik op een week om hem te openen.</div></div>
-    <h2>Belangrijke data</h2>
+    </table></div><div class="note">Hele weken (ook de dagen buiten deze maand). Tik op een week om hem te openen.</div></div>` },
+      { id: 'data', naam: 'Belangrijke data', html: `<h2>Belangrijke data</h2>
     <div class="card" style="padding:4px 12px">${data.map(x => `<div class="list-item" style="cursor:default"><div class="grow">
       <div class="name">${esc(x.wat)}</div><div class="sub">${dagKort(x.s)}${x.sub ? ' · ' + esc(x.sub) : ''}</div></div></div>`).join('')
-      || '<div class="empty">Geen tentamens, deadlines of vakanties deze maand.</div>'}</div>`;
+      || '<div class="empty">Geen tentamens, deadlines of vakanties deze maand.</div>'}</div>` },
+    ])}`;
+  indelingKnoppen('maand-overzicht');
   document.querySelectorAll('tr[data-wk]').forEach(tr => tr.onclick = () => { wk = tr.dataset.wk; view = 'week'; render(); window.scrollTo(0,0); });
 }
 // ================= UITJES (Maand → Uitjes) =================
@@ -1896,29 +1902,32 @@ function maandWerk(mi){
   const alleDiensten = D.diensten.filter(x => x.datum.startsWith(ym + '-')).sort((a,b)=>(a.datum+a.begin).localeCompare(b.datum+b.begin));
   $('#maandInhoud').innerHTML = `
     ${werkKop()}
-    <div class="card">
+    ${indelingHtml('maand-werk', [
+      { id: 'uren', naam: 'Uren', html: `<div class="card">
       <div class="row"><div class="grow"><div class="sub">${esc(W())} · uren (netto)</div><div class="big">${u(mi.tot)}<span class="unit">u</span></div></div>
         <button class="btn sec small" id="mDoel">Doel ${mi.doel} u</button></div>
       <div class="track"><i class="gew" style="width:${pos(mi.gew)}%"></i><i class="gep" style="left:${pos(mi.gew)}%;width:${pos(gepland)}%"></i>${markHtml}</div>
       <div class="legend"><span>gewerkt ${u(mi.gew)} u</span><span class="p">gepland ${u(gepland)} u</span></div>
       ${status}
       ${mi.extra ? `<div class="note">Doel inclusief ${mi.extra} u extra voor vakantiedagen (⚙︎ → Vakanties).</div>` : ''}
-    </div>
-    <h2>Diensten</h2>
-    <div class="card" style="padding:4px 12px">${alleDiensten.map(dienstItem).join('') || '<div class="empty">Nog geen diensten deze maand.</div>'}</div>
-    ${dienstzoeker(ym, mi)}
-    ${ruimteKaart()}
-    <div class="card">
+    </div>` },
+      { id: 'diensten', naam: 'Diensten', html: `<h2>Diensten</h2>
+    <div class="card" style="padding:4px 12px">${alleDiensten.map(dienstItem).join('') || '<div class="empty">Nog geen diensten deze maand.</div>'}</div>` },
+      { id: 'zoeker', naam: 'Dienstzoeker', html: dienstzoeker(ym, mi) },
+      { id: 'ruimte', naam: 'Ruimte voor diensten', html: ruimteKaart() },
+      { id: 'loon', naam: 'Loon', html: `<div class="card">
       <div class="row line"><div class="grow">Uurloon bij deze uren</div><div class="name">${euroC(mi.tarief)}</div></div>
       <div class="row line"><div class="grow">Bruto (indicatie)</div><div class="name">≈ ${euro(mi.bruto)}</div></div>
       <div class="row line"><div class="grow">Uitbetaald in</div><div class="name">${ymNaam(ymPlus(ym,1))}</div></div>
       <div class="note">Netto krijg je minder door belasting. Uren zijn na aftrek van onbetaalde pauze.</div>
-    </div>
-    <details><summary>Alle maanden</summary>
+    </div>` },
+      { id: 'maanden', naam: 'Alle maanden', html: `<details><summary>Alle maanden</summary>
     <div class="card"><table><tr><th>Maand</th><th></th><th>Uren</th><th>Doel</th><th>Bruto</th></tr>
       ${lijst.map(m => { const x = maandInfo(m); return `<tr data-m="${m}" style="cursor:pointer" class="${m===ym?'vandaag':''}">
         <td>${MAANDEN[Number(m.slice(5))-1]} ${m.slice(2,4)}</td><td><span class="mini"><i style="width:${x.tot/maxU*100}%"></i></span></td>
-        <td>${u(x.tot)}</td><td>${x.doel}</td><td>${euro(x.bruto)}</td></tr>`; }).join('')}</table></div></details>`;
+        <td>${u(x.tot)}</td><td>${x.doel}</td><td>${euro(x.bruto)}</td></tr>`; }).join('')}</table></div></details>` },
+    ])}`;
+  indelingKnoppen('maand-werk');
   $('#stickyHost').innerHTML = `<div class="sticky"><button class="btn" id="dNieuw">+ Dienst</button></div>`;
   $('#dNieuw').onclick = () => openDienst({ datum: ym === vandaag().slice(0,7) ? vandaag() : ym + '-01' });
   document.querySelectorAll('tr[data-m]').forEach(tr => tr.onclick = () => { ym = tr.dataset.m; renderMaand(); window.scrollTo(0,0); });
@@ -2075,7 +2084,8 @@ function renderWeek(){
     ${reflVorige ? '<div class="infobox">Je ziet vorige week, want de reflectie daarvan is nog niet opgeslagen. Tik › voor deze week.</div>' : ''}
     <div class="daynav"><button class="nb" id="wPrev" aria-label="vorige week">‹</button>
       <div class="lbl">${dagKort(wk)} – ${dagKort(zo)}</div><button class="nb" id="wNext" aria-label="volgende week">›</button></div>
-    <div class="card">
+    ${indelingHtml('week', [
+      { id: 'cijfers', naam: 'Cijfers', html: `<div class="card">
       ${meter('<b>Zelfstudie</b>', ws.studie, ws.doel.studie, uMin(ws.studie)+' / '+uD(ws.doel.studie))}
       <div style="padding-left:12px;border-left:3px solid var(--line);margin:4px 0 10px">${vakMeters(ws)}</div>
       ${meter('Sportschool', ws.sport, ws.sportDoel, ws.sport+' / '+ws.sportDoel+'×')}
@@ -2086,9 +2096,9 @@ function renderWeek(){
       <div class="row line"><div class="grow">${esc(W())}</div><div class="name">${u(ws.werk)} u</div></div>
       <div class="row line"><div class="grow">Lessen (agenda)</div><div class="name">${ws.les===null?'…':u(ws.les)+' u'}</div></div>
       ${begonnen ? vergelijkVorige(wk, bezig ? dagenTot(wk, nu) + 1 : 7) : ''}
-    </div>
-    ${sig.map(([c,t]) => `<div class="${c}">${t}</div>`).join('')}
-    <div class="card"><div class="tabelwrap"><table>
+    </div>` },
+      { id: 'signalen', naam: 'Meldingen', html: sig.map(([c,t]) => `<div class="${c}">${t}</div>`).join('') },
+      { id: 'dagen', naam: 'Per dag', html: `<div class="card"><div class="tabelwrap"><table>
       <tr><th>Dag</th><th>Les</th><th>Studie</th><th>Game</th><th>Code</th><th>Sport</th><th>${esc(W())}</th><th>Slaap</th></tr>
       ${ws.dagen.map(d => `<tr data-d="${d.s}" style="cursor:pointer" class="${d.s===nu?'vandaag':''}">
         <td>${DAGEN[dt(d.s).getDay()]} ${dt(d.s).getDate()}${d.uitje ? ' 🧳' : d.vakantie ? (d.vakantie.soort === 'zomer' ? ' ☀' : ' 🏖') : ''}</td><td>${d.les===null?(LESSEN?'–':'…'):d.les?u(d.les):'–'}</td>
@@ -2096,8 +2106,8 @@ function renderWeek(){
         <td>${d.werk?u(d.werk)+(d.laat?' ☾':''):'–'}</td><td>${d.slaap?u(d.slaap):'–'}</td></tr>`).join('')}
       <tr class="tot"><td>Totaal</td><td>${ws.les===null?'…':u(ws.les)}</td><td>${u(ws.studie)}</td><td>${u(ws.gamen)}</td><td>${u(ws.coderen)}</td><td>${ws.sport}×</td><td>${u(ws.werk)}</td>
         <td>${ws.slaapGem===null?'–':'⌀ '+u(Math.round(ws.slaapGem*10)/10)}</td></tr>
-    </table></div><div class="note">Tik op een dag om hem in te vullen. ☾ = late dienst${ws.doel.vakantieDagen ? ', 🏖/☀ = vakantie' : ''}${ws.doel.uitjeDagen ? ', 🧳 = weg' : ''}.</div></div>
-    <h2>Reflectie <span id="rStatus" class="sub autostatus ${reflStatus}">${STATUS_TEKST[reflStatus] || ''}</span></h2>
+    </table></div><div class="note">Tik op een dag om hem in te vullen. ☾ = late dienst${ws.doel.vakantieDagen ? ', 🏖/☀ = vakantie' : ''}${ws.doel.uitjeDagen ? ', 🧳 = weg' : ''}.</div></div>` },
+      { id: 'reflectie', naam: 'Reflectie', html: `<h2>Reflectie <span id="rStatus" class="sub autostatus ${reflStatus}">${STATUS_TEKST[reflStatus] || ''}</span></h2>
     <div class="card">
       ${notitiesWeek(ws).length ? `<label class="f" style="margin-top:0">Notities van deze week</label>
         ${notitiesWeek(ws).map(d => `<div class="row line"><div class="name" style="min-width:64px">${dagKort(d.s)}</div><div class="grow">${esc(d.notitie)}</div></div>`).join('')}` : ''}
@@ -2106,7 +2116,9 @@ function renderWeek(){
       <label class="f">Focus volgende week</label><textarea id="rFocus">${esc(refl.focus)}</textarea>
       <div style="height:10px"></div>
       <button class="btn sec" id="rKopie">Kopieer weekoverzicht</button>
-    </div>`;
+    </div>` },
+    ])}`;
+  indelingKnoppen('week');
   $('#wPrev').onclick = () => verlaat(() => { wk = plus(wk,-7); renderWeek(); });
   $('#wNext').onclick = () => verlaat(() => { wk = plus(wk,7); renderWeek(); });
   document.querySelectorAll('tr[data-d]').forEach(tr => tr.onclick = () => verlaat(() => { dag = tr.dataset.d; view = 'vandaag'; render(); window.scrollTo(0,0); }));
@@ -2648,22 +2660,25 @@ function renderTrends(){
   $('#main').innerHTML = `
     <div class="seg" style="margin:10px 0">${[4,8,12].map(n => `<button data-tw="${n}" class="${n===trendWeken?'on':''}">${n} weken</button>`).join('')}</div>
     ${leeg ? '<div class="infobox">Nog weinig ingevuld. De grafieken vullen zich vanzelf als je je dagen invult.</div>' : ''}
-    ${staven('studie', { titel: 'Zelfstudie per week', sub: 'Per vak · streepje = je weekdoel (hoger in toetsweekmodus)', labels: lab, series: reeksen, eenheid: 'u',
-       streep: { naam: 'doel', waarden: wc.map(w => w.doel.studie) } })}
-    ${staven('gamen', { titel: 'Gamen per week', sub: 'Streepje = vrijgespeelde gametijd', labels: lab, eenheid: 'u',
-       series: [{ naam: 'gegamed', kleur: kleur(1), waarden: wc.map(w => w.gamen) }], streep: { naam: 'vrijgespeeld', waarden: wc.map(w => w.verdiend) } })}
-    ${staven('sport', { titel: 'Sportschool per week', labels: lab, eenheid: '×',
-       series: [{ naam: 'keer', kleur: kleur(2), waarden: wc.map(w => w.sport) }], refs: [{ waarde: i.sportDoel, label: 'doel ' + i.sportDoel + '×' }] })}
-    ${staven('coderen', { titel: 'Coderen per week', labels: lab, eenheid: 'u',
-       series: [{ naam: 'uren', kleur: kleur(6), waarden: wc.map(w => w.coderen) }], refs: [{ waarde: i.codeerDoel, label: 'doel ' + u(i.codeerDoel) + ' u' }] })}
-    ${slaap.some(v => v != null) ? lijn('slaap', { titel: 'Slaap per nacht', sub: 'Laatste 14 nachten', labels: nachten.map(s => String(dt(s).getDate())),
+    ${indelingHtml('trends', [
+      { id: 'studie', naam: 'Zelfstudie', html: staven('studie', { titel: 'Zelfstudie per week', sub: 'Per vak · streepje = je weekdoel (hoger in toetsweekmodus)', labels: lab, series: reeksen, eenheid: 'u',
+       streep: { naam: 'doel', waarden: wc.map(w => w.doel.studie) } }) },
+      { id: 'gamen', naam: 'Gamen', html: staven('gamen', { titel: 'Gamen per week', sub: 'Streepje = vrijgespeelde gametijd', labels: lab, eenheid: 'u',
+       series: [{ naam: 'gegamed', kleur: kleur(1), waarden: wc.map(w => w.gamen) }], streep: { naam: 'vrijgespeeld', waarden: wc.map(w => w.verdiend) } }) },
+      { id: 'sport', naam: 'Sportschool', html: staven('sport', { titel: 'Sportschool per week', labels: lab, eenheid: '×',
+       series: [{ naam: 'keer', kleur: kleur(2), waarden: wc.map(w => w.sport) }], refs: [{ waarde: i.sportDoel, label: 'doel ' + i.sportDoel + '×' }] }) },
+      { id: 'coderen', naam: 'Coderen', html: staven('coderen', { titel: 'Coderen per week', labels: lab, eenheid: 'u',
+       series: [{ naam: 'uren', kleur: kleur(6), waarden: wc.map(w => w.coderen) }], refs: [{ waarde: i.codeerDoel, label: 'doel ' + u(i.codeerDoel) + ' u' }] }) },
+      { id: 'slaap', naam: 'Slaap', html: slaap.some(v => v != null) ? lijn('slaap', { titel: 'Slaap per nacht', sub: 'Laatste 14 nachten', labels: nachten.map(s => String(dt(s).getDate())),
        waarden: slaap, eenheid: 'u', kleur: kleur(0), tipFmt: uMin, refs: [{ waarde: i.slaapDoel, label: 'doel ' + u(i.slaapDoel) + ' u' }] })
-       : '<div class="card"><div class="gt">Slaap per nacht</div><div class="note">Nog niets ingevuld. Vul bij Vandaag in hoe laat je naar bed ging en wakker werd.</div></div>'}
-    ${bed.some(v => v != null) ? lijn('bed', { titel: 'Hoe laat naar bed', sub: 'Laatste 14 nachten (datum = de ochtend erna)', labels: nachten.map(s => String(dt(s).getDate())),
-       waarden: bed, kleur: kleur(6), fmt: uurTekst }) : ''}
-    ${staven('werk', { titel: W() + ': uren per maand', sub: 'Netto, na pauze', labels: mnd.map(m => MAANDEN[Number(m.slice(5))-1]), eenheid: 'u',
+       : '<div class="card"><div class="gt">Slaap per nacht</div><div class="note">Nog niets ingevuld. Vul bij Vandaag in hoe laat je naar bed ging en wakker werd.</div></div>' },
+      { id: 'bed', naam: 'Naar bed', html: bed.some(v => v != null) ? lijn('bed', { titel: 'Hoe laat naar bed', sub: 'Laatste 14 nachten (datum = de ochtend erna)', labels: nachten.map(s => String(dt(s).getDate())),
+       waarden: bed, kleur: kleur(6), fmt: uurTekst }) : '' },
+      { id: 'werk', naam: 'Werkuren', html: staven('werk', { titel: W() + ': uren per maand', sub: 'Netto, na pauze', labels: mnd.map(m => MAANDEN[Number(m.slice(5))-1]), eenheid: 'u',
        series: [{ naam: 'gewerkt', kleur: kleur(0), waarden: mi.map(x => x.gew) }, { naam: 'gepland', kleur: ZACHT[donker()?'donker':'licht'], waarden: mi.map(x => x.tot - x.gew) }],
-       refs: [i.grens1, i.grens2].filter(v => v > 0).map(v => ({ waarde: v, label: String(v), inline: true })) })}`;
+       refs: [i.grens1, i.grens2].filter(v => v > 0).map(v => ({ waarde: v, label: String(v), inline: true })) }) },
+    ])}`;
+  indelingKnoppen('trends');
   document.querySelectorAll('[data-tw]').forEach(b => b.onclick = () => { trendWeken = +b.dataset.tw; renderTrends(); });
   grafiekTips();
 }
@@ -2882,8 +2897,8 @@ function reflNuOpslaan(){
 //   { t, d, b, e } = alleen die ene les (titel, datum, begin, eind)
 //   { t, w, b, e } = elke week op die weekdag (0 = zondag) en tijd
 //   { t }          = alle lessen met die titel
-//   p (bij de eerste twee, als de les een locatie heeft) = locatie: zo kun je twee groepen met dezelfde titel en tijd
-//   uit elkaar houden als ze in een ander lokaal zitten
+//   p = lokaal (alleen in regels van versie -5; nieuwe regels gebruiken het niet meer)
+// Lessen met dezelfde titel die op dezelfde dag overlappen, worden al vanzelf samengevoegd tot de langste (lessenWeek).
 // Verborgen lessen tellen ook niet mee als lesuren in je studieplan.
 let lesKlik = [];                                       // lessen op het scherm, zodat een klik weet welke les het is
 const lesData = l => `data-les="${lesKlik.push(l) - 1}"`;
@@ -2919,9 +2934,10 @@ function openLes(l){
   const wd = dt(l.datum).getDay();
   const zelfde = (LESSEN && LESSEN.lessen || []).filter(x => x.datum === l.datum && !(x.titel === l.titel && x.begin === l.begin && x.eind === l.eind && (x.waar || '') === (l.waar || '')) && mins(x.begin) < mins(l.eind) && mins(x.eind) > mins(l.begin));
   sheet(`<h3>${esc(l.titel)}</h3>
-    <div class="note">${dagKort(l.datum)} · ${l.begin}–${l.eind}${l.waar ? ' · ' + esc(l.waar) : ''}</div>
+    <div class="note">${dagKort(l.datum)} · ${l.begin}–${l.eind}</div>
     ${zelfde.length ? `<div class="infobox">Tegelijk: ${zelfde.map(x => esc(x.titel) + ' ' + x.begin + '–' + x.eind).join(', ')}</div>` : ''}
-    <label class="f">Niet jouw les (andere groep, zonder verlenging)? Verbergen:</label>
+    <div class="note">Lessen met dezelfde naam die tegelijk zijn (andere groep, met/zonder verlenging) voegt de app al samen: je ziet alleen de langste.</div>
+    <label class="f">Toch niet jouw les? Verbergen:</label>
     <button class="btn sec" data-v="een">Alleen deze (${dagKort(l.datum)})</button>
     <button class="btn sec" data-v="week" style="margin-top:8px">Elke ${DAGEN_LANG[wd]} ${l.begin}–${l.eind} met deze titel</button>
     <button class="btn sec" data-v="titel" style="margin-top:8px">Alle lessen met deze titel</button>
@@ -2931,7 +2947,6 @@ function openLes(l){
   document.querySelectorAll('.sheet [data-v]').forEach(b => b.onclick = () => {
     const r = b.dataset.v === 'een' ? { t: l.titel, d: l.datum, b: l.begin, e: l.eind }
             : b.dataset.v === 'week' ? { t: l.titel, w: wd, b: l.begin, e: l.eind } : { t: l.titel };
-    if (l.waar && b.dataset.v !== 'titel') r.p = l.waar;
     closeSheet(); bewaarLesRegels(lesRegels().concat([r]), 'Verborgen: ' + l.titel);
   });
 }
@@ -3070,7 +3085,7 @@ const blokNaam = b => b.wat || (b.soort === 'studie' ? (b.vak || 'Studie') : BLO
 /** Alles met een tijd op dag s: lessen, diensten en blokken. */
 function roosterItems(s){
   const uit = [], lo = lessenOp(s);
-  if (lo && lo.lessen) lo.lessen.forEach(l => uit.push(Object.assign(minuten(l), { soort: 'les', titel: l.titel, tijd: l.begin + '–' + l.eind, les: l, sub: l.waar || '' })));
+  if (lo && lo.lessen) lo.lessen.forEach(l => uit.push(Object.assign(minuten(l), { soort: 'les', titel: l.titel, tijd: l.begin + '–' + l.eind, les: l })));
   dienstenOp(s).forEach(x => uit.push(Object.assign(minuten(x), { soort: 'werk', titel: W() + (x.waar ? ' · ' + x.waar : ''),
     tijd: x.begin + '–' + x.eind, dienst: x.id })));
   blokken().filter(b => b.datum === s).forEach(b => uit.push(Object.assign(minuten(b), { soort: b.soort, titel: blokNaam(b),
