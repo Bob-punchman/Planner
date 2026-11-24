@@ -221,7 +221,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.24-1';
+const APP_VERSIE = '2026.11.24-2';
 const SERVER_MIN = '2026.11.22-4';   // deze app verwacht minstens deze Code.gs-versie (studieplan: Klaar, game-agendamelding)
 
 // ================= data & helpers =================
@@ -786,8 +786,8 @@ const tril = () => { try { navigator.vibrate && navigator.vibrate(15); } catch(e
  * Naam = het vak van de deadline/het tentamen, of bij een deadline zonder vak de omschrijving.
  */
 const LOS_DAGEN = 28, LOS_TE_LAAT = 7;    // komende 4 weken; een open deadline nog 7 dagen na de datum
-function losseStudie(){
-  const nu = vandaag(), gezien = new Set(D.vakken.map(v => v.vak.trim().toLowerCase())), uit = [];
+function losseStudie(nu = vandaag()){
+  const gezien = new Set(D.vakken.map(v => v.vak.trim().toLowerCase())), uit = [];
   const voegToe = (naam, soort, datum) => {
     naam = String(naam || '').trim(); const k = naam.toLowerCase();
     if (!naam || gezien.has(k)) return;
@@ -1054,9 +1054,15 @@ function planKaart(s){
       ${k ? '' : `<div class="meter ${g >= p - 0.01 ? 'good' : ''}"><i style="width:${p > 0.01 ? Math.min(100, g / p * 100) : 100}%"></i></div>`}</div>`;
   };
   // studie buiten je vakken (timer voor een losse deadline/tentamen): telt mee in het totaal, geen eigen doel
-  const extra = Object.keys(d.gedaanVak).filter(v => !D.vakken.some(x => x.vak === v) && d.gedaanVak[v] >= 0.01);
-  const rijen = D.vakken.map(v => rij(v.vak)).join('') + extra.map(v =>
-    `<div class="m"><div class="row"><div class="grow">${esc(v)} <span class="sub">(extra)</span></div><div class="mv">${uMin(d.gedaanVak[v])}</div></div></div>`).join('');
+  // vandaag en later: ook open deadlines/tentamens die niet bij je vakken horen, zonder doel (zie losseStudie)
+  const los = s >= nu ? losseStudie(s) : [], losNamen = los.map(x => x.naam);
+  const extra = Object.keys(d.gedaanVak).filter(v => !D.vakken.some(x => x.vak === v) && !losNamen.includes(v) && d.gedaanVak[v] >= 0.01);
+  const startKnop = v => s === nu && !D.timer ? `<button class="btn sec small" data-tv="${esc(v)}" aria-label="timer starten">▶</button>` : '';
+  const extraRij = (v, sub) => `<div class="m"><div class="row"><div class="grow">${esc(v)} <span class="sub">${sub}</span></div>
+      <div class="mv">${uMin(d.gedaanVak[v] || 0)}</div>${startKnop(v)}</div></div>`;
+  const rijen = D.vakken.map(v => rij(v.vak)).join('')
+    + los.map(x => extraRij(x.naam, (x.soort === 'tentamen' ? '📚 tentamen ' : '⏰ deadline ') + dagKort(x.datum) + ' · extra')).join('')
+    + extra.map(v => extraRij(v, '(extra)')).join('');
   const meld = [];
   if (d.allesKlaar) meld.push(['okbox', 'Alles klaar 🎉 De rest van de dag is vrij, en je gametijd ook.']);
   else if (d.school && tot > 0.01 && d.gedaan >= tot - 0.01) meld.push(['okbox', 'Studie van deze dag af ✓ Je gametijd is vrij.']);
