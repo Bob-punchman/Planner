@@ -221,7 +221,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.22-5';
+const APP_VERSIE = '2026.11.24-1';
 const SERVER_MIN = '2026.11.22-4';   // deze app verwacht minstens deze Code.gs-versie (studieplan: Klaar, game-agendamelding)
 
 // ================= data & helpers =================
@@ -780,6 +780,24 @@ setInterval(() => {
   }
 }, 1000);
 const tril = () => { try { navigator.vibrate && navigator.vibrate(15); } catch(e){} };   // korte tik op Android
+/**
+ * Studie die niet bij een vak hoort: open deadlines en komende tentamens waarvan het vak niet bij ⚙︎ → Vakken staat.
+ * Daar kun je ook een timer voor starten; de tijd telt als studie (dag, week, gametijd), los van de vakken.
+ * Naam = het vak van de deadline/het tentamen, of bij een deadline zonder vak de omschrijving.
+ */
+const LOS_DAGEN = 28, LOS_TE_LAAT = 7;    // komende 4 weken; een open deadline nog 7 dagen na de datum
+function losseStudie(){
+  const nu = vandaag(), gezien = new Set(D.vakken.map(v => v.vak.trim().toLowerCase())), uit = [];
+  const voegToe = (naam, soort, datum) => {
+    naam = String(naam || '').trim(); const k = naam.toLowerCase();
+    if (!naam || gezien.has(k)) return;
+    gezien.add(k); uit.push({ naam, soort, datum });
+  };
+  D.deadlines.filter(d => !d.klaar && dagenTot(nu, d.datum) <= LOS_DAGEN && dagenTot(nu, d.datum) >= -LOS_TE_LAAT)
+    .forEach(d => voegToe(d.vak || d.wat, 'deadline', d.datum));
+  komendeTentamens(nu).filter(t => dagenTot(nu, t.datum) <= LOS_DAGEN).forEach(t => voegToe(t.vak, 'tentamen', t.datum));
+  return uit.sort((a, b) => a.datum.localeCompare(b.datum));
+}
 function timerHtml(){
   const t = D.timer;
   if (t) { const p = !!t.pauzeStart;
@@ -793,7 +811,9 @@ function timerHtml(){
       <button class="btn ghost" id="tAnn" style="padding:6px;margin-top:4px">Timer annuleren</button></div>`; }
   return `<div class="card"><div class="sub" style="margin-bottom:8px">Timer starten${timerBezig ? ' · opslaan…' : ''}</div><div class="chips">
     ${D.vakken.map(v=>`<button class="chip" data-tv="${esc(v.vak)}">▶ ${esc(v.vak)}</button>`).join('')}
-    <button class="chip game" data-tg="gamen">▶ Gamen</button><button class="chip code" data-tg="coderen">▶ Coderen</button></div></div>`;
+    <button class="chip game" data-tg="gamen">▶ Gamen</button><button class="chip code" data-tg="coderen">▶ Coderen</button></div>
+    ${(los => los.length ? `<div class="sub" style="margin:10px 0 6px">Ook studie (niet bij je vakken)</div><div class="chips">
+      ${los.map(x => `<button class="chip" data-tv="${esc(x.naam)}" title="${x.soort} ${dagKort(x.datum)}">▶ ${x.soort === 'tentamen' ? '📚' : '⏰'} ${esc(x.naam)}</button>`).join('')}</div>` : '')(losseStudie())}</div>`;
 }
 /** Timer meteen op het scherm aanpassen, daarna naar de server. Lukt dat niet, dan terug naar hoe het was. */
 async function timerActie(knop, nieuweTimer, melding, fn, ...args){
@@ -1033,7 +1053,10 @@ function planKaart(s){
         ${k ? `<button class="btn ghost small" data-klaarweg="${esc(k.id)}">ongedaan</button>` : `<button class="btn sec small" data-klaar="${esc(v)}">Klaar</button>`}</div>
       ${k ? '' : `<div class="meter ${g >= p - 0.01 ? 'good' : ''}"><i style="width:${p > 0.01 ? Math.min(100, g / p * 100) : 100}%"></i></div>`}</div>`;
   };
-  const rijen = D.vakken.map(v => rij(v.vak)).join('');
+  // studie buiten je vakken (timer voor een losse deadline/tentamen): telt mee in het totaal, geen eigen doel
+  const extra = Object.keys(d.gedaanVak).filter(v => !D.vakken.some(x => x.vak === v) && d.gedaanVak[v] >= 0.01);
+  const rijen = D.vakken.map(v => rij(v.vak)).join('') + extra.map(v =>
+    `<div class="m"><div class="row"><div class="grow">${esc(v)} <span class="sub">(extra)</span></div><div class="mv">${uMin(d.gedaanVak[v])}</div></div></div>`).join('');
   const meld = [];
   if (d.allesKlaar) meld.push(['okbox', 'Alles klaar 🎉 De rest van de dag is vrij, en je gametijd ook.']);
   else if (d.school && tot > 0.01 && d.gedaan >= tot - 0.01) meld.push(['okbox', 'Studie van deze dag af ✓ Je gametijd is vrij.']);
