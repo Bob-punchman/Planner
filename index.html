@@ -195,6 +195,24 @@
   .datumveld input.native{position:absolute;right:0;bottom:0;width:46px;height:100%;opacity:0;pointer-events:none}
   input.tijd.fout{border-color:var(--warn);background:var(--warn-soft)}
   .x{border:0;background:none;color:var(--warn);font-size:20px;padding:4px 8px;cursor:pointer}
+  /* ===== Indeling (Vandaag) ===== */
+  .vkaarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,440px),1fr));column-gap:16px;
+    grid-auto-rows:4px;grid-auto-flow:row dense;align-items:start}
+  .vkaarten.indelen{grid-auto-flow:row}
+  .vblok{min-width:0}
+  .vblok > .vinhoud > :first-child{margin-top:0}
+  .vblok > .vinhoud > h2:first-child{margin-top:8px}
+  .vblok.uit,.vblok.leeg{display:none}
+  .vkaarten.indelen .vblok{display:block;outline:2px dashed var(--line);outline-offset:3px;border-radius:12px;cursor:grab}
+  .vkaarten.indelen .vblok.uit{opacity:.4}
+  .vkaarten.indelen .vblok.sleept{opacity:.25}
+  .vkaarten.indelen .vinhoud{pointer-events:none}
+  .blokbalk{display:flex;align-items:center;gap:4px;margin:4px 0 2px;font-size:13px}
+  .blokbalk .greep{cursor:grab;padding:0 6px 0 2px;color:var(--muted);font-size:16px}
+  .blokbalk .bnaam{flex:1;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .indelbalk{position:sticky;top:60px;z-index:4}
+  @media (min-width: 900px){ .vkaarten > .vblok.vol{grid-column:span 2} }
+  @media (max-width: 899px){ .breedknop{display:none} }
   /* ===== Rooster ===== */
   main.breed{max-width:1700px}
   .rooster-zij h2:first-child{margin-top:6px}
@@ -224,7 +242,7 @@
     border-left:3px solid var(--line);background:var(--soft);color:var(--ink);z-index:1}
   .blok .bt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .blok .bs{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .blok.les{background:var(--soft);border-left-color:var(--muted);cursor:default}
+  .blok.les{background:var(--soft);border-left-color:var(--muted)}
   .blok.werk{background:var(--accent-soft);border-left-color:var(--accent)}
   .blok.studie{background:var(--info-soft);border-left-color:var(--info)}
   .blok.sport{background:var(--ok-soft);border-left-color:var(--ok)}
@@ -280,8 +298,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.24-4';
-const SERVER_MIN = '2026.11.24-3';   // deze app verwacht minstens deze Code.gs-versie (rooster: Blokken en Taken)
+const APP_VERSIE = '2026.11.24-5';
+const SERVER_MIN = '2026.11.24-4';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -456,7 +474,12 @@ function lessenWeek(ma){
   if (LESSEN.fout) return { fout: LESSEN.fout };
   if (ma < maandag(LESSEN.van) || ma > LESSEN.tot)     // buiten wat bij het opstarten is opgehaald
     return { lessen: [], buiten: true };
-  return { lessen: LESSEN.lessen.filter(l => l.datum >= ma && l.datum <= plus(ma, 6)) };
+  const regels = D ? lesRegels() : [], gezien = new Set();
+  return { lessen: LESSEN.lessen.filter(l => {
+    if (l.datum < ma || l.datum > plus(ma, 6) || lesVerborgen(l, regels)) return false;
+    const k = [l.datum, l.begin, l.eind, l.titel, l.waar || ''].join('|');   // precies dezelfde les twee keer in de agenda: één keer tonen
+    if (gezien.has(k)) return false; gezien.add(k); return true;
+  }) };
 }
 function lessenOp(s){ const w=lessenWeek(maandag(s)); if (!w || w.fout) return w; return {lessen: w.lessen.filter(l=>l.datum===s), buiten: w.buiten}; }
 
@@ -812,7 +835,10 @@ function render(){
   }
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v===view));
   $('#stickyHost').innerHTML = '';
-  $('#main').classList.toggle('breed', view === 'rooster' && weekModus());   // weekrooster mag de hele breedte gebruiken
+  lesKlik = [];
+  // weekrooster en (op een breed scherm) Vandaag met kaarten naast elkaar mogen de hele breedte gebruiken
+  $('#main').classList.toggle('breed', (view === 'rooster' && weekModus()) || (view === 'vandaag' && BREED.matches));
+  if (indelen && indelen !== view) indelen = null;     // ander scherm gekozen tijdens indelen: indelen stoppen
   ({vandaag:renderVandaag, rooster:renderRooster, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
   planWeekSync();
 }
@@ -1003,7 +1029,7 @@ function renderVandaag(){
   const lo = lessenOp(dag), ds = dienstenOp(dag);
   const agenda = [];
   if (lo && lo.lessen) lo.lessen.forEach(l => agenda.push({t:l.begin, html:
-    `<div class="ag"><span class="tijd">${l.begin}–${l.eind}</span><span class="grow">${esc(l.titel)}</span></div>`}));
+    `<div class="ag" ${lesData(l)} style="cursor:pointer"><span class="tijd">${l.begin}–${l.eind}</span><span class="grow">${esc(l.titel)}</span></div>`}));
   ds.forEach(x => agenda.push({t:x.begin, html:
     `<div class="ag werk"><span class="tijd">${x.begin}–${x.eind}</span><span class="grow">${esc(W())}${x.waar?' · '+esc(x.waar):''}</span><span class="sub">${u(nettoU(x))} u</span></div>`}));
   // je eigen blokken uit het rooster (tik = wijzigen of afvinken)
@@ -1014,6 +1040,7 @@ function renderVandaag(){
   const ws = weekStats(maandag(dag)), i = I();
   const komend = komendeTentamens(dag), t = komend[0];
   const zelfdeDag = t ? komend.filter(x => x.datum === t.datum).length - 1 : 0;   // nog meer tentamens op die dag
+  // De kaarten hieronder zijn blokken die je zelf kunt indelen (volgorde, verbergen, breed), per apparaat: zie INDELING.
   $('#main').innerHTML = `
     <div class="daynav"><button class="nb" id="dPrev" aria-label="vorige dag">‹</button>
       <input type="date" id="dDatum" value="${dag}" style="flex:1">
@@ -1021,22 +1048,23 @@ function renderVandaag(){
     ${isVandaag ? '' : '<button class="btn ghost" id="dNu" style="padding:6px">Terug naar vandaag</button>'}
     ${gister.length ? `<div class="alert">Late dienst gisteren (tot ${gister[gister.length-1].eind}): vandaag geen zwaar studieblok en geen vroege sportschool.</div>` : ''}
     ${(d => toetsBanner(d.modus, d, 'vandaag') + vrijBanner(d, 'vandaag'))(dagDoel(dag))}
-    ${timerHtml()}
-    ${planKaart(dag)}
-    ${gameKaart(dag)}
-    ${t ? `<div class="card count"><div class="grow"><div class="sub">Volgende tentamen</div><div class="name">${esc(t.vak)}${zelfdeDag ? ` <span class="sub">+${zelfdeDag} op dezelfde dag</span>` : ''}</div>
+    ${indelingHtml('vandaag', [
+      { id: 'timer', naam: 'Timer', html: timerHtml() },
+      { id: 'studieplan', naam: 'Studieplan', html: planKaart(dag) },
+      { id: 'gametijd', naam: 'Gametijd', html: gameKaart(dag) },
+      { id: 'tentamen', naam: 'Volgende tentamen', html: t ? `<div class="card count"><div class="grow"><div class="sub">Volgende tentamen</div><div class="name">${esc(t.vak)}${zelfdeDag ? ` <span class="sub">+${zelfdeDag} op dezelfde dag</span>` : ''}</div>
       <div class="sub">${dagKort(t.datum)}${t.tijd?' · '+t.tijd:''}${t.opmerking?' · '+esc(t.opmerking):''}</div>
       ${/indien nodig|her(toets|kansing)/i.test(t.vak+' '+t.opmerking) ? `<button class="btn sec small" id="tNiet" style="margin-top:8px">Niet nodig ✓</button>` : ''}</div>
-      <div class="big">${dagenTot(dag,t.datum)}<span class="unit">${dagenTot(dag,t.datum)===1?'dag':'dagen'}</span></div></div>` : ''}
-    ${deadlineKaart(dag)}
-    <h2>Agenda</h2>
+      <div class="big">${dagenTot(dag,t.datum)}<span class="unit">${dagenTot(dag,t.datum)===1?'dag':'dagen'}</span></div></div>` : '' },
+      { id: 'deadlines', naam: 'Deadlines', html: deadlineKaart(dag) },
+      { id: 'agenda', naam: 'Agenda', html: `<h2>Agenda</h2>
     <div class="card">
       ${lo===null ? '<div class="note">Lessen laden…</div>' : ''}
       ${lo && lo.fout ? `<div class="note">${esc(lo.fout)}</div>` : ''}
       ${lo && lo.buiten ? `<div class="note">Lessen worden opgehaald voor 2 weken terug t/m ${dagKort(LESSEN.tot)}. Deze dag valt erbuiten.</div>` : ''}
       ${agenda.map(a=>a.html).join('') || (lo && lo.lessen ? '<div class="empty">Geen lessen of diensten.</div>' : '')}
-    </div>
-    <h2>Invullen <span id="vStatus" class="sub autostatus ${autoStatus}">${STATUS_TEKST[autoStatus] || ''}</span></h2>
+    </div>` },
+      { id: 'invullen', naam: 'Invullen', html: `<h2>Invullen <span id="vStatus" class="sub autostatus ${autoStatus}">${STATUS_TEKST[autoStatus] || ''}</span></h2>
     <div class="card">
       ${vakNamen().map((v,n) => stepper('s'+n, esc(v))).join('') || '<div class="note">Voeg vakken toe bij ⚙︎.</div>'}
       ${stepper('gamen','Gamen')}
@@ -1053,19 +1081,22 @@ function renderVandaag(){
         <div class="seg small" id="vSport"><button data-v="0" class="${!inv.sport?'on':''}">Nee</button><button data-v="1" class="${inv.sport?'on':''}">Ja</button></div></div>
       <div class="note">Tik op een getal om het precies in te typen. Wijzigingen worden vanzelf opgeslagen, een paar seconden nadat je klaar bent.</div>
       <label class="f">Notitie</label><input id="vNot" value="${esc(inv.notitie)}" placeholder="bijv. moe na dienst">
-    </div>
-    <h2>Week ${weekNr(dag)}</h2>
+    </div>` },
+      { id: 'week', naam: 'Week', html: `<h2>Week ${weekNr(dag)}</h2>
     <div class="card">
       ${meter('Zelfstudie totaal', ws.studie, ws.doel.studie, uMin(ws.studie)+' / '+uD(ws.doel.studie))}
       ${meter('Sportschool', ws.sport, ws.sportDoel, ws.sport+' / '+ws.sportDoel+'×')}
       ${meter('Coderen', ws.coderen, ws.codeDoel, uMin(ws.coderen)+' / '+uD(ws.codeDoel))}
       ${ws.slaapGem !== null ? `<div class="note">Slaap gemiddeld ${uMin(ws.slaapGem)} per nacht (doel ${uMin(i.slaapDoel)})</div>` : ''}
       <div class="note">${esc(W())} deze week: ${u(ws.werk)} u${ws.les!==null?' · lessen: '+u(ws.les)+' u':''}</div>
-    </div>`;
+    </div>` },
+    ])}`;
 
+  indelingKnoppen('vandaag');
   timerKnoppen();
   planKnoppen(dag);
   deadlineKnoppen();
+  lesKnoppen();
   document.querySelectorAll('#main [data-blok]').forEach(el => el.onclick = () => openBlok(blokken().find(b => b.id === el.dataset.blok)));
   if ($('#tNiet')) $('#tNiet').onclick = async () => {
     const k = $('#tNiet'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Zeker? Tik nog een keer'; return; }
@@ -2845,6 +2876,176 @@ function reflNuOpslaan(){
   return reflBezig;
 }
 
+// ================= LESSEN VERBERGEN =================
+// Lessen uit je lesrooster-agenda die je niet volgt (andere groep, de tentamenversie zonder verlenging).
+// Regels staan in instelling lesVerberg (JSON, in je sheet, dus op telefoon én pc hetzelfde):
+//   { t, d, b, e } = alleen die ene les (titel, datum, begin, eind)
+//   { t, w, b, e } = elke week op die weekdag (0 = zondag) en tijd
+//   { t }          = alle lessen met die titel
+//   p (bij de eerste twee, als de les een locatie heeft) = locatie: zo kun je twee groepen met dezelfde titel en tijd
+//   uit elkaar houden als ze in een ander lokaal zitten
+// Verborgen lessen tellen ook niet mee als lesuren in je studieplan.
+let lesKlik = [];                                       // lessen op het scherm, zodat een klik weet welke les het is
+const lesData = l => `data-les="${lesKlik.push(l) - 1}"`;
+let lesCache = { tekst: null, regels: [] };
+function lesRegels(){
+  const tekst = (D && D.instellingen && D.instellingen.lesVerberg) || '';
+  if (tekst !== lesCache.tekst) {                       // alleen opnieuw lezen (JSON.parse) als de tekst veranderd is
+    let r = []; try { r = JSON.parse(tekst || '[]'); } catch(e) {}
+    lesCache = { tekst, regels: Array.isArray(r) ? r : [] };
+  }
+  return lesCache.regels;
+}
+function lesVerborgen(l, regels = lesRegels()){
+  return regels.some(r => r.t === l.titel && (r.p === undefined || r.p === (l.waar || '')) && (
+    r.d ? r.d === l.datum && r.b === l.begin && r.e === l.eind
+    : r.w !== undefined ? r.w === dt(l.datum).getDay() && r.b === l.begin && r.e === l.eind
+    : true));
+}
+const regelTekst = r => (r.d ? `alleen ${dagKort(r.d)} ${r.b}–${r.e}` : r.w !== undefined ? `elke ${DAGEN_LANG[r.w]} ${r.b}–${r.e}` : 'alle lessen met deze titel')
+  + (r.p ? ' · ' + r.p : '');
+function bewaarLesRegels(regels, melding){
+  D.instellingen.lesVerberg = JSON.stringify(regels);
+  PLAN = { D: null, L: null, nu: '', w: {} };           // studieplan opnieuw uitrekenen (lesuren veranderen)
+  render(); if (melding) toast(melding);
+  api('bewaarInstelling', 'lesVerberg', D.instellingen.lesVerberg).then(d => { D = d; achtergrondRender(); }).catch(() => {});
+}
+function lesKnoppen(){
+  document.querySelectorAll('#main [data-les]').forEach(el => el.onclick = e => { e.stopPropagation(); openLes(lesKlik[+el.dataset.les]); });
+}
+function openLes(l){
+  if (!l) return;
+  if (!roosterKlaar()) return toast('Werk eerst je Code.gs bij (⚙︎ → Versie)');
+  const wd = dt(l.datum).getDay();
+  const zelfde = (LESSEN && LESSEN.lessen || []).filter(x => x.datum === l.datum && !(x.titel === l.titel && x.begin === l.begin && x.eind === l.eind && (x.waar || '') === (l.waar || '')) && mins(x.begin) < mins(l.eind) && mins(x.eind) > mins(l.begin));
+  sheet(`<h3>${esc(l.titel)}</h3>
+    <div class="note">${dagKort(l.datum)} · ${l.begin}–${l.eind}${l.waar ? ' · ' + esc(l.waar) : ''}</div>
+    ${zelfde.length ? `<div class="infobox">Tegelijk: ${zelfde.map(x => esc(x.titel) + ' ' + x.begin + '–' + x.eind).join(', ')}</div>` : ''}
+    <label class="f">Niet jouw les (andere groep, zonder verlenging)? Verbergen:</label>
+    <button class="btn sec" data-v="een">Alleen deze (${dagKort(l.datum)})</button>
+    <button class="btn sec" data-v="week" style="margin-top:8px">Elke ${DAGEN_LANG[wd]} ${l.begin}–${l.eind} met deze titel</button>
+    <button class="btn sec" data-v="titel" style="margin-top:8px">Alle lessen met deze titel</button>
+    <div class="note">Verborgen lessen staan niet meer in je rooster en tellen niet mee als lesuren in je studieplan. Terugzetten kan in het rooster ("verborgen lessen").</div>
+    <button class="btn ghost" id="lAnn">Annuleren</button>`);
+  $('#lAnn').onclick = closeSheet;
+  document.querySelectorAll('.sheet [data-v]').forEach(b => b.onclick = () => {
+    const r = b.dataset.v === 'een' ? { t: l.titel, d: l.datum, b: l.begin, e: l.eind }
+            : b.dataset.v === 'week' ? { t: l.titel, w: wd, b: l.begin, e: l.eind } : { t: l.titel };
+    if (l.waar && b.dataset.v !== 'titel') r.p = l.waar;
+    closeSheet(); bewaarLesRegels(lesRegels().concat([r]), 'Verborgen: ' + l.titel);
+  });
+}
+/** Knop in het rooster: hoeveel lessen zijn deze week verborgen? */
+function verborgenKnop(ma){
+  if (!LESSEN || !LESSEN.lessen || !lesRegels().length) return '';
+  const n = LESSEN.lessen.filter(l => l.datum >= ma && l.datum <= plus(ma, 6) && lesVerborgen(l)).length;
+  return `<button class="btn ghost small" id="rVerborgen" style="padding:2px 0">${n ? n + (n === 1 ? ' les' : ' lessen') + ' verborgen deze week' : 'Verborgen lessen'} · bekijken</button>`;
+}
+function verborgenLessen(){
+  const regels = lesRegels();
+  sheet(`<h3>Verborgen lessen</h3>
+    ${regels.length ? regels.map((r, i) => `<div class="row line"><div class="grow"><div class="name">${esc(r.t)}</div><div class="sub">${regelTekst(r)}</div></div>
+      <button class="btn sec small" data-terug="${i}">Weer tonen</button></div>`).join('') : '<div class="note">Geen verborgen lessen.</div>'}
+    <div style="height:10px"></div><button class="btn ghost" id="lAnn">Sluiten</button>`);
+  $('#lAnn').onclick = closeSheet;
+  document.querySelectorAll('[data-terug]').forEach(b => b.onclick = () => {
+    const nieuw = regels.filter((_, i) => i !== +b.dataset.terug); closeSheet(); bewaarLesRegels(nieuw, 'Weer zichtbaar');
+  });
+}
+
+// ================= INDELING (zoals de Dashboard-indeling in Financiën) =================
+// Een scherm bestaat uit blokken met een id. Per apparaat (localStorage) onthouden we de volgorde, of een blok
+// verborgen is (aan) en of het breed is. Indelen: verschuiven met slepen of ▲▼, 👁 = tonen/verbergen, ↔ = breed.
+// Op een breed scherm staan de blokken naast elkaar als metselwerk: kolommen van een grid met heel kleine rijen
+// (4 px), elk blok beslaat zoveel rijen als het hoog is (grid-row-end: span n). Zo vullen kortere blokken de gaten.
+const INDELING_KEY = 'planner-indeling';
+let indelen = null, indelingConcept = null;              // scherm dat je nu indeelt + de werkkopie
+function indelingVan(scherm, ids){
+  const alle = opslag.get(INDELING_KEY) || {}, bewaard = Array.isArray(alle[scherm]) ? alle[scherm] : [];
+  const uit = bewaard.filter(x => ids.includes(x.id)).map(x => ({ id: x.id, aan: x.aan !== false, breed: !!x.breed }));
+  // blokken die er later bij kwamen: op hun standaardplek erbij
+  ids.forEach((id, i) => { if (!uit.some(x => x.id === id)) uit.splice(Math.min(i, uit.length), 0, { id, aan: true, breed: false }); });
+  return uit;
+}
+function indelingHtml(scherm, blokken){
+  const ids = blokken.map(b => b.id), per = {};
+  blokken.forEach(b => per[b.id] = b);
+  const bezigMee = indelen === scherm;
+  if (bezigMee && !indelingConcept) indelingConcept = indelingVan(scherm, ids);
+  const lijst = bezigMee ? indelingConcept : indelingVan(scherm, ids);
+  const blokHtml = (x, i) => {
+    const b = per[x.id]; if (!b) return '';
+    const leeg = !String(b.html || '').trim();
+    return `<div class="vblok ${x.aan ? '' : 'uit'} ${x.breed ? 'vol' : ''} ${leeg ? 'leeg' : ''}" data-id="${x.id}" ${bezigMee ? 'draggable="true"' : ''}>
+      ${bezigMee ? `<div class="blokbalk"><span class="greep" title="slepen">⠿</span><span class="bnaam">${esc(b.naam)}${x.aan ? '' : ' · verborgen'}${leeg ? ' · nu leeg' : ''}</span>
+        <button class="mini-knop" data-iop="${i}" aria-label="omhoog" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button class="mini-knop" data-ineer="${i}" aria-label="omlaag" ${i === lijst.length - 1 ? 'disabled' : ''}>▼</button>
+        <button class="mini-knop" data-ioog="${i}" title="tonen of verbergen">${x.aan ? '👁' : '⊘'}</button>
+        <button class="mini-knop breedknop" data-ibreed="${i}" title="breed (twee kolommen)">${x.breed ? '⇤' : '↔'}</button></div>` : ''}
+      <div class="vinhoud">${b.html || ''}</div></div>`;
+  };
+  return `${bezigMee ? `<div class="infobox indelbalk"><div class="grow"><b>Indeling aanpassen</b> (alleen op dit apparaat): sleep aan ⠿ of gebruik ▲▼, 👁 = tonen/verbergen${BREED.matches ? ', ↔ = breed' : ''}.</div>
+      <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn small" id="iBewaar">Opslaan</button>
+      <button class="btn sec small" id="iAnnuleer">Annuleren</button><button class="btn ghost small" id="iStandaard">Standaard</button></div></div>` : ''}
+    <div class="vkaarten ${bezigMee ? 'indelen' : ''}" data-scherm="${scherm}">${lijst.map(blokHtml).join('')}</div>
+    ${bezigMee ? '' : `<button class="btn ghost small" id="iStart" style="margin:6px auto 0;display:block">Indeling aanpassen</button>`}`;
+}
+/** Volgorde zoals hij nu op het scherm staat (na slepen) in de werkkopie zetten. */
+function leesVolgorde(){
+  const volg = [...document.querySelectorAll('.vkaarten > .vblok')].map(el => el.dataset.id);
+  indelingConcept.sort((a, b) => volg.indexOf(a.id) - volg.indexOf(b.id));
+}
+function indelingKnoppen(scherm){
+  metsel();
+  if ($('#iStart')) $('#iStart').onclick = () => { indelen = scherm; indelingConcept = null; render(); };
+  if (indelen !== scherm) return;
+  const stop = () => { indelen = null; indelingConcept = null; render(); };
+  $('#iAnnuleer').onclick = stop;
+  $('#iStandaard').onclick = () => {
+    const alle = opslag.get(INDELING_KEY) || {}; delete alle[scherm]; opslag.set(INDELING_KEY, alle); stop(); toast('Standaardindeling'); };
+  $('#iBewaar').onclick = () => {
+    const alle = opslag.get(INDELING_KEY) || {}; alle[scherm] = indelingConcept; opslag.set(INDELING_KEY, alle); stop(); toast('Indeling opgeslagen ✓'); };
+  const wissel = (i, j) => { if (j < 0 || j >= indelingConcept.length) return; [indelingConcept[i], indelingConcept[j]] = [indelingConcept[j], indelingConcept[i]]; render(); };
+  document.querySelectorAll('[data-iop]').forEach(b => b.onclick = () => wissel(+b.dataset.iop, +b.dataset.iop - 1));
+  document.querySelectorAll('[data-ineer]').forEach(b => b.onclick = () => wissel(+b.dataset.ineer, +b.dataset.ineer + 1));
+  document.querySelectorAll('[data-ioog]').forEach(b => b.onclick = () => { const x = indelingConcept[+b.dataset.ioog]; x.aan = !x.aan; render(); });
+  document.querySelectorAll('[data-ibreed]').forEach(b => b.onclick = () => { const x = indelingConcept[+b.dataset.ibreed]; x.breed = !x.breed; render(); });
+  // slepen: tijdens het slepen schuiven we de blokken zelf in de pagina (DOM); bij loslaten lezen we de volgorde uit
+  let sleep = null;
+  const zone = $('.vkaarten.indelen');
+  zone.addEventListener('dragstart', e => {
+    sleep = e.target.closest('.vblok'); if (!sleep) return;
+    sleep.classList.add('sleept'); e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', sleep.dataset.id); } catch(_) {}
+  });
+  zone.addEventListener('dragover', e => {
+    if (!sleep) return;
+    const doel = e.target.closest('.vblok');
+    if (!doel || doel === sleep) return;
+    e.preventDefault();
+    const r = doel.getBoundingClientRect();
+    const na = e.clientX - r.left > r.width / 2 || e.clientY - r.top > r.height * 0.75;   // rechterhelft of onderkant = erachter
+    zone.insertBefore(sleep, na ? doel.nextSibling : doel);
+    metsel();
+  });
+  zone.addEventListener('drop', e => { if (sleep) e.preventDefault(); });
+  zone.addEventListener('dragend', () => { if (!sleep) return; sleep.classList.remove('sleept'); sleep = null; leesVolgorde(); render(); });
+}
+/** Metselwerk: elk blok zoveel rijen van 4 px hoog laten beslaan als het hoog is. Opnieuw als een blok van hoogte verandert. */
+const METSEL_RIJ = 4, METSEL_GAT = 14;
+let metselKijker = null;
+function metsel(){
+  const zone = $('.vkaarten'); if (!zone) return;
+  const zet = el => { const h = el.querySelector('.vinhoud').getBoundingClientRect().height + (el.querySelector('.blokbalk') ? 34 : 0);
+    el.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil((h + METSEL_GAT) / METSEL_RIJ)); };
+  zone.querySelectorAll('.vblok').forEach(zet);
+  if (metselKijker) metselKijker.disconnect();
+  if (window.ResizeObserver) {
+    metselKijker = new ResizeObserver(lijst => lijst.forEach(x => { const el = x.target.closest('.vblok'); if (el) zet(el); }));
+    zone.querySelectorAll('.vblok .vinhoud').forEach(el => metselKijker.observe(el));
+  }
+}
+
 // ================= ROOSTER (week op de pc, dag op de telefoon) =================
 // Lessen (lesrooster-agenda), diensten en je eigen blokken (tabblad Blokken) in één rooster per uur.
 // Breed scherm (pc/laptop, vanaf 900 pixels): weekrooster. Smal scherm (telefoon): dagrooster.
@@ -2869,7 +3070,7 @@ const blokNaam = b => b.wat || (b.soort === 'studie' ? (b.vak || 'Studie') : BLO
 /** Alles met een tijd op dag s: lessen, diensten en blokken. */
 function roosterItems(s){
   const uit = [], lo = lessenOp(s);
-  if (lo && lo.lessen) lo.lessen.forEach(l => uit.push(Object.assign(minuten(l), { soort: 'les', titel: l.titel, tijd: l.begin + '–' + l.eind })));
+  if (lo && lo.lessen) lo.lessen.forEach(l => uit.push(Object.assign(minuten(l), { soort: 'les', titel: l.titel, tijd: l.begin + '–' + l.eind, les: l, sub: l.waar || '' })));
   dienstenOp(s).forEach(x => uit.push(Object.assign(minuten(x), { soort: 'werk', titel: W() + (x.waar ? ' · ' + x.waar : ''),
     tijd: x.begin + '–' + x.eind, dienst: x.id })));
   blokken().filter(b => b.datum === s).forEach(b => uit.push(Object.assign(minuten(b), { soort: b.soort, titel: blokNaam(b),
@@ -2935,7 +3136,7 @@ function renderRooster(){
         <button class="btn sec small" id="rNieuw">+ Blok</button>
         <button class="btn ghost small" id="rKopie">Blokken van vorige week overnemen</button>
         <div class="grow"></div>${keuze}</div>
-      ${oud}${lesInfo}
+      ${oud}${lesInfo}${verborgenKnop(wkMa)}
       <div class="note" style="margin:0 2px 6px">Studie gepland deze week: <b>${uMin(gepland)}</b> van je studieplan ${uD(doel)}.
         Klik in een leeg vak om een blok te plannen, klik op een blok om het te wijzigen of af te vinken.</div>
       ${weekRooster(wkMa)}`;
@@ -2947,7 +3148,7 @@ function renderRooster(){
       <div class="row" style="margin:4px 0 8px">
         ${rd !== nu ? '<button class="btn ghost small" id="rNu">Vandaag</button>' : ''}
         <button class="btn sec small" id="rNieuw">+ Blok</button><div class="grow"></div>${keuze}</div>
-      ${oud}${lesInfo}
+      ${oud}${lesInfo}${verborgenKnop(maandag(rd))}
       <h2>${DAGEN_LANG[dt(rd).getDay()].replace(/^./, c => c.toUpperCase())} ${dt(rd).getDate()} ${MAANDEN[dt(rd).getMonth()]}
         ${st ? `<span class="sub">${st}</span>` : ''}</h2>
       ${kop.length ? `<div class="kopchips">${kop.map(k => `<span class="kopchip">${esc(k)}</span>`).join('')}</div>` : ''}
@@ -2957,6 +3158,8 @@ function renderRooster(){
     <div class="rooster-zij">${takenKaarten()}</div></div>`;
   roosterKnoppen();
   takenKnoppen();
+  lesKnoppen();
+  if ($('#rVerborgen')) $('#rVerborgen').onclick = verborgenLessen;
 }
 
 /** Weekrooster: tijdkolom + 7 dagkolommen, items absoluut gepositioneerd op hun tijd. */
@@ -2983,7 +3186,7 @@ function weekRooster(ma){
 }
 function itemHtml(x, start){
   const top = (x.b - start) / 30 * SLOT, h = Math.max(SLOT - 4, (x.e - x.b) / 30 * SLOT - 2);
-  const data = x.blok ? `data-blok="${x.blok}"` : x.dienst ? `data-dienst="${x.dienst}"` : '';
+  const data = x.blok ? `data-blok="${x.blok}"` : x.dienst ? `data-dienst="${x.dienst}"` : x.les ? lesData(x.les) : '';
   return `<div class="blok ${x.soort} ${x.klaar ? 'klaar' : ''}" ${data} title="${esc(x.tijd + ' ' + x.titel)}"
     style="top:${top}px;height:${h}px;left:calc(${x.l / x.n * 100}% + 2px);width:calc(${100 / x.n}% - 4px)">
     <div class="bt">${x.klaar ? '✓ ' : ''}${esc(x.titel)}</div>${h > SLOT ? `<div class="bs">${esc(x.tijd)}${x.sub ? ' · ' + esc(x.sub) : ''}</div>` : ''}</div>`;
@@ -2995,8 +3198,8 @@ function dagRooster(s){
   return `<div class="card">${items.map(x => x.blok
     ? `<div class="ag blokrij ${x.soort} ${x.klaar ? 'klaar' : ''}"><button class="vink" data-bvink="${x.blok}" aria-label="afvinken">${x.klaar ? '✓' : ''}</button>
         <span class="tijd">${x.tijd}</span><span class="grow" data-blok="${x.blok}" style="cursor:pointer"><span class="bolletje ${x.soort}"></span>${esc(x.titel)}${x.sub ? ` <span class="sub">${esc(x.sub)}</span>` : ''}</span></div>`
-    : `<div class="ag ${x.soort === 'werk' ? 'werk' : ''}" ${x.dienst ? `data-dienst="${x.dienst}" style="cursor:pointer"` : ''}><span class="vink-plek"></span>
-        <span class="tijd">${x.tijd}</span><span class="grow">${esc(x.titel)}</span></div>`).join('')}</div>`;
+    : `<div class="ag ${x.soort === 'werk' ? 'werk' : ''}" ${x.dienst ? `data-dienst="${x.dienst}"` : x.les ? lesData(x.les) : ''} style="cursor:pointer"><span class="vink-plek"></span>
+        <span class="tijd">${x.tijd}</span><span class="grow">${esc(x.titel)}${x.sub ? ` <span class="sub">${esc(x.sub)}</span>` : ''}</span></div>`).join('')}</div>`;
 }
 
 function roosterKnoppen(){
