@@ -195,14 +195,15 @@
   .datumveld input.native{position:absolute;right:0;bottom:0;width:46px;height:100%;opacity:0;pointer-events:none}
   input.tijd.fout{border-color:var(--warn);background:var(--warn-soft)}
   .x{border:0;background:none;color:var(--warn);font-size:20px;padding:4px 8px;cursor:pointer}
-  /* ===== Indeling (Vandaag) ===== */
-  .vkaarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,440px),1fr));column-gap:16px;
-    grid-auto-rows:4px;grid-auto-flow:row dense;align-items:start}
-  .vkaarten.indelen{grid-auto-flow:row}
-  .vblok{min-width:0}
+  /* ===== Indeling (vaste kolommen) ===== */
+  .vkaarten{display:grid;column-gap:16px;align-items:start}
+  .vkol{min-width:0;min-height:40px}
+  .vblok{min-width:0;margin-bottom:12px}
   .vblok > .vinhoud > :first-child{margin-top:0}
   .vblok > .vinhoud > h2:first-child{margin-top:8px}
   .vblok.uit,.vblok.leeg{display:none}
+  .vkaarten.indelen{align-items:stretch}               /* tijdens indelen: kolommen even hoog, zodat je overal in een kolom kunt loslaten */
+  .vkaarten.indelen .vkol{min-height:160px;border-radius:12px;background:var(--soft);padding:6px 6px 60px}
   .vkaarten.indelen .vblok{display:block;outline:2px dashed var(--line);outline-offset:3px;border-radius:12px;cursor:grab}
   .vkaarten.indelen .vblok.uit{opacity:.4}
   .vkaarten.indelen .vblok.sleept{opacity:.25}
@@ -211,8 +212,6 @@
   .blokbalk .greep{cursor:grab;padding:0 6px 0 2px;color:var(--muted);font-size:16px}
   .blokbalk .bnaam{flex:1;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .indelbalk{position:sticky;top:60px;z-index:4}
-  @media (min-width: 900px){ .vkaarten > .vblok.vol{grid-column:span 2} }
-  @media (max-width: 899px){ .breedknop{display:none} }
   /* ===== Rooster ===== */
   /* breed scherm: het weekrooster gebruikt maximaal 95% van de breedte; de andere schermen (kaarten naast elkaar)
      maximaal 1600 pixels, dat zijn drie kolommen. De datum/week-navigatie blijft compact in het midden. */
@@ -302,7 +301,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-1';
+const APP_VERSIE = '2026.11.25-2';
 const SERVER_MIN = '2026.11.24-4';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen)
 
 // ================= data & helpers =================
@@ -2973,18 +2972,21 @@ function verborgenLessen(){
   });
 }
 
-// ================= INDELING (zoals de Dashboard-indeling in Financiën) =================
-// Een scherm bestaat uit blokken met een id. Per apparaat (localStorage) onthouden we de volgorde, of een blok
-// verborgen is (aan) en of het breed is. Indelen: verschuiven met slepen of ▲▼, 👁 = tonen/verbergen, ↔ = breed.
-// Op een breed scherm staan de blokken naast elkaar als metselwerk: kolommen van een grid met heel kleine rijen
-// (4 px), elk blok beslaat zoveel rijen als het hoog is (grid-row-end: span n). Zo vullen kortere blokken de gaten.
+// ================= INDELING (vaste kolommen) =================
+// Een scherm bestaat uit blokken met een id. Per apparaat (localStorage) onthouden we per blok: in welke kolom
+// het staat (kol 1 = links), de volgorde, en of het zichtbaar is (aan). Op een breed scherm staan de kolommen
+// naast elkaar (3, of 2 bij een smaller venster); op de telefoon staan alle blokken onder elkaar, kolom voor kolom.
+// Indelen: slepen aan ⠿, ▲▼ = binnen de kolom, ◀ ▶ = naar een andere kolom, 👁 = tonen/verbergen.
 const INDELING_KEY = 'planner-indeling';
 let indelen = null, indelingConcept = null;              // scherm dat je nu indeelt + de werkkopie
+const aantalKol = () => !BREED.matches ? 1 : window.innerWidth >= 1300 ? 3 : 2;
 function indelingVan(scherm, ids){
   const alle = opslag.get(INDELING_KEY) || {}, bewaard = Array.isArray(alle[scherm]) ? alle[scherm] : [];
-  const uit = bewaard.filter(x => ids.includes(x.id)).map(x => ({ id: x.id, aan: x.aan !== false, breed: !!x.breed }));
+  const uit = bewaard.filter(x => ids.includes(x.id)).map(x => ({ id: x.id, aan: x.aan !== false, kol: Number(x.kol) || 0 }));
   // blokken die er later bij kwamen: op hun standaardplek erbij
-  ids.forEach((id, i) => { if (!uit.some(x => x.id === id)) uit.splice(Math.min(i, uit.length), 0, { id, aan: true, breed: false }); });
+  ids.forEach((id, i) => { if (!uit.some(x => x.id === id)) uit.splice(Math.min(i, uit.length), 0, { id, aan: true, kol: 0 }); });
+  // nog geen kolom (nieuw, of bewaard vóór de vaste kolommen): om en om verdelen over 3 kolommen
+  uit.forEach((x, i) => { if (!x.kol) x.kol = (i % 3) + 1; });
   return uit;
 }
 function indelingHtml(scherm, blokken){
@@ -2992,45 +2994,70 @@ function indelingHtml(scherm, blokken){
   blokken.forEach(b => per[b.id] = b);
   const bezigMee = indelen === scherm;
   if (bezigMee && !indelingConcept) indelingConcept = indelingVan(scherm, ids);
-  const lijst = bezigMee ? indelingConcept : indelingVan(scherm, ids);
-  const blokHtml = (x, i) => {
+  const n = aantalKol(), kolVan = x => Math.min(x.kol, n);
+  kolStand = n;
+  // één kolom (telefoon): eerst alle blokken van kolom 1, dan 2, dan 3 (sort is stabiel: volgorde binnen een kolom blijft)
+  const ruw = bezigMee ? indelingConcept : indelingVan(scherm, ids);
+  const lijst = n === 1 ? [...ruw].sort((a, b) => a.kol - b.kol) : ruw;
+  const blokHtml = x => {
     const b = per[x.id]; if (!b) return '';
-    const leeg = !String(b.html || '').trim();
-    return `<div class="vblok ${x.aan ? '' : 'uit'} ${x.breed ? 'vol' : ''} ${leeg ? 'leeg' : ''}" data-id="${x.id}" ${bezigMee ? 'draggable="true"' : ''}>
+    const leeg = !String(b.html || '').trim(), k = kolVan(x);
+    const inKol = lijst.filter(y => kolVan(y) === k), pos = inKol.indexOf(x);
+    return `<div class="vblok ${x.aan ? '' : 'uit'} ${leeg ? 'leeg' : ''}" data-id="${x.id}" ${bezigMee ? 'draggable="true"' : ''}>
       ${bezigMee ? `<div class="blokbalk"><span class="greep" title="slepen">⠿</span><span class="bnaam">${esc(b.naam)}${x.aan ? '' : ' · verborgen'}${leeg ? ' · nu leeg' : ''}</span>
-        <button class="mini-knop" data-iop="${i}" aria-label="omhoog" ${i === 0 ? 'disabled' : ''}>▲</button>
-        <button class="mini-knop" data-ineer="${i}" aria-label="omlaag" ${i === lijst.length - 1 ? 'disabled' : ''}>▼</button>
-        <button class="mini-knop" data-ioog="${i}" title="tonen of verbergen">${x.aan ? '👁' : '⊘'}</button>
-        <button class="mini-knop breedknop" data-ibreed="${i}" title="breed (twee kolommen)">${x.breed ? '⇤' : '↔'}</button></div>` : ''}
+        ${n > 1 ? `<button class="mini-knop" data-ilinks="${x.id}" aria-label="kolom naar links" ${k === 1 ? 'disabled' : ''}>◀</button>
+        <button class="mini-knop" data-irechts="${x.id}" aria-label="kolom naar rechts" ${k === n ? 'disabled' : ''}>▶</button>` : ''}
+        <button class="mini-knop" data-iop="${x.id}" aria-label="omhoog" ${pos === 0 ? 'disabled' : ''}>▲</button>
+        <button class="mini-knop" data-ineer="${x.id}" aria-label="omlaag" ${pos === inKol.length - 1 ? 'disabled' : ''}>▼</button>
+        <button class="mini-knop" data-ioog="${x.id}" title="tonen of verbergen">${x.aan ? '👁' : '⊘'}</button></div>` : ''}
       <div class="vinhoud">${b.html || ''}</div></div>`;
   };
-  return `${bezigMee ? `<div class="infobox indelbalk"><div class="grow"><b>Indeling aanpassen</b> (alleen op dit apparaat): sleep aan ⠿ of gebruik ▲▼, 👁 = tonen/verbergen${BREED.matches ? ', ↔ = breed' : ''}.</div>
+  const kolommen = [...Array(n)].map((_, i) =>
+    `<div class="vkol" data-kol="${i + 1}">${lijst.filter(x => kolVan(x) === i + 1).map(blokHtml).join('')}</div>`).join('');
+  return `${bezigMee ? `<div class="infobox indelbalk"><div class="grow"><b>Indeling aanpassen</b> (alleen op dit apparaat): sleep aan ⠿${n > 1 ? ', ◀ ▶ = andere kolom' : ''}, ▲▼ = volgorde, 👁 = tonen/verbergen.</div>
       <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn small" id="iBewaar">Opslaan</button>
       <button class="btn sec small" id="iAnnuleer">Annuleren</button><button class="btn ghost small" id="iStandaard">Standaard</button></div></div>` : ''}
-    <div class="vkaarten ${bezigMee ? 'indelen' : ''}" data-scherm="${scherm}">${lijst.map(blokHtml).join('')}</div>
+    <div class="vkaarten ${bezigMee ? 'indelen' : ''}" data-scherm="${scherm}" style="grid-template-columns:repeat(${n},minmax(0,1fr))">${kolommen}</div>
     ${bezigMee ? '' : `<button class="btn ghost small" id="iStart" style="margin:6px auto 0;display:block">Indeling aanpassen</button>`}`;
 }
-/** Volgorde zoals hij nu op het scherm staat (na slepen) in de werkkopie zetten. */
+/** Kolom en volgorde zoals ze nu op het scherm staan (na slepen) in de werkkopie zetten. */
 function leesVolgorde(){
-  const volg = [...document.querySelectorAll('.vkaarten > .vblok')].map(el => el.dataset.id);
-  indelingConcept.sort((a, b) => volg.indexOf(a.id) - volg.indexOf(b.id));
+  const volg = [];
+  document.querySelectorAll('.vkaarten > .vkol').forEach(kol => kol.querySelectorAll(':scope > .vblok').forEach(el => {
+    const x = indelingConcept.find(y => y.id === el.dataset.id); if (x) { x.kol = +kol.dataset.kol; volg.push(x); } }));
+  indelingConcept = volg.concat(indelingConcept.filter(x => !volg.includes(x)));
 }
 function indelingKnoppen(scherm){
-  metsel();
   if ($('#iStart')) $('#iStart').onclick = () => { indelen = scherm; indelingConcept = null; render(); };
   if (indelen !== scherm) return;
   const stop = () => { indelen = null; indelingConcept = null; render(); };
+  const n = aantalKol(), vind = id => indelingConcept.find(x => x.id === id);
   $('#iAnnuleer').onclick = stop;
-  $('#iStandaard').onclick = () => {
-    const alle = opslag.get(INDELING_KEY) || {}; delete alle[scherm]; opslag.set(INDELING_KEY, alle); stop(); toast('Standaardindeling'); };
-  $('#iBewaar').onclick = () => {
-    const alle = opslag.get(INDELING_KEY) || {}; alle[scherm] = indelingConcept; opslag.set(INDELING_KEY, alle); stop(); toast('Indeling opgeslagen ✓'); };
-  const wissel = (i, j) => { if (j < 0 || j >= indelingConcept.length) return; [indelingConcept[i], indelingConcept[j]] = [indelingConcept[j], indelingConcept[i]]; render(); };
-  document.querySelectorAll('[data-iop]').forEach(b => b.onclick = () => wissel(+b.dataset.iop, +b.dataset.iop - 1));
-  document.querySelectorAll('[data-ineer]').forEach(b => b.onclick = () => wissel(+b.dataset.ineer, +b.dataset.ineer + 1));
-  document.querySelectorAll('[data-ioog]').forEach(b => b.onclick = () => { const x = indelingConcept[+b.dataset.ioog]; x.aan = !x.aan; render(); });
-  document.querySelectorAll('[data-ibreed]').forEach(b => b.onclick = () => { const x = indelingConcept[+b.dataset.ibreed]; x.breed = !x.breed; render(); });
-  // slepen: tijdens het slepen schuiven we de blokken zelf in de pagina (DOM); bij loslaten lezen we de volgorde uit
+  $('#iStandaard').onclick = () => { const alle = opslag.get(INDELING_KEY) || {}; delete alle[scherm]; opslag.set(INDELING_KEY, alle); stop(); toast('Standaardindeling'); };
+  $('#iBewaar').onclick = () => { const alle = opslag.get(INDELING_KEY) || {}; alle[scherm] = indelingConcept; opslag.set(INDELING_KEY, alle); stop(); toast('Indeling opgeslagen ✓'); };
+  // ▲▼: wisselen met het vorige/volgende blok in dezelfde kolom
+  const schuif = (id, r) => {
+    if (n === 1) {                                         // één kolom: volgorde zoals getoond, daarna alles in kolom 1
+      const l = [...indelingConcept].sort((a, b) => a.kol - b.kol), i = l.indexOf(vind(id)), j = i + r;
+      if (j < 0 || j >= l.length) return;
+      [l[i], l[j]] = [l[j], l[i]]; l.forEach(y => y.kol = 1); indelingConcept = l; return render();
+    }
+    const x = vind(id), k = Math.min(x.kol, n), inKol = indelingConcept.filter(y => Math.min(y.kol, n) === k);
+    const j = inKol.indexOf(x) + r; if (j < 0 || j >= inKol.length) return;
+    const a = indelingConcept.indexOf(x), b = indelingConcept.indexOf(inKol[j]);
+    [indelingConcept[a], indelingConcept[b]] = [indelingConcept[b], indelingConcept[a]]; render();
+  };
+  // ◀ ▶: naar de kolom ernaast (onderaan die kolom)
+  const kolom = (id, r) => {
+    const x = vind(id); x.kol = Math.max(1, Math.min(n, Math.min(x.kol, n) + r));
+    indelingConcept = indelingConcept.filter(y => y !== x).concat([x]); render();
+  };
+  document.querySelectorAll('[data-iop]').forEach(b => b.onclick = () => schuif(b.dataset.iop, -1));
+  document.querySelectorAll('[data-ineer]').forEach(b => b.onclick = () => schuif(b.dataset.ineer, 1));
+  document.querySelectorAll('[data-ilinks]').forEach(b => b.onclick = () => kolom(b.dataset.ilinks, -1));
+  document.querySelectorAll('[data-irechts]').forEach(b => b.onclick = () => kolom(b.dataset.irechts, 1));
+  document.querySelectorAll('[data-ioog]').forEach(b => b.onclick = () => { const x = vind(b.dataset.ioog); x.aan = !x.aan; render(); });
+  // slepen: tijdens het slepen verplaatsen we het blok zelf in de pagina (DOM); bij loslaten lezen we kolommen en volgorde uit
   let sleep = null;
   const zone = $('.vkaarten.indelen');
   zone.addEventListener('dragstart', e => {
@@ -3040,31 +3067,19 @@ function indelingKnoppen(scherm){
   });
   zone.addEventListener('dragover', e => {
     if (!sleep) return;
-    const doel = e.target.closest('.vblok');
-    if (!doel || doel === sleep) return;
-    e.preventDefault();
-    const r = doel.getBoundingClientRect();
-    const na = e.clientX - r.left > r.width / 2 || e.clientY - r.top > r.height * 0.75;   // rechterhelft of onderkant = erachter
-    zone.insertBefore(sleep, na ? doel.nextSibling : doel);
-    metsel();
+    const doel = e.target.closest('.vblok'), kol = e.target.closest('.vkol');
+    if (doel && doel !== sleep) {
+      e.preventDefault();
+      const r = doel.getBoundingClientRect();
+      doel.parentNode.insertBefore(sleep, e.clientY - r.top > r.height / 2 ? doel.nextSibling : doel);   // onderste helft = erachter
+    } else if (!doel && kol) { e.preventDefault(); if (sleep.parentNode !== kol || kol.lastElementChild !== sleep) kol.appendChild(sleep); }
   });
   zone.addEventListener('drop', e => { if (sleep) e.preventDefault(); });
   zone.addEventListener('dragend', () => { if (!sleep) return; sleep.classList.remove('sleept'); sleep = null; leesVolgorde(); render(); });
 }
-/** Metselwerk: elk blok zoveel rijen van 4 px hoog laten beslaan als het hoog is. Opnieuw als een blok van hoogte verandert. */
-const METSEL_RIJ = 4, METSEL_GAT = 14;
-let metselKijker = null;
-function metsel(){
-  const zone = $('.vkaarten'); if (!zone) return;
-  const zet = el => { const h = el.querySelector('.vinhoud').getBoundingClientRect().height + (el.querySelector('.blokbalk') ? 34 : 0);
-    el.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil((h + METSEL_GAT) / METSEL_RIJ)); };
-  zone.querySelectorAll('.vblok').forEach(zet);
-  if (metselKijker) metselKijker.disconnect();
-  if (window.ResizeObserver) {
-    metselKijker = new ResizeObserver(lijst => lijst.forEach(x => { const el = x.target.closest('.vblok'); if (el) zet(el); }));
-    zone.querySelectorAll('.vblok .vinhoud').forEach(el => metselKijker.observe(el));
-  }
-}
+// venster smaller/breder (aantal kolommen verandert): opnieuw tekenen
+let kolStand = null;                                     // pas bij de eerste resize uitrekenen (BREED bestaat dan al)
+window.addEventListener('resize', () => { const n = aantalKol(); if (kolStand === null) kolStand = n; else if (n !== kolStand) { kolStand = n; if (view !== 'rooster') achtergrondRender(); } });
 
 // ================= ROOSTER (week op de pc, dag op de telefoon) =================
 // Lessen (lesrooster-agenda), diensten en je eigen blokken (tabblad Blokken) in één rooster per uur.
