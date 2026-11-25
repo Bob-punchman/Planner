@@ -311,6 +311,8 @@
   .ag .tijd{min-width:92px}
   .ag.blokrij.klaar .grow{text-decoration:line-through;color:var(--muted)}
   .ag.blokrij{align-items:center}
+  .ag .vink{flex:none}
+  .nu-tag{font-size:11px;background:var(--accent);color:var(--bg);border-radius:6px;padding:1px 5px;margin-right:4px}
   .taak .vink{width:28px;height:28px;font-size:14px}
   .taak.klaar .tnaam{text-decoration:line-through;color:var(--muted)}
   .taak.later{opacity:.55}
@@ -352,7 +354,7 @@
 function versieNr(v){ return String(v || '').split(/[.-]/).map(Number).reduce((t, x) => t * 1000 + (x || 0), 0); }
 const versieMin = (v, min) => !!v && versieNr(v) >= versieNr(min);
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-31';
+const APP_VERSIE = '2026.11.25-32';
 const SERVER_MIN = '2026.11.25-11';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -1203,19 +1205,33 @@ function renderVandaag(){
   const gister = dienstenOp(plus(dag,-1)).filter(isLaat);
   const lo = lessenOp(dag), ds = dienstenOp(dag);
   const agenda = [];
-  if (lo && lo.lessen) lo.lessen.forEach(l => agenda.push({t:l.begin, html:
+  if (lo && lo.lessen) lo.lessen.forEach(l => agenda.push({t:l.begin, e:minuten(l).e, html:
     `<div class="ag" ${lesData(l)} style="cursor:pointer"><span class="tijd">${l.begin}–${l.eind}</span><span class="grow">${esc(l.titel)}</span></div>`}));
-  ds.forEach(x => agenda.push({t:x.begin, html:
+  ds.forEach(x => agenda.push({t:x.begin, e:minuten(x).e, html:
     `<div class="ag werk"><span class="tijd">${x.begin}–${x.eind}</span><span class="grow">${esc(W())}${x.waar?' · '+esc(x.waar):''}</span><span class="sub">${u(nettoU(x))} u</span></div>`}));
   // extra agenda's (⚙︎): hele dag bovenaan, de rest op tijd
-  extraOp(dag).forEach(x => agenda.push({t: x.heleDag ? '00:00' : x.begin, html:
+  extraOp(dag).forEach(x => agenda.push({t: x.heleDag ? '00:00' : x.begin, e: x.heleDag ? 1440 : minuten(x).e, heleDag: !!x.heleDag, html:
     `<div class="ag" ${extraData(x)} style="cursor:pointer"><span class="tijd">${x.heleDag ? 'hele dag' : x.begin + '–' + x.eind}</span>
       <span class="grow"><span class="bolletje extra"${extraBolStijl(x)}></span>${esc(x.titel)}${x.tijdTekst ? ` <span class="sub">${esc(x.tijdTekst)}</span>` : ''}</span></div>`}));
   // je eigen blokken uit het rooster (tik = wijzigen of afvinken)
-  blokken().filter(b => b.datum === dag).forEach(b => agenda.push({t:b.begin, html:
-    `<div class="ag blokrij ${b.klaar ? 'klaar' : ''}" data-blok="${b.id}" style="cursor:pointer"><span class="tijd">${b.begin}–${b.eind}</span>
+  blokken().filter(b => b.datum === dag).forEach(b => agenda.push({t:b.begin, e:minuten(b).e, html:
+    `<div class="ag blokrij ${b.klaar ? 'klaar' : ''}" data-blok="${b.id}" style="cursor:pointer">${!BREED.matches ? `<button class="vink" data-bvink="${b.id}" aria-label="afvinken">${b.klaar ? '✓' : ''}</button>` : ''}<span class="tijd">${b.begin}–${b.eind}</span>
       <span class="grow"><span class="bolletje ${b.soort}"></span>${b.klaar ? '✓ ' : ''}${esc(blokNaam(b))}</span></div>`}));
+  // reistijd ook (op de telefoon handig: "wanneer moet ik weg?")
+  if (!BREED.matches) reisOp(dag).forEach(r => agenda.push({t:hhmm(r.b), e:r.e, html:
+    `<div class="ag reis"><span class="tijd">${hhmm(r.b)}–${hhmm(r.e)}</span><span class="grow">🚆 reizen <span class="sub">${esc(r.titel)}</span></span></div>`}));
   agenda.sort((a,b)=>a.t.localeCompare(b.t));
+  // Telefoon, vandaag: alleen "nu en straks" (wat nu bezig is + de volgende 2), de hele dag staat in Rooster.
+  // Pc: de hele dag in één oogopslag.
+  const nuEnStraks = !BREED.matches && isVandaag;
+  if (nuEnStraks) {
+    const nuM = new Date().getHours() * 60 + new Date().getMinutes();
+    const nog = agenda.filter(a => !a.heleDag && a.e > nuM);
+    const bezig = nog.filter(a => mins(a.t) <= nuM), straks = nog.filter(a => mins(a.t) > nuM).slice(0, 2);
+    const heel = agenda.filter(a => a.heleDag);
+    agenda.length = 0;
+    agenda.push(...heel, ...bezig.map(a => Object.assign({}, a, { html: a.html.replace('<span class="tijd">', '<span class="tijd"><b class="nu-tag">nu</b> ') })), ...straks);
+  }
   // terugkerende taken (na vaste tijd) die bijna moeten, te laat zijn of vandaag gedaan: bovenaan
   const ivTaken = (D.taken || []).filter(t => interval(t)).map(t => ({ t, st: taakStand(t, dag) })).filter(x => x.st && !x.st.later)
     .map(x => ({t:'', html: `<div class="ag dl taak ${x.st.klaar ? 'klaar' : ''} ${x.st.volgende && x.st.dagen < 0 ? 'urgent' : ''}"><button class="vink" data-tvink="${x.t.id}" aria-label="gedaan">${x.st.klaar ? '✓' : ''}</button>
@@ -1241,12 +1257,13 @@ function renderVandaag(){
       ${/indien nodig|her(toets|kansing)/i.test(t.vak+' '+t.opmerking) ? `<button class="btn sec small" id="tNiet" style="margin-top:8px">Niet nodig ✓</button>` : ''}</div>
       <div class="big">${dagenTot(dag,t.datum)}<span class="unit">${dagenTot(dag,t.datum)===1?'dag':'dagen'}</span></div></div>` : '' },
       { id: 'deadlines', naam: 'Deadlines', html: deadlineKaart(dag) },
-      { id: 'agenda', naam: 'Agenda', html: `<h2>Agenda</h2>
+      { id: 'agenda', naam: 'Agenda', html: `<h2>${nuEnStraks ? 'Nu en straks' : 'Agenda'}</h2>
     <div class="card">
       ${lo===null ? '<div class="note">Lessen laden…</div>' : ''}
       ${lo && lo.fout ? `<div class="note">${esc(lo.fout)}</div>` : ''}
       ${lo && lo.buiten ? `<div class="note">Lessen worden opgehaald voor 2 weken terug t/m ${dagKort(LESSEN.tot)}. Deze dag valt erbuiten.</div>` : ''}
-      ${agenda.map(a=>a.html).join('') || (lo && lo.lessen ? '<div class="empty">Geen lessen of diensten.</div>' : '')}
+      ${agenda.map(a=>a.html).join('') || (nuEnStraks ? '<div class="empty">Niets meer gepland vandaag ✓</div>' : lo && lo.lessen ? '<div class="empty">Geen lessen of diensten.</div>' : '')}
+      ${!BREED.matches ? '<button class="btn ghost small" id="agHeleDag" style="margin-top:6px">Hele dag in Rooster →</button>' : ''}
     </div>` },
       { id: 'invullen', naam: 'Invullen', html: `<h2>Invullen <span id="vStatus" class="sub autostatus ${autoStatus}">${STATUS_TEKST[autoStatus] || ''}</span></h2>
     <div class="card">
@@ -1283,6 +1300,8 @@ function renderVandaag(){
   lesKnoppen();
   document.querySelectorAll('#main [data-blok]').forEach(el => el.onclick = () => openBlok(blokken().find(b => b.id === el.dataset.blok)));
   document.querySelectorAll('#main [data-tvink]').forEach(b => b.onclick = () => vinkTaak((D.taken || []).find(t => t.id === b.dataset.tvink)));
+  document.querySelectorAll('#main [data-bvink]').forEach(k => k.onclick = e => { e.stopPropagation(); vinkBlokVraag(blokken().find(b => b.id === k.dataset.bvink)); });
+  if ($('#agHeleDag')) $('#agHeleDag').onclick = () => { view = 'rooster'; rd = dag; render(); window.scrollTo(0, 0); };
   if ($('#tNiet')) $('#tNiet').onclick = async () => {
     const k = $('#tNiet'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Zeker? Tik nog een keer'; return; }
     D = await api('verwijderTentamen', t.id); render(); toast(t.vak + ' verwijderd. Gefeliciteerd!');
