@@ -297,6 +297,7 @@
   .dagkol[data-bwdag] .blok:not(.achter){z-index:1}
   .blok.reis{background:repeating-linear-gradient(135deg,var(--soft) 0 6px,transparent 6px 12px);border-left-color:var(--muted);opacity:.85}
   .ag.reis{opacity:.7}
+  .blok.reis.achter{opacity:.3}
   .blok.anders{background:var(--card);border:1px dashed var(--line);border-left:3px solid var(--muted)}
   .blok.klaar{opacity:.55}
   .blok.klaar .bt{text-decoration:line-through}
@@ -348,7 +349,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-25';
+const APP_VERSIE = '2026.11.25-26';
 const SERVER_MIN = '2026.11.25-9';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -566,14 +567,26 @@ function reisMin(tekst){
   return r ? Number(r.min) : 0;
 }
 /** Reisstukken op dag s: [{b, e, titel}] in minuten. */
-function reisOp(s){
+/** Reisstukken op dag s. erbijBlokken: blokken die er (nog) niet staan maar wel mee moeten tellen (bij overnemen). */
+function reisOp(s, erbijBlokken = []){
   if (!D) return [];
   // terug = false: geen reistijd na afloop (bij "Na afloop: rest van de dag" ben je toch al niet meer beschikbaar)
   const uit = [], erbij = (m, r, titel, terug = true) => { if (r > 0) { uit.push({ b: m.b - r, e: m.b, titel }); if (terug) uit.push({ b: m.e, e: m.e + r, titel }); } };
   const lo = lessenOp(s), rs = Math.max(0, Number(I().reisSchool) || 0);
   if (rs && lo && lo.lessen && lo.lessen.length) {
     const m = lo.lessen.map(minuten);
-    erbij({ b: Math.min(...m.map(x => x.b)), e: Math.max(...m.map(x => x.e)) }, rs, 'school');
+    const sch = { b: Math.min(...m.map(x => x.b)), e: Math.max(...m.map(x => x.e)) };
+    // Blijf je op school studeren? Een eigen blok dat begint vóórdat je thuis kunt zijn (binnen de reistijd na je laatste
+    // les), of eindigt nadat je al van huis weg had gemoeten, doe je op school: de reistijd schuift dan naar erna/ervoor.
+    const bl = blokken().filter(b => b.datum === s).concat(erbijBlokken.filter(b => b.datum === s)).map(minuten);
+    for (let k = 0, door = true; door && k < 20; k++) {
+      door = false;
+      bl.forEach(x => {
+        if (x.b >= sch.e && x.b < sch.e + rs && x.e > sch.e) { sch.e = x.e; door = true; }
+        if (x.e <= sch.b && x.e > sch.b - rs && x.b < sch.b) { sch.b = x.b; door = true; }
+      });
+    }
+    erbij(sch, rs, 'school');
   }
   dienstenOp(s).forEach(x => erbij(minuten(x), reisMin(x.waar), x.waar || W()));
   const eigen = extraOp(s).filter(x => !x.heleDag && extraTeltMee(x.agenda)).map(x => Object.assign(minuten(x), { x }));
@@ -583,7 +596,7 @@ function reisOp(s){
   return uit.filter(r => !eigen.some(m => m.b < r.e && m.e > r.b)).sort((p, q) => p.b - q.b);
 }
 /** Bezette stukken [begin, eind] (minuten) op dag s door meetellende extra afspraken (met "na afloop") en reistijd. */
-function extraStukken(s){
+function extraStukken(s, erbijBlokken = []){
   if (!D) return [];
   const { a, b } = actieveDag();
   // na afloop nog bezet (⚙︎ per agenda): +1 uur of tot het eind van je dag
@@ -595,7 +608,7 @@ function extraStukken(s){
     if (/^vanaf/.test(x.tijdTekst) && t) return [mins(t), b];
     if (/^tot/.test(x.tijdTekst) && t) return [a, na(x, mins(t))];
     return [a, b];                                                      // dag ertussen: helemaal weg
-  }).filter(Boolean).concat(reisOp(s).map(r => [r.b, r.e]))            // reistijd telt hier ook (zelfde tijd niet dubbel)
+  }).filter(Boolean).concat(reisOp(s, erbijBlokken).map(r => [r.b, r.e]))   // reistijd telt hier ook (zelfde tijd niet dubbel)
     .sort((p, q) => p[0] - q[0]);
   return stukken;
 }
@@ -3767,13 +3780,13 @@ function basisWeek(){
   try { const r = JSON.parse((D && D.instellingen && D.instellingen.basisWeek) || '[]'); return Array.isArray(r) ? r : []; } catch (e) { return []; }
 }
 /** Bezet op dag s: [{b, e, wat}] in minuten. */
-function bezetOp(s){
-  const uit = [], lo = lessenOp(s);
+function bezetOp(s, kandidaat){
+  const uit = [], lo = lessenOp(s), erbij = kandidaat ? [kandidaat] : [];
   if (lo && lo.lessen) lo.lessen.forEach(l => uit.push(Object.assign(minuten(l), { wat: l.titel })));
   dienstenOp(s).forEach(x => uit.push(Object.assign(minuten(x), { wat: W() + (x.waar ? ' ' + x.waar : '') })));
   const ex = extraOp(s).filter(x => extraTeltMee(x.agenda));
-  extraStukken(s).forEach(([b, e]) => {
-    const x = ex.find(y => !y.heleDag && minuten(y).b === b), r = reisOp(s).find(y => y.b === b && y.e === e);
+  extraStukken(s, erbij).forEach(([b, e]) => {
+    const x = ex.find(y => !y.heleDag && minuten(y).b === b), r = reisOp(s, erbij).find(y => y.b === b && y.e === e);
     uit.push({ b, e, wat: r ? 'reistijd' : x ? x.titel : 'afspraak' });
   });
   blokken().filter(b => b.datum === s).forEach(b => uit.push(Object.assign(minuten(b), { wat: blokNaam(b) })));
@@ -3782,7 +3795,7 @@ function bezetOp(s){
 /** Past blok n (datum, begin, eind) in de week? → { status: 'ok' | 'kort' | 'weg', begin, eind, reden } */
 function toetsBlok(n){
   if (volWeg(n.datum)) return { status: 'weg', reden: 'je bent weg' };
-  const m = minuten(n), bezet = bezetOp(n.datum).filter(x => x.b < m.e && x.e > m.b).sort((p, q) => p.b - q.b);
+  const m = minuten(n), bezet = bezetOp(n.datum, n).filter(x => x.b < m.e && x.e > m.b).sort((p, q) => p.b - q.b);
   if (!bezet.length) return { status: 'ok' };
   // vrije stukken binnen het blok
   let t = m.b, beste = null;
