@@ -349,7 +349,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-27';
+const APP_VERSIE = '2026.11.25-28';
 const SERVER_MIN = '2026.11.25-9';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -3573,7 +3573,7 @@ function renderRooster(){
         <button class="btn ghost small" id="rBasisEdit">Basisweek bewerken</button>
         <button class="btn ghost small" id="rBasisBewaar">Deze week als basisweek</button>
         <div class="grow"></div>${keuze}</div>
-      ${oud}${lesInfo}${extraInfo}${verborgenKnop(wkMa)}
+      ${oud}${lesInfo}${extraInfo}${verborgenKnop(wkMa)}${dubbeleBlokkenMelding(wkMa)}
       <div class="note" style="margin:0 2px 6px">Studie gepland deze week: <b>${uMin(gepland)}</b> van je studieplan ${uD(doel)}.
         Klik in een leeg vak om een blok te plannen, klik op een blok om het te wijzigen of af te vinken.</div>
       ${weekRooster(wkMa)}`;
@@ -3654,6 +3654,7 @@ function roosterKnoppen(){
   if ($('#rNieuw')) $('#rNieuw').onclick = () => openBlok(null, { datum: rd });
   if ($('#rKopie')) $('#rKopie').onclick = () => neemVorigeWeekOver();
   if ($('#rBasis')) $('#rBasis').onclick = () => neemBasisOver();
+  if ($('#rDubbel')) $('#rDubbel').onclick = e => ruimDubbelOp(e.currentTarget);
   if ($('#rBasisBewaar')) $('#rBasisBewaar').onclick = () => bewaarBasisweek();
   if ($('#rBasisEdit')) $('#rBasisEdit').onclick = () => { basisEdit = { ref: maandag(rd), achter: true }; render(); window.scrollTo(0, 0); };
   document.querySelectorAll('[data-blok]').forEach(el => el.onclick = e => { e.stopPropagation(); openBlok(blokken().find(b => b.id === el.dataset.blok)); });
@@ -3811,8 +3812,10 @@ function toetsBlok(n){
 }
 /** Laat zien wat er met de blokken gebeurt en neem ze over na "overnemen". */
 function overnemenScherm(titel, kandidaten){
-  const dubbel = n => blokken().some(b => b.datum === n.datum && b.begin === n.begin && b.wat === n.wat);
-  const lijst = kandidaten.filter(n => !dubbel(n)).map(n => ({ n, r: toetsBlok(n) }))
+  // staat hij er al (precies zo, of ingekort: hetzelfde soort blok binnen dezelfde tijden)? dan niet nog een keer
+  const alGedaan = n => blokken().some(b => b.datum === n.datum && b.soort === n.soort && (b.wat || '') === (n.wat || '')
+    && (b.vak || '') === (n.vak || '') && b.begin >= n.begin && b.eind <= n.eind);
+  const lijst = kandidaten.filter(n => !alGedaan(n)).map(n => ({ n, r: toetsBlok(n) }))
     .sort((p, q) => (p.n.datum + p.n.begin).localeCompare(q.n.datum + q.n.begin));
   if (!lijst.length) return toast('Die blokken staan er al');
   const mee = lijst.filter(x => x.r.status !== 'weg');
@@ -3831,6 +3834,27 @@ function overnemenScherm(titel, kandidaten){
     api('bewaarBlokken', nieuw).then(d => { D = d; closeSheet(); render(); toast(nieuw.length + (nieuw.length === 1 ? ' blok' : ' blokken') + ' overgenomen ✓'); })
       .catch(() => { k.classList.remove('bezig'); $('#oAnn').classList.remove('bezig'); k.textContent = 'Opnieuw proberen'; });
   };
+}
+/** Blokken die precies dubbel staan (zelfde dag, tijden, soort, vak en wat) in week ma: de extra kopieën. */
+function dubbeleBlokken(ma){
+  const gezien = new Set(), extra = [];
+  blokken().filter(b => b.datum >= ma && b.datum <= plus(ma, 6))
+    .sort((p, q) => (p.klaar === 'ja' ? 0 : 1) - (q.klaar === 'ja' ? 0 : 1))     // een afgevinkte houden we
+    .forEach(b => { const k = [b.datum, b.begin, b.eind, b.soort, b.vak || '', b.wat || ''].join('|');
+      if (gezien.has(k)) extra.push(b); else gezien.add(k); });
+  return extra;
+}
+function dubbeleBlokkenMelding(ma){
+  const n = dubbeleBlokken(ma).length;
+  return n ? `<div class="alert">${n} ${n === 1 ? 'blok staat' : 'blokken staan'} dubbel in deze week.
+    <button class="btn sec small" id="rDubbel" style="margin-left:8px">Dubbele weghalen</button></div>` : '';
+}
+async function ruimDubbelOp(knop){
+  const weg = dubbeleBlokken(maandag(rd));
+  if (!weg.length) return;
+  tril(); knop.classList.add('bezig'); knop.textContent = 'Bezig…';
+  try { for (const b of weg) D = await api('verwijderBlok', b.id); render(); toast(weg.length + (weg.length === 1 ? ' dubbel blok' : ' dubbele blokken') + ' weggehaald ✓'); }
+  catch (e) { render(); }
 }
 /** Blokken van de week ervóór naar de week die je ziet (zonder vinkjes). */
 function neemVorigeWeekOver(){
