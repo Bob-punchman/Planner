@@ -352,7 +352,7 @@
 function versieNr(v){ return String(v || '').split(/[.-]/).map(Number).reduce((t, x) => t * 1000 + (x || 0), 0); }
 const versieMin = (v, min) => !!v && versieNr(v) >= versieNr(min);
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-30';
+const APP_VERSIE = '2026.11.25-31';
 const SERVER_MIN = '2026.11.25-11';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -550,6 +550,10 @@ function haalExtraOp(){
     .then(r => { EXTRA = Object.assign({}, b, r); opslag.set(EXTRA_KEY, EXTRA); achtergrondRender(); })
     .catch(() => { if (!EXTRA) EXTRA = { items: [], fout: 'Extra agenda laden lukte niet.' }; achtergrondRender(); });
 }
+/** Kleur uit Google Agenda (alleen een geldige #hex): rand + lichte achtergrond, zoals daar. */
+const kleurOk = k => /^#[0-9a-f]{3,8}$/i.test(String(k || ''));
+const extraKleurStijl = x => kleurOk(x && x.kleur) ? `border-left-color:${x.kleur};background:color-mix(in srgb, ${x.kleur} 24%, var(--card));` : '';
+const extraBolStijl = x => kleurOk(x && x.kleur) ? ` style="background:${x.kleur}"` : '';
 const extraOp = s => (EXTRA && EXTRA.items || []).filter(x => x.datum === s);
 /**
  * Hoeveel uur van je actieve dag (⚙︎) gaat op dag s op aan afspraken uit je extra agenda's (instelling extraTelt = aan).
@@ -1206,7 +1210,7 @@ function renderVandaag(){
   // extra agenda's (⚙︎): hele dag bovenaan, de rest op tijd
   extraOp(dag).forEach(x => agenda.push({t: x.heleDag ? '00:00' : x.begin, html:
     `<div class="ag" ${extraData(x)} style="cursor:pointer"><span class="tijd">${x.heleDag ? 'hele dag' : x.begin + '–' + x.eind}</span>
-      <span class="grow"><span class="bolletje extra"></span>${esc(x.titel)}${x.tijdTekst ? ` <span class="sub">${esc(x.tijdTekst)}</span>` : ''}</span></div>`}));
+      <span class="grow"><span class="bolletje extra"${extraBolStijl(x)}></span>${esc(x.titel)}${x.tijdTekst ? ` <span class="sub">${esc(x.tijdTekst)}</span>` : ''}</span></div>`}));
   // je eigen blokken uit het rooster (tik = wijzigen of afvinken)
   blokken().filter(b => b.datum === dag).forEach(b => agenda.push({t:b.begin, html:
     `<div class="ag blokrij ${b.klaar ? 'klaar' : ''}" data-blok="${b.id}" style="cursor:pointer"><span class="tijd">${b.begin}–${b.eind}</span>
@@ -3492,7 +3496,7 @@ const blokNaam = b => b.wat || (b.soort === 'studie' ? (b.vak || 'Studie') : BLO
 function roosterItems(s){
   const uit = [], lo = lessenOp(s);
   if (lo && lo.lessen) lo.lessen.forEach(l => uit.push(Object.assign(minuten(l), { soort: 'les', titel: l.titel, tijd: l.begin + '–' + l.eind, les: l })));
-  extraOp(s).filter(x => !x.heleDag).forEach(x => uit.push(Object.assign(minuten(x), { soort: 'extra', titel: x.titel, tijd: x.begin + '–' + x.eind, extra: x })));
+  extraOp(s).filter(x => !x.heleDag).forEach(x => uit.push(Object.assign(minuten(x), { soort: 'extra', titel: x.titel, tijd: x.begin + '–' + x.eind, extra: x, stijl: extraKleurStijl(x) })));
   dienstenOp(s).forEach(x => uit.push(Object.assign(minuten(x), { soort: 'werk', titel: W() + (x.waar ? ' · ' + x.waar : ''),
     tijd: x.begin + '–' + x.eind, dienst: x.id })));
   reisOp(s).forEach(r => uit.push({ b: r.b, e: r.e, soort: 'reis', titel: '🚆 reizen', sub: r.titel, tijd: hhmm(r.b) + '–' + hhmm(r.e) }));
@@ -3628,7 +3632,7 @@ function itemHtml(x, start){
   const top = (x.b - start) / 30 * SLOT, h = Math.max(SLOT - 4, (x.e - x.b) / 30 * SLOT - 2);
   const data = x.blok ? `data-blok="${x.blok}"` : x.dienst ? `data-dienst="${x.dienst}"` : x.les ? lesData(x.les) : x.extra ? extraData(x.extra) : '';
   return `<div class="blok ${x.soort} ${x.klaar ? 'klaar' : ''}" ${data} title="${esc(x.tijd + ' ' + x.titel)}"
-    style="top:${top}px;height:${h}px;left:calc(${x.l / x.n * 100}% + 2px);width:calc(${100 / x.n}% - 4px)">
+    style="top:${top}px;height:${h}px;left:calc(${x.l / x.n * 100}% + 2px);width:calc(${100 / x.n}% - 4px);${x.stijl || ''}">
     <div class="bt">${x.klaar ? '✓ ' : ''}${esc(x.titel)}</div>${h > SLOT ? `<div class="bs">${esc(x.tijd)}${x.sub ? ' · ' + esc(x.sub) : ''}</div>` : ''}</div>`;
 }
 /** Dagrooster (telefoon): een lijst op tijd, met een vinkje bij je eigen blokken. */
@@ -3638,7 +3642,7 @@ function dagRooster(s){
   return `<div class="card">${items.map(x => x.blok
     ? `<div class="ag blokrij ${x.soort} ${x.klaar ? 'klaar' : ''}"><button class="vink" data-bvink="${x.blok}" aria-label="afvinken">${x.klaar ? '✓' : ''}</button>
         <span class="tijd">${x.tijd}</span><span class="grow" data-blok="${x.blok}" style="cursor:pointer"><span class="bolletje ${x.soort}"></span>${esc(x.titel)}${x.sub ? ` <span class="sub">${esc(x.sub)}</span>` : ''}</span></div>`
-    : `<div class="ag ${x.soort === 'werk' ? 'werk' : ''}" ${x.dienst ? `data-dienst="${x.dienst}"` : x.les ? lesData(x.les) : x.extra ? extraData(x.extra) : ''} style="cursor:pointer"><span class="vink-plek">${x.extra ? '<span class="bolletje extra"></span>' : ''}</span>
+    : `<div class="ag ${x.soort === 'werk' ? 'werk' : ''}" ${x.dienst ? `data-dienst="${x.dienst}"` : x.les ? lesData(x.les) : x.extra ? extraData(x.extra) : ''} style="cursor:pointer"><span class="vink-plek">${x.extra ? `<span class="bolletje extra"${extraBolStijl(x.extra)}></span>` : ''}</span>
         <span class="tijd">${x.tijd}</span><span class="grow">${esc(x.titel)}${x.sub ? ` <span class="sub">${esc(x.sub)}</span>` : ''}</span></div>`).join('')}</div>`;
 }
 
@@ -3704,7 +3708,7 @@ function renderBasisEdit(){
   const item = (x) => {
     const top = (x.b - start) / 30 * SLOT, h = Math.max(SLOT - 4, (x.e - x.b) / 30 * SLOT - 2);
     return `<div class="blok ${x.soort} ${x.achter ? 'achter' : ''}" ${x.bw !== undefined ? `data-bw="${x.bw}"` : ''} title="${esc(x.tijd + ' ' + x.titel)}"
-      style="top:${top}px;height:${h}px;left:calc(${x.l / x.n * 100}% + 2px);width:calc(${100 / x.n}% - 4px)">
+      style="top:${top}px;height:${h}px;left:calc(${x.l / x.n * 100}% + 2px);width:calc(${100 / x.n}% - 4px);${x.stijl || ''}">
       <div class="bt">${esc(x.titel)}</div>${h > SLOT ? `<div class="bs">${esc(x.tijd)}${x.sub ? ' · ' + esc(x.sub) : ''}</div>` : ''}</div>`;
   };
   const kolommen = per.map((items, k) => `<div class="dagkol" data-bwdag="${k}" data-start="${start}" style="height:${hoogte}px">${items.map(item).join('')}</div>`).join('');
@@ -4033,7 +4037,7 @@ function maandItems(s){
   periodes().filter(p => p.van <= s && s <= p.tot).forEach(p => uit.push({ soort: 'periode', ico: p.soort === 'uitje' ? '🧳' : p.soort === 'zomer' ? '☀' : '🏖', tekst: p.naam, p }));
   D.tentamens.filter(t => t.datum === s).forEach(t => uit.push({ soort: 'tentamen', ico: '📚', tekst: t.vak + (t.tijd ? ' ' + t.tijd : ''), t }));
   D.deadlines.filter(d => d.datum === s).forEach(d => uit.push({ soort: 'deadline', ico: d.klaar ? '✓' : '⏰', tekst: deadlineNaam(d), klaar: d.klaar, d }));
-  extraOp(s).filter(x => extraInMaand(x.agenda)).forEach(x => uit.push({ soort: 'extra', ico: '📅', tekst: (x.heleDag ? '' : x.begin + ' ') + x.titel, x }));
+  extraOp(s).filter(x => extraInMaand(x.agenda)).forEach(x => uit.push({ soort: 'extra', ico: '📅', tekst: (x.heleDag ? '' : x.begin + ' ') + x.titel, x, kleur: x.kleur }));
   dienstenOp(s).forEach(x => uit.push({ soort: 'werk', ico: '💼', tekst: W() + ' ' + x.begin, x }));
   const bl = blokken().filter(b => b.datum === s);
   if (bl.length) uit.push({ soort: 'blokken', ico: '▦', tekst: bl.length + (bl.length === 1 ? ' blok' : ' blokken') });
@@ -4047,7 +4051,7 @@ function maandRooster(ymS){
     const items = maandItems(s), anders = s.slice(0, 7) !== ymS, wd = dt(s).getDay();
     return `<div class="mdcel ${anders ? 'anders' : ''} ${s === nu ? 'vandaag' : ''} ${wd === 0 || wd === 6 ? 'weekend' : ''}" data-dag="${s}">
       <div class="mdnr">${dt(s).getDate()}</div>
-      ${items.slice(0, 5).map(x => `<div class="mditem ${x.soort} ${x.klaar ? 'klaar' : ''}" title="${esc(x.tekst)}"><span class="mdico">${x.ico}</span><span class="mdtekst">${esc(x.tekst)}</span></div>`).join('')}
+      ${items.slice(0, 5).map(x => `<div class="mditem ${x.soort} ${x.klaar ? 'klaar' : ''}" title="${esc(x.tekst)}"${kleurOk(x.kleur) ? ` style="box-shadow:inset 3px 0 0 ${x.kleur}"` : ''}><span class="mdico">${x.ico}</span><span class="mdtekst">${esc(x.tekst)}</span></div>`).join('')}
       ${items.length > 5 ? `<div class="mditem meer">+${items.length - 5}</div>` : ''}</div>`;
   };
   return `<div class="md"><div class="mdkop wknr"></div>${kop}
