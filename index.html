@@ -352,7 +352,7 @@
 function versieNr(v){ return String(v || '').split(/[.-]/).map(Number).reduce((t, x) => t * 1000 + (x || 0), 0); }
 const versieMin = (v, min) => !!v && versieNr(v) >= versieNr(min);
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-29';
+const APP_VERSIE = '2026.11.25-30';
 const SERVER_MIN = '2026.11.25-11';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -3779,7 +3779,7 @@ function openBasisBlok(i, preset){
 // ================= BLOKKEN OVERNEMEN (vorige week of basisweek) =================
 // Elk blok wordt eerst getoetst aan de nieuwe week: botst het met lessen, diensten, afspraken die meetellen
 // (met "na afloop"), reistijd of een blok dat er al staat, dan vervalt het. Botst het maar deels, dan wordt het
-// ingekort tot het grootste vrije stuk (minstens 30 min). Op dagen dat je helemaal weg bent (uitje) niets.
+// ingekort tot het grootste vrije stuk (minstens 1 uur). Op dagen dat je helemaal weg bent (uitje) niets.
 // Je ziet eerst wat er gebeurt en kiest dan pas "overnemen".
 /** Basisweek: [{dag (0 = ma … 6 = zo), begin, eind, wat, soort, vak}] uit instelling basisWeek. */
 function basisWeek(){
@@ -3810,7 +3810,8 @@ function toetsBlok(n){
   bezet.forEach(x => { if (x.b > t) kijk(t, x.b); t = Math.max(t, x.e); });
   if (m.e > t) kijk(t, m.e);
   const reden = 'botst met ' + [...new Set(bezet.map(x => x.wat))].join(', ');
-  if (beste && beste.e - beste.b >= 30) return { status: 'kort', begin: hhmm(beste.b), eind: hhmm(beste.e), reden };
+  // korter dan een uur heeft weinig zin (kort blok blijft alleen staan als het origineel ook zo kort was)
+  if (beste && beste.e - beste.b >= Math.min(60, m.e - m.b)) return { status: 'kort', begin: hhmm(beste.b), eind: hhmm(beste.e), reden };
   return { status: 'weg', reden };
 }
 /** Laat zien wat er met de blokken gebeurt en neem ze over na "overnemen". */
