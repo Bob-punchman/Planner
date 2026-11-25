@@ -285,6 +285,8 @@
   .blok.coderen{background:var(--soft);border-left-color:var(--game)}
   .blok.taak{background:var(--warn-soft);border-left-color:var(--warn)}
   .blok.extra{background:var(--soft);border-left-color:var(--extra)}
+  .blok.reis{background:repeating-linear-gradient(135deg,var(--soft) 0 6px,transparent 6px 12px);border-left-color:var(--muted);opacity:.85}
+  .ag.reis{opacity:.7}
   .blok.anders{background:var(--card);border:1px dashed var(--line);border-left:3px solid var(--muted)}
   .blok.klaar{opacity:.55}
   .blok.klaar .bt{text-decoration:line-through}
@@ -335,8 +337,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-9';
-const SERVER_MIN = '2026.11.25-4';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda)
+const APP_VERSIE = '2026.11.25-11';
+const SERVER_MIN = '2026.11.25-6';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -361,6 +363,7 @@ const u = n => (Math.round(n*100)/100).toLocaleString('nl-NL',{maximumFractionDi
 const euro = n => '€ '+Math.round(n).toLocaleString('nl-NL');
 const euroC = n => '€ '+n.toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2});
 const num = s => Number(String(s).replace(',','.'));
+const hhmm = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return pad(Math.floor(m / 60)) + ':' + pad(m % 60); };
 const mins = t => { const [h,m]=String(t||'0:0').split(':').map(Number); return (h||0)*60+(m||0); };
 const ymPlus = (ym,n) => { let [y,m]=ym.split('-').map(Number); m+=n; while(m>12){m-=12;y++;} while(m<1){m+=12;y--;} return y+'-'+pad(m); };
 const ymNaam = ym => { const [y,m]=ym.split('-').map(Number); return MAANDEN_LANG[m-1]+' '+y; };
@@ -538,6 +541,32 @@ const extraOp = s => (EXTRA && EXTRA.items || []).filter(x => x.datum === s);
  * Afspraak met tijd: het deel binnen je actieve dag. Meerdaagse afspraak met tijden: eerste dag "vanaf", laatste dag "tot",
  * de dagen ertussen helemaal. Afspraken van een hele dag zonder tijd (bijv. een herinnering) tellen niet mee.
  */
+// ================= REISTIJD =================
+// Vaste reistijd vóór en na een afspraak, zodat die niet als vrije tijd telt.
+// - School: ⚙︎ → Studietijd → reistijd naar school (enkele reis): vóór de eerste en na de laatste les van de dag.
+// - Regels (⚙︎ → Reistijd, instelling reisRegels, JSON [{tekst, min}]): komt de tekst voor in de locatie van een dienst
+//   of de titel van een afspraak uit een extra agenda, dan komt er min minuten reizen vóór én na. De eerste regel die past telt.
+function reisRegels(){
+  try { const r = JSON.parse(I().reisRegels || '[]'); return Array.isArray(r) ? r.filter(x => x && String(x.tekst || '').trim() && Number(x.min) > 0) : []; }
+  catch (e) { return []; }
+}
+function reisMin(tekst){
+  const t = String(tekst || '').toLowerCase(), r = reisRegels().find(x => t.includes(String(x.tekst).trim().toLowerCase()));
+  return r ? Number(r.min) : 0;
+}
+/** Reisstukken op dag s: [{b, e, titel}] in minuten. */
+function reisOp(s){
+  if (!D) return [];
+  const uit = [], erbij = (m, r, titel) => { if (r > 0) uit.push({ b: m.b - r, e: m.b, titel }, { b: m.e, e: m.e + r, titel }); };
+  const lo = lessenOp(s), rs = Math.max(0, Number(I().reisSchool) || 0);
+  if (rs && lo && lo.lessen && lo.lessen.length) {
+    const m = lo.lessen.map(minuten);
+    erbij({ b: Math.min(...m.map(x => x.b)), e: Math.max(...m.map(x => x.e)) }, rs, 'school');
+  }
+  dienstenOp(s).forEach(x => erbij(minuten(x), reisMin(x.waar), x.waar || W()));
+  extraOp(s).filter(x => !x.heleDag && extraTeltMee(x.agenda)).forEach(x => erbij(minuten(x), reisMin(x.titel), x.titel));
+  return uit.sort((p, q) => p.b - q.b);
+}
 function extraUren(s){
   if (!D) return 0;
   const { a, b } = actieveDag(), deel = (van, tot) => Math.max(0, Math.min(tot, b) - Math.max(van, a));
@@ -551,7 +580,8 @@ function extraUren(s){
     if (/^vanaf/.test(x.tijdTekst) && t) return [mins(t), b];
     if (/^tot/.test(x.tijdTekst) && t) return [a, na(x, mins(t))];
     return [a, b];                                                      // dag ertussen: helemaal weg
-  }).filter(Boolean).sort((p, q) => p[0] - q[0]);
+  }).filter(Boolean).concat(reisOp(s).map(r => [r.b, r.e]))            // reistijd telt hier ook (zelfde tijd niet dubbel)
+    .sort((p, q) => p[0] - q[0]);
   let tot = 0, eind = -1;
   stukken.forEach(([v, e]) => { const begin = Math.max(v, eind); if (e > begin) { tot += deel(begin, e); eind = e; } });
   return tot / 60;
@@ -658,7 +688,20 @@ function weekendGewicht(){
 function lesUren(s){
   const l = lessenOp(s);
   if (!l || l.fout || l.buiten) return { uren: 0, onbekend: true };
-  return { uren: l.lessen.reduce((t, x) => t + x.uren, 0), onbekend: false };
+  return { uren: lesBezet(l.lessen) / 60, onbekend: false };
+}
+/** Minuten bezet door lessen: de lessen zelf (overlap één keer geteld) plus korte gaten ertussen.
+ *  Een gat van hoogstens lesGat minuten (⚙︎ → Studietijd, standaard 30) is geen echte studietijd: lokaal wisselen, koffie. */
+function lesBezet(lessen){
+  const g = I().lesGat, grens = (g === undefined || g === '') ? 30 : Math.max(0, Number(g) || 0);
+  const blokken = lessen.map(minuten).sort((x, y) => x.b - y.b);
+  let tot = 0, cur = null;
+  blokken.forEach(x => {
+    if (cur && x.b <= cur.e + grens) cur.e = Math.max(cur.e, x.e);   // het gat hoort bij het blok
+    else { if (cur) tot += cur.e - cur.b; cur = { b: x.b, e: x.e }; }
+  });
+  if (cur) tot += cur.e - cur.b;
+  return tot;
 }
 const klaarLijst = () => (D && D.klaar) || [];
 /** Klaar-melding voor vak v op dag s (of null). */
@@ -2253,6 +2296,7 @@ function renderWeek(){
 // Getallen in de instellingen, per kopje. Alle velden met data-k worden bij het opslaan uitgelezen, waar ze ook staan.
 const VELDEN = {
   studie: [['schoolUren','Schooltijd per week, inclusief lessen (uur)'],['maxStudieDag','Maximaal zelfstudie per dag (uur)'],['maxPerDag','Maximaal school + werk per dag (uur)'],
+           ['lesGat','Gat tussen twee lessen telt als bezet tot (min)'],
            ['weekendProcent','Weekenddag telt voor (% van een doordeweekse dag, bij "lichter")']],
   toetsweek: [['toetsweekDagen','Aantal dagen vóór een tentamen (0 = uit)'],['toetsweekAandeel','Deel van je studietijd voor tentamenvakken (%)'],['toetsweekGameMax','Gamen per week in de toetsweekmodus (uur)']],
   vakantie: [['vakantieStudie','Studiedoel per week in een schoolvakantie (uur; zomervakantie = 0)'],['vakantieGameDag','Gamen per dag in vakanties (uur, hoeft niet verdiend)']],
@@ -2263,8 +2307,10 @@ const VELDEN = {
          ['pauzeVanaf','Onbetaalde pauze bij diensten langer dan (uur)'],['pauzeMin','Pauze (minuten)'],
          ['vakantieWerkExtra','Extra werkuren per vakantieweek (bovenop je maanddoel)']],
 };
+// Nieuwe instellingen die een oudere Code.gs nog niet kent: deze waarde tonen in plaats van "undefined".
+const NIEUW_STD = { lesGat: 30, reisSchool: 0 };
 const veldenKaart = (i, sleutel) => `<div class="card">${VELDEN[sleutel].map(([k,l]) =>
-  `<div class="row line"><div class="grow">${l}</div><input data-k="${k}" inputmode="decimal" value="${String(i[k]).replace('.',',')}" style="width:92px;text-align:right"></div>`).join('')}</div>`;
+  `<div class="row line"><div class="grow">${l}</div><input data-k="${k}" inputmode="decimal" value="${String(i[k] ?? NIEUW_STD[k] ?? '').replace('.',',')}" style="width:92px;text-align:right"></div>`).join('')}</div>`;
 /** Extra agenda's: namen (instelling extraAgenda, met komma's) + welke níet meetellen (extraNietTellen). */
 const extraNamen = () => String(I().extraAgenda || '').split(',').map(x => x.trim()).filter(Boolean);
 const extraNietTellen = () => String(I().extraNietTellen || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -2274,6 +2320,11 @@ const extraTeltMee = naam => I().extraTelt !== 'uit' && !extraNietTellen().inclu
 function extraNaAfloop(naam){
   const r = String(I().extraNaAfloop || '').split(',').map(x => x.split('=')).find(x => x[0].trim() === naam);
   return r ? (r[1] || '').trim() : '';
+}
+function reisRij(r){
+  return `<div class="row line reisrow"><input class="rTekst grow" value="${esc(r.tekst || '')}" placeholder="tekst in titel of locatie">
+    <input class="rMin" inputmode="numeric" value="${r.min || ''}" placeholder="min" style="width:64px;text-align:right"><span class="sub">min</span>
+    <button class="x rDel" aria-label="verwijderen">×</button></div>`;
 }
 function extraRij(naam, telt, na){
   const n = (EXTRA && EXTRA.items || []).filter(x => x.agenda === naam).length;
@@ -2370,6 +2421,14 @@ function openInstellingen(){
       <div class="note" style="margin-top:0">Bijv. de agenda van je vereniging. Ze staan in je Rooster en Agenda. <b>Telt mee</b> = de tijd van een afspraak gaat af van je vrije tijd (studieplan), net als een dienst; afspraken van een hele dag zonder tijd tellen nooit mee. <b>Na afloop</b>: doe je na een borrel niets meer, kies dan +1 uur of rest van de dag. De agenda moet in je Google Agenda-lijst staan.</div>
       <div id="iExtra">${extraNamen().map(n => extraRij(n, extraTeltMee(n), extraNaAfloop(n))).join('')}</div>
       <button class="btn ghost small" id="iExtraAdd" style="padding:6px 0">+ Agenda toevoegen</button></div>
+    <h2>🚆 Reistijd</h2>
+    <div class="card">
+      <div class="note" style="margin-top:0">Vaste reistijd (enkele reis) vóór én na een afspraak. Die tijd gaat af van je vrije tijd en staat gestreept in je rooster.
+        <b>Regels</b>: komt de tekst voor in de locatie van een dienst of de titel van een afspraak uit een extra agenda (die meetelt), dan geldt die reistijd. Hoofdletters maken niet uit.</div>
+      <div class="row line"><div class="grow">Naar school (vóór de eerste en na de laatste les)</div>
+        <input data-k="reisSchool" inputmode="decimal" value="${String(i.reisSchool ?? 0).replace('.',',')}" style="width:64px;text-align:right"><span class="sub">min</span></div>
+      <div id="iReis">${reisRegels().map(reisRij).join('')}</div>
+      <button class="btn ghost small" id="iReisAdd" style="padding:6px 0">+ Regel toevoegen</button></div>
     <h2>Mijn dag</h2>
     <div class="card">
       <div class="note" style="margin-top:0">Van wanneer tot wanneer je dag loopt. Gebruikt voor het rooster, uitjes (vertrek je om 18:00 en loopt je dag van 08:00 tot 23:00, dan ben je 5 van de 15 uur weg) en afspraken die meetellen.</div>
@@ -2446,6 +2505,9 @@ function openInstellingen(){
       planI(); });
   };
   exEvents();
+  const reisEvents = () => document.querySelectorAll('.rDel').forEach(b => b.onclick = () => { b.closest('.reisrow').remove(); planI(); });
+  reisEvents();
+  $('#iReisAdd').onclick = () => { $('#iReis').insertAdjacentHTML('beforeend', reisRij({})); reisEvents(); $('#iReis .reisrow:last-child .rTekst').focus(); };
   $('#iExtraAdd').onclick = () => { $('#iExtra').insertAdjacentHTML('beforeend', extraRij('', true, '')); exEvents(); $('#iExtra .exrow:last-child .exNaam').focus(); };
   if ($('#iUpdate')) $('#iUpdate').onclick = async () => {
     const info = $('#iUpdateInfo'); info.textContent = 'Kijken op GitHub…';
@@ -2507,7 +2569,9 @@ function openInstellingen(){
       telt: !!r.querySelector('.exTelt button[data-v="ja"].on'), na: (r.querySelector('.exNa button.on') || {}).dataset?.v || '' })).filter(x => x.naam);
     const o = Object.assign({lesAgenda: $('#iAgenda').value.trim(),
       extraAgenda: exRijen.map(x => x.naam).join(', '), extraNietTellen: exRijen.filter(x => !x.telt).map(x => x.naam).join(','),
-      extraNaAfloop: exRijen.filter(x => x.na).map(x => x.naam + '=' + x.na).join(','), extraTelt: 'aan', werkAgenda: $('#iWerkAgenda').value.trim(),
+      extraNaAfloop: exRijen.filter(x => x.na).map(x => x.naam + '=' + x.na).join(','), extraTelt: 'aan',
+      reisRegels: JSON.stringify([...document.querySelectorAll('.reisrow')].map(r => ({ tekst: r.querySelector('.rTekst').value.trim(),
+        min: Math.max(0, Math.round(num(r.querySelector('.rMin').value) || 0)) })).filter(x => x.tekst && x.min)), werkAgenda: $('#iWerkAgenda').value.trim(),
       werkNaam: $('#iWerkNaam').value.trim() || 'Werk', werkTitelWeg: $('#iWerkTitel').value.trim(),
       vrijeAvonden: [...document.querySelectorAll('#iVrijeAvond button.on')].map(b => b.dataset.v).join(','),
       dienstenInAgenda: i.dienstenInAgenda}, keuze);
@@ -3297,6 +3361,7 @@ function roosterItems(s){
   extraOp(s).filter(x => !x.heleDag).forEach(x => uit.push(Object.assign(minuten(x), { soort: 'extra', titel: x.titel, tijd: x.begin + '–' + x.eind, extra: x })));
   dienstenOp(s).forEach(x => uit.push(Object.assign(minuten(x), { soort: 'werk', titel: W() + (x.waar ? ' · ' + x.waar : ''),
     tijd: x.begin + '–' + x.eind, dienst: x.id })));
+  reisOp(s).forEach(r => uit.push({ b: r.b, e: r.e, soort: 'reis', titel: '🚆 reizen', sub: r.titel, tijd: hhmm(r.b) + '–' + hhmm(r.e) }));
   blokken().filter(b => b.datum === s).forEach(b => uit.push(Object.assign(minuten(b), { soort: b.soort, titel: blokNaam(b),
     sub: b.soort === 'studie' && b.vak && b.wat && b.wat !== b.vak ? b.vak : '', tijd: b.begin + '–' + b.eind, blok: b.id, klaar: b.klaar })));
   return uit.sort((a, b) => a.b - b.b || b.e - a.e);
@@ -3355,6 +3420,7 @@ function renderRooster(){
         <div class="lbl">${ymNaam(ymVan(rd))}</div>
         <button class="nb" id="rNext" aria-label="volgende maand">›</button></div>
       <div class="row" style="flex-wrap:wrap;margin:4px 0 8px">
+        <button class="btn sec small" id="rVandaag" title="naar vandaag: weekrooster op pc, dagrooster op je telefoon">Vandaag</button>
         ${ymVan(rd) !== ymVan(nu) ? '<button class="btn ghost small" id="rNu">Deze maand</button>' : ''}
         <div class="grow note" style="margin:0">Klik op een dag om iets toe te voegen of te bekijken.</div>${keuze}</div>
       ${oud}${extraInfo}
@@ -3445,6 +3511,8 @@ function roosterKnoppen(){
   $('#rNext').onclick = () => roosterModus === 'maand' ? maandStap(1) : stap(weekModus() ? 7 : 1);
   document.querySelectorAll('.mdcel[data-dag]').forEach(el => el.onclick = () => openMaandDag(el.dataset.dag));
   if ($('#rNu')) $('#rNu').onclick = () => { rd = vandaag(); render(); };
+  // maandrooster → vandaag in het gewone rooster (automatisch: week op pc, dag op telefoon)
+  if ($('#rVandaag')) $('#rVandaag').onclick = () => { rd = vandaag(); roosterModus = 'auto'; opslag.set(ROOSTER_KEY, 'auto'); render(); };
   if ($('#rDatum')) $('#rDatum').onchange = e => { if (e.target.value) { rd = e.target.value; render(); } };
   document.querySelectorAll('#rModus button').forEach(b => b.onclick = () => { roosterModus = b.dataset.v; opslag.set(ROOSTER_KEY, roosterModus); render(); });
   if ($('#rNieuw')) $('#rNieuw').onclick = () => openBlok(null, { datum: rd });
