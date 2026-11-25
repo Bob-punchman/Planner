@@ -292,6 +292,8 @@
   .blok.coderen{background:var(--soft);border-left-color:var(--game)}
   .blok.taak{background:var(--warn-soft);border-left-color:var(--warn)}
   .blok.extra{background:var(--soft);border-left-color:var(--extra)}
+  .blok.achter{opacity:.3;pointer-events:none;border-left-style:dashed;z-index:0}
+  .dagkol[data-bwdag] .blok:not(.achter){z-index:1}
   .blok.reis{background:repeating-linear-gradient(135deg,var(--soft) 0 6px,transparent 6px 12px);border-left-color:var(--muted);opacity:.85}
   .ag.reis{opacity:.7}
   .blok.anders{background:var(--card);border:1px dashed var(--line);border-left:3px solid var(--muted)}
@@ -345,7 +347,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-23';
+const APP_VERSIE = '2026.11.25-24';
 const SERVER_MIN = '2026.11.25-9';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -974,7 +976,7 @@ function meter(label, val, doel, txt, isMax){
 // ================= navigatie =================
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   if (b.dataset.v === view) return;
-  verlaat(() => { view = b.dataset.v; if (view === 'week') wk = startWeek(); render(); window.scrollTo(0,0); });
+  verlaat(() => { view = b.dataset.v; basisEdit = null; if (view === 'week') wk = startWeek(); render(); window.scrollTo(0,0); });
 });
 $('#gear').onclick = () => openInstellingen();
 
@@ -3520,6 +3522,7 @@ function banen(items){
 }
 
 function renderRooster(){
+  if (basisEdit) return renderBasisEdit();
   $('#title').textContent = 'Rooster';
   const wkMa = maandag(rd), nu = vandaag();
   const keuze = `<div class="seg small" id="rModus" style="flex:none">${[['auto','Auto'],['dag','Dag'],['week','Week'],['maand','Maand']].map(([v, l]) =>
@@ -3550,7 +3553,8 @@ function renderRooster(){
         <button class="btn sec small" id="rNieuw">+ Blok</button>
         ${basisWeek().length ? '<button class="btn ghost small" id="rBasis">Basisweek overnemen</button>' : ''}
         <button class="btn ghost small" id="rKopie">Vorige week overnemen</button>
-        <button class="btn ghost small" id="rBasisBewaar">Als basisweek bewaren</button>
+        <button class="btn ghost small" id="rBasisEdit">Basisweek bewerken</button>
+        <button class="btn ghost small" id="rBasisBewaar">Deze week als basisweek</button>
         <div class="grow"></div>${keuze}</div>
       ${oud}${lesInfo}${extraInfo}${verborgenKnop(wkMa)}
       <div class="note" style="margin:0 2px 6px">Studie gepland deze week: <b>${uMin(gepland)}</b> van je studieplan ${uD(doel)}.
@@ -3634,6 +3638,7 @@ function roosterKnoppen(){
   if ($('#rKopie')) $('#rKopie').onclick = () => neemVorigeWeekOver();
   if ($('#rBasis')) $('#rBasis').onclick = () => neemBasisOver();
   if ($('#rBasisBewaar')) $('#rBasisBewaar').onclick = () => bewaarBasisweek();
+  if ($('#rBasisEdit')) $('#rBasisEdit').onclick = () => { basisEdit = { ref: maandag(rd), achter: true }; render(); window.scrollTo(0, 0); };
   document.querySelectorAll('[data-blok]').forEach(el => el.onclick = e => { e.stopPropagation(); openBlok(blokken().find(b => b.id === el.dataset.blok)); });
   document.querySelectorAll('[data-dienst]').forEach(el => el.onclick = e => { e.stopPropagation(); openDienst(D.diensten.find(x => x.id === el.dataset.dienst)); });
   document.querySelectorAll('[data-bvink]').forEach(el => el.onclick = () => vinkBlokVraag(blokken().find(b => b.id === el.dataset.bvink)));
@@ -3645,6 +3650,109 @@ function roosterKnoppen(){
     if (m >= 1440) return toast('Na middernacht: plan dat blok op de volgende dag');
     openBlok(null, { datum: kol.dataset.s });                // alleen de dag; tijden vul je zelf in
   });
+}
+
+// ================= BASISWEEK BEWERKEN =================
+// Een weekrooster ma–zo zonder data met alleen je basisblokken. Ter oriëntatie staan lessen, diensten en afspraken
+// van een gewone week (‹ › te kiezen, of uit) grijs op de achtergrond; die komen niet in de basisweek.
+let basisEdit = null;                                   // { ref: maandag van de achtergrondweek, achter: true/false }
+function zetBasis(lijst, melding, knop){
+  const waarde = JSON.stringify(lijst), oud = D.instellingen.basisWeek;
+  if (knop) { tril(); knop.classList.add('bezig'); }
+  D.instellingen.basisWeek = waarde;
+  return api('bewaarInstelling', 'basisWeek', waarde).then(d => { D = d; closeSheet(); render(); if (melding) toast(melding); })
+    .catch(() => { D.instellingen.basisWeek = oud; if (knop) knop.classList.remove('bezig'); });
+}
+function renderBasisEdit(){
+  $('#title').textContent = 'Basisweek';
+  const { ref, achter } = basisEdit, bw = basisWeek(), { a, b } = actieveDag();
+  const per = [...Array(7)].map((_, k) => {
+    const s = plus(ref, k);
+    const bg = achter ? roosterItems(s).filter(x => !x.blok).map(x => Object.assign({}, x, { achter: true })) : [];
+    const eigen = bw.map((x, i) => ({ x, i })).filter(y => y.x.dag === k).map(({ x, i }) => Object.assign(minuten(x),
+      { soort: x.soort, titel: blokNaam(x), tijd: x.begin + '–' + x.eind, bw: i }));
+    // achtergrond over de volle breedte, achter je eigen blokken (die krijgen hun eigen banen)
+    return bg.map(x => Object.assign(x, { l: 0, n: 1 })).concat(banen(eigen.sort((p, q) => p.b - q.b || q.e - p.e)));
+  });
+  let start = Math.min(a, ...per.flat().map(x => x.b)), eind = Math.max(b, ...per.flat().map(x => x.e));
+  start = Math.max(0, Math.floor(start / 60) * 60); eind = Math.min(start + 26 * 60, Math.ceil(eind / 60) * 60);
+  const hoogte = (eind - start) / 30 * SLOT;
+  const uren = [...Array((eind - start) / 60)].map((_, i) => `<div class="uurlbl" style="top:${i * 2 * SLOT}px">${hm(start + i * 60)}</div>`).join('');
+  const kop = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'].map((d, k) => `<div class="wkkop" style="cursor:default"><div class="name">${d}</div>
+    ${achter ? `<div class="sub">achtergrond ${dt(plus(ref, k)).getDate()} ${MAANDEN[dt(plus(ref, k)).getMonth()].slice(0, 3)}</div>` : ''}</div>`).join('');
+  const item = (x) => {
+    const top = (x.b - start) / 30 * SLOT, h = Math.max(SLOT - 4, (x.e - x.b) / 30 * SLOT - 2);
+    return `<div class="blok ${x.soort} ${x.achter ? 'achter' : ''}" ${x.bw !== undefined ? `data-bw="${x.bw}"` : ''} title="${esc(x.tijd + ' ' + x.titel)}"
+      style="top:${top}px;height:${h}px;left:calc(${x.l / x.n * 100}% + 2px);width:calc(${100 / x.n}% - 4px)">
+      <div class="bt">${esc(x.titel)}</div>${h > SLOT ? `<div class="bs">${esc(x.tijd)}${x.sub ? ' · ' + esc(x.sub) : ''}</div>` : ''}</div>`;
+  };
+  const kolommen = per.map((items, k) => `<div class="dagkol" data-bwdag="${k}" data-start="${start}" style="height:${hoogte}px">${items.map(item).join('')}</div>`).join('');
+  const uurTot = bw.filter(x => x.soort === 'studie').reduce((t, x) => t + blokUren(x), 0);
+  $('#main').innerHTML = `<div class="rooster-hoofd">
+    <div class="row" style="flex-wrap:wrap;gap:8px;margin:4px 0 8px">
+      <button class="btn sec small" id="bwKlaar">✓ Klaar</button>
+      <button class="btn ghost small" id="bwNieuw">+ Blok</button>
+      <div class="grow"></div>
+      <span class="sub">Achtergrond:</span>
+      ${achter ? `<button class="nb" id="bwPrev" aria-label="vorige week">‹</button><span class="sub">week ${weekNr(ref)}</span><button class="nb" id="bwNext" aria-label="volgende week">›</button>` : ''}
+      <div class="seg small" id="bwAchter" style="flex:none"><button data-v="1" class="${achter ? 'on' : ''}">Aan</button><button data-v="" class="${achter ? '' : 'on'}">Uit</button></div>
+    </div>
+    <div class="note" style="margin:0 2px 6px">Dit is je <b>basisweek</b>: ${bw.length} ${bw.length === 1 ? 'blok' : 'blokken'}, ${uMin(uurTot)} studie. Klik in een leeg vak om een blok toe te voegen, klik op een blok om het te wijzigen.
+      Grijs = lessen, diensten en afspraken van week ${weekNr(ref)}, alleen ter oriëntatie (die wisselen per week en komen niet in je basisweek).
+      Lange sessies kun je beter in twee blokken zetten: botst er later een les mee, dan blijft van elk blok het vrije stuk over.</div>
+    <div class="wk"><div class="wkkop leeg"></div>${kop}<div class="urenkol" style="height:${hoogte}px">${uren}</div>${kolommen}</div></div>`;
+  $('#bwKlaar').onclick = () => { basisEdit = null; render(); };
+  $('#bwNieuw').onclick = () => openBasisBlok(null, {});
+  if ($('#bwPrev')) $('#bwPrev').onclick = () => { basisEdit.ref = plus(ref, -7); render(); };
+  if ($('#bwNext')) $('#bwNext').onclick = () => { basisEdit.ref = plus(ref, 7); render(); };
+  document.querySelectorAll('#bwAchter button').forEach(k => k.onclick = () => { basisEdit.achter = !!k.dataset.v; render(); });
+  document.querySelectorAll('[data-bw]').forEach(el => el.onclick = e => { e.stopPropagation(); openBasisBlok(+el.dataset.bw); });
+  document.querySelectorAll('.dagkol[data-bwdag]').forEach(kol => kol.onclick = e => {
+    if (e.target !== kol) return;
+    openBasisBlok(null, { dag: +kol.dataset.bwdag });
+  });
+}
+/** Basisblok toevoegen (i = null) of wijzigen (i = plek in de lijst). */
+function openBasisBlok(i, preset){
+  if (!roosterKlaar()) return toast('Werk eerst je Code.gs bij (⚙︎ → Versie)');
+  const bw = basisWeek(), nieuw = i === null;
+  const b = Object.assign({ dag: 0, begin: '', eind: '', wat: '', soort: 'studie', vak: '' }, preset || {}, nieuw ? {} : bw[i]);
+  let soort = b.soort;
+  const vakken = alleVakken();
+  sheet(`<h3>${nieuw ? 'Nieuw basisblok' : 'Basisblok wijzigen'}</h3>
+    <div class="seg" id="bSoort">${Object.keys(BLOK_SOORT).map(k => `<button data-v="${k}" class="${soort === k ? 'on' : ''}">${BLOK_SOORT[k]}</button>`).join('')}</div>
+    <div id="bVakRij"><label class="f">Vak <span class="sub">(meestal leeg: kijk bij het blok in je studie-to-do)</span></label><select id="bVak"><option value="">Nog niet gekozen (gewoon "studie")</option>
+      ${vakken.map(v => `<option ${v === b.vak ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
+    <label class="f">Wat <span class="sub">(mag leeg)</span></label><input id="bWat" value="${esc(b.wat)}" placeholder="bijv. herhalen, sportschool">
+    <label class="f">Dag</label><div class="seg" id="bDag">${['ma','di','wo','do','vr','za','zo'].map((d, k) => `<button data-v="${k}" class="${b.dag === k ? 'on' : ''}">${d}</button>`).join('')}</div>
+    <div class="row"><div class="grow"><label class="f">Begin</label><input type="time" id="bBegin" value="${b.begin}"></div>
+      <div class="grow"><label class="f">Eind</label><input type="time" id="bEind" value="${b.eind}"></div></div>
+    <div style="height:10px"></div>
+    <button class="btn" id="bOk">Opslaan</button>
+    ${nieuw ? '' : '<button class="btn danger" id="bDel" style="margin-top:8px">Verwijderen</button>'}
+    <button class="btn ghost" id="bAnn">Annuleren</button>`);
+  let dag = b.dag;
+  const toon = () => { $('#bVakRij').style.display = soort === 'studie' ? '' : 'none'; };
+  document.querySelectorAll('#bSoort button').forEach(k => k.onclick = () => {
+    soort = k.dataset.v; document.querySelectorAll('#bSoort button').forEach(y => y.classList.toggle('on', y === k)); toon(); });
+  document.querySelectorAll('#bDag button').forEach(k => k.onclick = () => {
+    dag = +k.dataset.v; document.querySelectorAll('#bDag button').forEach(y => y.classList.toggle('on', y === k)); });
+  toon();
+  $('#bAnn').onclick = closeSheet;
+  $('#bOk').onclick = () => {
+    const x = { dag, begin: $('#bBegin').value, eind: $('#bEind').value, wat: $('#bWat').value.trim(), soort, vak: soort === 'studie' ? $('#bVak').value : '' };
+    if (!/^\d{2}:\d{2}$/.test(x.begin) || !/^\d{2}:\d{2}$/.test(x.eind)) return toast('Vul begin- en eindtijd in');
+    if (x.begin === x.eind) return toast('Begin en eind zijn hetzelfde');
+    const lijst = basisWeek(); if (nieuw) lijst.push(x); else lijst[i] = x;
+    lijst.sort((p, q) => p.dag - q.dag || p.begin.localeCompare(q.begin));
+    $('#bOk').textContent = 'Opslaan…';
+    zetBasis(lijst, 'Basisweek bijgewerkt ✓', $('#bOk'));
+  };
+  if (!nieuw) $('#bDel').onclick = () => {
+    const k = $('#bDel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer om te verwijderen'; return; }
+    const lijst = basisWeek(); lijst.splice(i, 1);
+    zetBasis(lijst, 'Blok uit je basisweek gehaald', k);
+  };
 }
 
 // ================= BLOKKEN OVERNEMEN (vorige week of basisweek) =================
