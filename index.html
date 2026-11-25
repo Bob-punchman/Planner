@@ -345,8 +345,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-20';
-const SERVER_MIN = '2026.11.25-8';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd)
+const APP_VERSIE = '2026.11.25-21';
+const SERVER_MIN = '2026.11.25-9';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -579,10 +579,10 @@ function reisOp(s){
   // dan gaat die afspraak voor en vervalt het standaard reisstuk.
   return uit.filter(r => !eigen.some(m => m.b < r.e && m.e > r.b)).sort((p, q) => p.b - q.b);
 }
-function extraUren(s){
-  if (!D) return 0;
-  const { a, b } = actieveDag(), deel = (van, tot) => Math.max(0, Math.min(tot, b) - Math.max(van, a));
-  // overlap optellen, maar dubbel geboekte tijd (twee afspraken tegelijk) één keer tellen
+/** Bezette stukken [begin, eind] (minuten) op dag s door meetellende extra afspraken (met "na afloop") en reistijd. */
+function extraStukken(s){
+  if (!D) return [];
+  const { a, b } = actieveDag();
   // na afloop nog bezet (⚙︎ per agenda): +1 uur of tot het eind van je dag
   const na = (x, e) => { const v = extraNaAfloop(x.agenda); return v === 'rest' ? Math.max(e, b) : v === '1' ? e + 60 : e; };
   const stukken = extraOp(s).filter(x => extraTeltMee(x.agenda)).map(x => {
@@ -594,6 +594,13 @@ function extraUren(s){
     return [a, b];                                                      // dag ertussen: helemaal weg
   }).filter(Boolean).concat(reisOp(s).map(r => [r.b, r.e]))            // reistijd telt hier ook (zelfde tijd niet dubbel)
     .sort((p, q) => p[0] - q[0]);
+  return stukken;
+}
+function extraUren(s){
+  if (!D) return 0;
+  const { a, b } = actieveDag(), deel = (van, tot) => Math.max(0, Math.min(tot, b) - Math.max(van, a));
+  // overlap optellen, maar dubbel geboekte tijd (twee afspraken tegelijk) één keer tellen
+  const stukken = extraStukken(s);
   let tot = 0, eind = -1;
   stukken.forEach(([v, e]) => { const begin = Math.max(v, eind); if (e > begin) { tot += deel(begin, e); eind = e; } });
   return tot / 60;
@@ -3540,7 +3547,9 @@ function renderRooster(){
       <div class="row" style="flex-wrap:wrap;margin:4px 0 8px">
         ${maandag(nu) !== wkMa ? '<button class="btn ghost small" id="rNu">Deze week</button>' : ''}
         <button class="btn sec small" id="rNieuw">+ Blok</button>
-        <button class="btn ghost small" id="rKopie">Blokken van vorige week overnemen</button>
+        ${basisWeek().length ? '<button class="btn ghost small" id="rBasis">Basisweek overnemen</button>' : ''}
+        <button class="btn ghost small" id="rKopie">Vorige week overnemen</button>
+        <button class="btn ghost small" id="rBasisBewaar">Als basisweek bewaren</button>
         <div class="grow"></div>${keuze}</div>
       ${oud}${lesInfo}${extraInfo}${verborgenKnop(wkMa)}
       <div class="note" style="margin:0 2px 6px">Studie gepland deze week: <b>${uMin(gepland)}</b> van je studieplan ${uD(doel)}.
@@ -3622,6 +3631,8 @@ function roosterKnoppen(){
   document.querySelectorAll('#rModus button').forEach(b => b.onclick = () => { roosterModus = b.dataset.v; opslag.set(ROOSTER_KEY, roosterModus); render(); });
   if ($('#rNieuw')) $('#rNieuw').onclick = () => openBlok(null, { datum: rd });
   if ($('#rKopie')) $('#rKopie').onclick = () => neemVorigeWeekOver();
+  if ($('#rBasis')) $('#rBasis').onclick = () => neemBasisOver();
+  if ($('#rBasisBewaar')) $('#rBasisBewaar').onclick = () => bewaarBasisweek();
   document.querySelectorAll('[data-blok]').forEach(el => el.onclick = e => { e.stopPropagation(); openBlok(blokken().find(b => b.id === el.dataset.blok)); });
   document.querySelectorAll('[data-dienst]').forEach(el => el.onclick = e => { e.stopPropagation(); openDienst(D.diensten.find(x => x.id === el.dataset.dienst)); });
   document.querySelectorAll('[data-bvink]').forEach(el => el.onclick = () => vinkBlokVraag(blokken().find(b => b.id === el.dataset.bvink)));
@@ -3635,19 +3646,109 @@ function roosterKnoppen(){
   });
 }
 
-/** Blokken van de week ervóór kopiëren naar de week die je ziet (zonder vinkjes). Dubbele worden overgeslagen. */
+// ================= BLOKKEN OVERNEMEN (vorige week of basisweek) =================
+// Elk blok wordt eerst getoetst aan de nieuwe week: botst het met lessen, diensten, afspraken die meetellen
+// (met "na afloop"), reistijd of een blok dat er al staat, dan vervalt het. Botst het maar deels, dan wordt het
+// ingekort tot het grootste vrije stuk (minstens 30 min). Op dagen dat je helemaal weg bent (uitje) niets.
+// Je ziet eerst wat er gebeurt en kiest dan pas "overnemen".
+/** Basisweek: [{dag (0 = ma … 6 = zo), begin, eind, wat, soort, vak}] uit instelling basisWeek. */
+function basisWeek(){
+  try { const r = JSON.parse((D && D.instellingen && D.instellingen.basisWeek) || '[]'); return Array.isArray(r) ? r : []; } catch (e) { return []; }
+}
+/** Bezet op dag s: [{b, e, wat}] in minuten. */
+function bezetOp(s){
+  const uit = [], lo = lessenOp(s);
+  if (lo && lo.lessen) lo.lessen.forEach(l => uit.push(Object.assign(minuten(l), { wat: l.titel })));
+  dienstenOp(s).forEach(x => uit.push(Object.assign(minuten(x), { wat: W() + (x.waar ? ' ' + x.waar : '') })));
+  const ex = extraOp(s).filter(x => extraTeltMee(x.agenda));
+  extraStukken(s).forEach(([b, e]) => {
+    const x = ex.find(y => !y.heleDag && minuten(y).b === b), r = reisOp(s).find(y => y.b === b && y.e === e);
+    uit.push({ b, e, wat: r ? 'reistijd' : x ? x.titel : 'afspraak' });
+  });
+  blokken().filter(b => b.datum === s).forEach(b => uit.push(Object.assign(minuten(b), { wat: blokNaam(b) })));
+  return uit;
+}
+/** Past blok n (datum, begin, eind) in de week? → { status: 'ok' | 'kort' | 'weg', begin, eind, reden } */
+function toetsBlok(n){
+  if (volWeg(n.datum)) return { status: 'weg', reden: 'je bent weg' };
+  const m = minuten(n), bezet = bezetOp(n.datum).filter(x => x.b < m.e && x.e > m.b).sort((p, q) => p.b - q.b);
+  if (!bezet.length) return { status: 'ok' };
+  // vrije stukken binnen het blok
+  let t = m.b, beste = null;
+  const kijk = (van, tot) => { if (tot - van > (beste ? beste.e - beste.b : 0)) beste = { b: van, e: tot }; };
+  bezet.forEach(x => { if (x.b > t) kijk(t, x.b); t = Math.max(t, x.e); });
+  if (m.e > t) kijk(t, m.e);
+  const reden = 'botst met ' + [...new Set(bezet.map(x => x.wat))].join(', ');
+  if (beste && beste.e - beste.b >= 30) return { status: 'kort', begin: hhmm(beste.b), eind: hhmm(beste.e), reden };
+  return { status: 'weg', reden };
+}
+/** Laat zien wat er met de blokken gebeurt en neem ze over na "overnemen". */
+function overnemenScherm(titel, kandidaten){
+  const dubbel = n => blokken().some(b => b.datum === n.datum && b.begin === n.begin && b.wat === n.wat);
+  const lijst = kandidaten.filter(n => !dubbel(n)).map(n => ({ n, r: toetsBlok(n) }))
+    .sort((p, q) => (p.n.datum + p.n.begin).localeCompare(q.n.datum + q.n.begin));
+  if (!lijst.length) return toast('Die blokken staan er al');
+  const mee = lijst.filter(x => x.r.status !== 'weg');
+  const rij = ({ n, r }) => `<div class="row line"><span style="width:22px">${r.status === 'ok' ? '✓' : r.status === 'kort' ? '✂' : '✗'}</span>
+    <div class="grow"><div class="${r.status === 'weg' ? 'sub' : ''}">${dagKort(n.datum)} ${n.begin}–${n.eind} · ${esc(blokNaam(n))}</div>
+    ${r.status === 'kort' ? `<div class="sub">wordt ${r.begin}–${r.eind} (${esc(r.reden)})</div>` : r.status === 'weg' ? `<div class="sub">overgeslagen: ${esc(r.reden)}</div>` : ''}</div></div>`;
+  sheet(`<h3>${titel}</h3>
+    <div class="note">✓ past · ✂ ingekort tot het vrije stuk · ✗ overgeslagen (plan die zelf ergens anders).</div>
+    <div class="card" style="padding:4px 12px">${lijst.map(rij).join('')}</div>
+    <button class="btn" id="oOk" ${mee.length ? '' : 'disabled'}>${mee.length} ${mee.length === 1 ? 'blok' : 'blokken'} overnemen</button>
+    <button class="btn ghost" id="oAnn">Annuleren</button>`);
+  $('#oAnn').onclick = closeSheet;
+  $('#oOk').onclick = () => {
+    const nieuw = mee.map(({ n, r }) => Object.assign({}, n, r.status === 'kort' ? { begin: r.begin, eind: r.eind } : {}));
+    const k = $('#oOk'); k.disabled = true; k.textContent = 'Overnemen…';
+    api('bewaarBlokken', nieuw).then(d => { D = d; closeSheet(); render(); toast(nieuw.length + (nieuw.length === 1 ? ' blok' : ' blokken') + ' overgenomen ✓'); })
+      .catch(() => { k.disabled = false; k.textContent = 'Opnieuw proberen'; });
+  };
+}
+/** Blokken van de week ervóór naar de week die je ziet (zonder vinkjes). */
 function neemVorigeWeekOver(){
   if (!roosterKlaar()) return toast('Werk eerst je Code.gs bij');
   const ma = maandag(rd), vorige = blokken().filter(b => b.datum >= plus(ma, -7) && b.datum < ma);
   if (!vorige.length) return toast('Vorige week staan er geen blokken');
-  const nieuw = vorige.map(b => ({ datum: plus(b.datum, 7), begin: b.begin, eind: b.eind, wat: b.wat, soort: b.soort, vak: b.vak }))
-    .filter(n => !blokken().some(b => b.datum === n.datum && b.begin === n.begin && b.wat === n.wat));
-  if (!nieuw.length) return toast('Die blokken staan er al');
-  const k = $('#rKopie');
-  if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = `${nieuw.length} ${nieuw.length === 1 ? 'blok' : 'blokken'} overnemen? Klik nog een keer`; return; }
-  k.classList.add('bezig');
-  api('bewaarBlokken', nieuw).then(d => { D = d; render(); toast(nieuw.length + (nieuw.length === 1 ? ' blok' : ' blokken') + ' overgenomen ✓'); })
-    .catch(() => k.classList.remove('bezig'));
+  overnemenScherm('Vorige week overnemen', vorige.map(b => ({ datum: plus(b.datum, 7), begin: b.begin, eind: b.eind, wat: b.wat, soort: b.soort, vak: b.vak })));
+}
+/** Basisweek naar de week die je ziet. */
+function neemBasisOver(){
+  if (!roosterKlaar()) return toast('Werk eerst je Code.gs bij');
+  const ma = maandag(rd), bw = basisWeek();
+  if (!bw.length) return toast('Je hebt nog geen basisweek');
+  overnemenScherm('Basisweek overnemen', bw.map(b => ({ datum: plus(ma, b.dag), begin: b.begin, eind: b.eind, wat: b.wat || '', soort: b.soort, vak: b.vak || '' })));
+}
+/** Blokken van de week die je ziet als basisweek bewaren; je kiest zelf welke (bijv. een maandelijkse taak niet). */
+function bewaarBasisweek(){
+  if (!roosterKlaar()) return toast('Werk eerst je Code.gs bij');
+  const ma = maandag(rd), bl = blokken().filter(b => b.datum >= ma && b.datum <= plus(ma, 6))
+    .sort((p, q) => (p.datum + p.begin).localeCompare(q.datum + q.begin));
+  if (!bl.length) return toast('Deze week staan er nog geen blokken');
+  const oud = basisWeek().length;
+  sheet(`<h3>Als basisweek bewaren</h3>
+    <div class="note">Vink uit wat niet elke week terugkomt (bijv. iets van één keer per maand: dat kan beter een taak zijn bij Persoonlijke to-do).
+      ${oud ? `Je huidige basisweek (${oud} blokken) wordt vervangen.` : ''}</div>
+    <div class="card" style="padding:4px 12px">${bl.map(b => `<label class="row line" style="cursor:pointer"><input type="checkbox" class="bwKies" data-id="${b.id}" checked style="width:20px;height:20px">
+      <div class="grow">${DAGEN_LANG[dt(b.datum).getDay()].slice(0, 2)} ${b.begin}–${b.eind} · ${esc(blokNaam(b))}</div></label>`).join('')}</div>
+    <button class="btn" id="bwOk">Bewaren</button>
+    ${oud ? '<button class="btn danger" id="bwWis" style="margin-top:8px">Basisweek wissen</button>' : ''}
+    <button class="btn ghost" id="bwAnn">Annuleren</button>`);
+  $('#bwAnn').onclick = closeSheet;
+  const bewaar = (waarde, melding) => {
+    D.instellingen.basisWeek = waarde;
+    api('bewaarInstelling', 'basisWeek', waarde).then(d => { D = d; closeSheet(); render(); toast(melding); }).catch(() => {});
+  };
+  $('#bwOk').onclick = () => {
+    const ids = [...document.querySelectorAll('.bwKies:checked')].map(x => x.dataset.id);
+    const lijst = bl.filter(b => ids.includes(b.id)).map(b => ({ dag: dagenTot(ma, b.datum), begin: b.begin, eind: b.eind, wat: b.wat || '', soort: b.soort, vak: b.vak || '' }));
+    if (!lijst.length) return toast('Kies minstens één blok');
+    bewaar(JSON.stringify(lijst), 'Basisweek bewaard ✓ (' + lijst.length + ' blokken)');
+  };
+  if ($('#bwWis')) $('#bwWis').onclick = e => {
+    const k = e.currentTarget; if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer om te wissen'; return; }
+    bewaar('', 'Basisweek gewist');
+  };
 }
 
 /** Alle vaknamen: je vakken, losse deadlines/tentamens en vakken met open studietaken. */
