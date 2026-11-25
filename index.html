@@ -120,6 +120,10 @@
   .sheet{background:var(--bg);width:100%;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;
     padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-width:680px;margin:0 auto}
   .sheet h3{margin:0 0 6px;font-size:21px}
+  /* kop die bovenaan blijft staan tijdens het scrollen (instellingen), met een sluitknop */
+  .sheet-kop{position:sticky;top:-18px;z-index:3;background:var(--bg);display:flex;align-items:flex-start;gap:10px;
+    margin:-18px -16px 6px;padding:14px 16px 8px;border-bottom:1px solid var(--line)}
+  .sheet-kop .x{font-size:28px;line-height:1;color:var(--muted);padding:2px 8px;flex:none}
   .inst-groep{font-size:17px;font-weight:700;margin:22px 2px 0;padding-bottom:4px;border-bottom:2px solid var(--accent-soft)}
   .inst-kol > .inst-groep:first-child{margin-top:8px}
   .exrow{padding:8px 0;border-bottom:1px solid var(--line)}
@@ -337,7 +341,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-11';
+const APP_VERSIE = '2026.11.25-14';
 const SERVER_MIN = '2026.11.25-6';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd)
 
 // ================= data & helpers =================
@@ -564,8 +568,11 @@ function reisOp(s){
     erbij({ b: Math.min(...m.map(x => x.b)), e: Math.max(...m.map(x => x.e)) }, rs, 'school');
   }
   dienstenOp(s).forEach(x => erbij(minuten(x), reisMin(x.waar), x.waar || W()));
-  extraOp(s).filter(x => !x.heleDag && extraTeltMee(x.agenda)).forEach(x => erbij(minuten(x), reisMin(x.titel), x.titel));
-  return uit.sort((p, q) => p.b - q.b);
+  const eigen = extraOp(s).filter(x => !x.heleDag && extraTeltMee(x.agenda)).map(x => Object.assign(minuten(x), { x }));
+  eigen.forEach(m => erbij(m, reisMin(m.x.titel), m.x.titel));
+  // Staat er in een extra agenda (die meetelt) al iets over een reisstuk heen, bijv. je eigen reis vanaf een andere plek,
+  // dan gaat die afspraak voor en vervalt het standaard reisstuk.
+  return uit.filter(r => !eigen.some(m => m.b < r.e && m.e > r.b)).sort((p, q) => p.b - q.b);
 }
 function extraUren(s){
   if (!D) return 0;
@@ -2351,8 +2358,9 @@ function openInstellingen(){
   const verborgenN = lesRegels().length;
   const kop = t => `<div class="inst-groep">${t}</div>`;
   // Drie kolommen op de pc (School | Werk en agenda's | Jij en de app), op de telefoon onder elkaar.
-  sheet(`<h3>Instellingen</h3>
-    <div class="sub autostatus iStatus">Wijzigingen worden vanzelf opgeslagen.</div>
+  sheet(`<div class="sheet-kop"><div class="grow"><h3>Instellingen</h3>
+      <div class="sub autostatus iStatus">Wijzigingen worden vanzelf opgeslagen.</div></div>
+      <button class="x" id="iSluitBoven" aria-label="sluiten" title="sluiten (Esc)">×</button></div>
     <div class="inst-grid">
     <div class="inst-kol">
     ${kop('🎓 School')}
@@ -2423,7 +2431,7 @@ function openInstellingen(){
       <button class="btn ghost small" id="iExtraAdd" style="padding:6px 0">+ Agenda toevoegen</button></div>
     <h2>🚆 Reistijd</h2>
     <div class="card">
-      <div class="note" style="margin-top:0">Vaste reistijd (enkele reis) vóór én na een afspraak. Die tijd gaat af van je vrije tijd en staat gestreept in je rooster.
+      <div class="note" style="margin-top:0">Vaste reistijd (enkele reis) vóór én na een afspraak. Die tijd gaat af van je vrije tijd en staat gestreept in je rooster. Staat er op dat moment al een afspraak in een extra agenda (bijv. je eigen reis vanaf een andere plek), dan gaat die voor.
         <b>Regels</b>: komt de tekst voor in de locatie van een dienst of de titel van een afspraak uit een extra agenda (die meetelt), dan geldt die reistijd. Hoofdletters maken niet uit.</div>
       <div class="row line"><div class="grow">Naar school (vóór de eerste en na de laatste les)</div>
         <input data-k="reisSchool" inputmode="decimal" value="${String(i.reisSchool ?? 0).replace('.',',')}" style="width:64px;text-align:right"><span class="sub">min</span></div>
@@ -2542,6 +2550,7 @@ function openInstellingen(){
   vakEvents();
   $('#iVakAdd').onclick = () => { $('#iVakken').insertAdjacentHTML('beforeend', vakRij({vak:'', weekdoel:2})); vakEvents(); };
   $('#iAnn').onclick = closeSheet;
+  $('#iSluitBoven').onclick = closeSheet;
   document.querySelectorAll('#iThema button').forEach(b => b.onclick = () => {
     opslag.set('planner-thema', b.dataset.v); pasThemaToe();
     document.querySelectorAll('#iThema button').forEach(y => y.classList.toggle('on', y===b));
@@ -2615,7 +2624,7 @@ function openInstellingen(){
     return iBezig;
   }
   function planI(){
-    clearTimeout(iTimer);
+    clearTimeout(iTimer); tochSluiten = false;     // weer iets gewijzigd: de failsafe geldt opnieuw
     const r = verzamel();
     if (r.fout) { status(r.fout, true); return; }
     if (JSON.stringify(r.o) === laatst) { status('Opgeslagen ✓'); return; }
@@ -2634,6 +2643,22 @@ function openInstellingen(){
     const r = verzamel();
     if (r.fout) { toast('Niet opgeslagen. ' + r.fout); return Promise.resolve(false); }
     return bewaarI(r.o).then(ok => { if (!ok) toast('Instellingen niet opgeslagen'); return ok; });
+  };
+  // Failsafe bij sluiten (×, Sluiten, Esc, naast het venster klikken): eerst opslaan en wachten.
+  // Fout veld of geen verbinding? Dan blijft het venster open. Nog een keer sluiten = toch sluiten (die wijziging gaat dan verloren).
+  let tochSluiten = false;
+  sheetVies = () => { const r = verzamel(); return !!r.fout || JSON.stringify(r.o) !== laatst || !!iBezig; };
+  sheetBewaker = async () => {
+    if (tochSluiten) return true;
+    clearTimeout(iTimer);
+    const r = verzamel();
+    if (r.fout) { tochSluiten = true; status(r.fout + ' · Nog een keer sluiten = sluiten zonder deze wijziging', true); return false; }
+    document.querySelectorAll('#iSluitBoven, #iAnn').forEach(b => b.disabled = true);
+    status('Opslaan, daarna sluit het venster…');
+    const ok = await bewaarI(r.o).catch(() => false);
+    document.querySelectorAll('#iSluitBoven, #iAnn').forEach(b => b.disabled = false);
+    if (!ok) { tochSluiten = true; status('Niet opgeslagen (geen verbinding?). Probeer opnieuw, of sluit nog een keer om toch te sluiten', true); }
+    return ok;
   };
   document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
     if (!b.dataset.zeker) { b.dataset.zeker = 1; b.textContent = 'zeker?'; b.style.fontSize = '14px'; return; }
@@ -2934,6 +2959,8 @@ function renderTrends(){
 // ================= sheet (pop-up van onderen) =================
 // Een venster kan iets nog willen opslaan voordat het dicht gaat of vervangen wordt (bijv. instellingen).
 let sheetSluitHaak = null;
+let sheetBewaker = null;   // () => Promise<bool>: mag het venster dicht? (alleen de instellingen)
+let sheetVies = null;      // () => bool: staan er nog niet-opgeslagen wijzigingen in het open venster?
 // ================= GEEN INVUL-SUGGESTIES =================
 /** Zet de browser-suggesties (eerder ingevulde waarden) uit voor elk invoerveld,
  *  ook voor velden die later in een sheet verschijnen. */
@@ -2948,11 +2975,17 @@ geenSuggesties(document);
 
 function sheetHaak(){ const h = sheetSluitHaak; sheetSluitHaak = null; return h ? h() : Promise.resolve(true); }
 function sheet(html){
-  sheetHaak();
+  sheetHaak(); sheetBewaker = null; sheetVies = null;
   $('#sheetHost').innerHTML = `<div class="sheet-bg"><div class="sheet">${html}</div></div>`;
   $('.sheet-bg').onclick = e => { if (e.target.classList.contains('sheet-bg')) closeSheet(); };
 }
-function closeSheet(){ sheetHaak(); $('#sheetHost').innerHTML = ''; setTimeout(inhalen, 0); }
+function closeSheet(){
+  // Venster met een bewaker (instellingen): pas dicht als alles is opgeslagen. Lukt dat niet, dan blijft het open.
+  if (sheetBewaker) { const b = sheetBewaker; b().then(ok => { if (ok && sheetBewaker === b) { sheetBewaker = null; closeSheet(); } }); return; }
+  sheetHaak(); sheetVies = null; $('#sheetHost').innerHTML = ''; setTimeout(inhalen, 0);
+}
+// Esc sluit een open venster (pc), net als klikken naast het venster
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#sheetHost').innerHTML) closeSheet(); });
 
 // ================= NIET-OPGESLAGEN WIJZIGINGEN =================
 const CONCEPT_KEY = 'planner-concept';
@@ -3022,7 +3055,7 @@ document.addEventListener('visibilitychange', () => {
   if (viesRefl()) reflNuOpslaan();
 });
 window.addEventListener('pagehide', bewaarConcept);
-window.addEventListener('beforeunload', e => { bewaarConcept(); if (viesDag() || viesRefl()) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { bewaarConcept(); if (viesDag() || viesRefl() || (sheetVies && sheetVies())) { e.preventDefault(); e.returnValue = ''; } });
 /** Bij openen: was er nog een concept? Dan terugzetten zodat je kunt opslaan of verwerpen. */
 function herstelConcept(){
   const c = opslag.get(CONCEPT_KEY);
