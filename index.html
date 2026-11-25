@@ -292,6 +292,7 @@
   .blok.coderen{background:var(--soft);border-left-color:var(--game)}
   .blok.taak{background:var(--warn-soft);border-left-color:var(--warn)}
   .blok.extra{background:var(--soft);border-left-color:var(--extra)}
+  .knop-scheid{width:1px;align-self:stretch;background:var(--line);margin:4px 6px}
   .blok.achter{opacity:.3;pointer-events:none;border-left-style:dashed;z-index:0}
   .dagkol[data-bwdag] .blok:not(.achter){z-index:1}
   .blok.reis{background:repeating-linear-gradient(135deg,var(--soft) 0 6px,transparent 6px 12px);border-left-color:var(--muted);opacity:.85}
@@ -347,7 +348,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-24';
+const APP_VERSIE = '2026.11.25-25';
 const SERVER_MIN = '2026.11.25-9';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -3553,6 +3554,7 @@ function renderRooster(){
         <button class="btn sec small" id="rNieuw">+ Blok</button>
         ${basisWeek().length ? '<button class="btn ghost small" id="rBasis">Basisweek overnemen</button>' : ''}
         <button class="btn ghost small" id="rKopie">Vorige week overnemen</button>
+        <span class="knop-scheid" aria-hidden="true"></span>
         <button class="btn ghost small" id="rBasisEdit">Basisweek bewerken</button>
         <button class="btn ghost small" id="rBasisBewaar">Deze week als basisweek</button>
         <div class="grow"></div>${keuze}</div>
