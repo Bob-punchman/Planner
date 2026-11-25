@@ -17,7 +17,7 @@
     --accent:#2c6e6a; --accent-soft:#d9ebe8; --plan:#9cc7c2;
     --ok:#2f7a4f; --ok-soft:#dbefe2; --warn:#b4432f; --warn-soft:#f6ddd7;
     --info:#355f8c; --info-soft:#dde8f4; --radius:14px;
-    --field:#fff; --soft:#e3e9e7; --track:#e6ecea; --hl:#f3f8f7; --on-accent:#fff; --game:#6b4fb3;
+    --field:#fff; --soft:#e3e9e7; --track:#e6ecea; --hl:#f3f8f7; --on-accent:#fff; --game:#6b4fb3; --extra:#c0587e;
     color-scheme: light;
   }
   /* Donker thema: eigen stappen, geen automatische omkering */
@@ -26,7 +26,7 @@
     --accent:#5fb3ad; --accent-soft:#1d3634; --plan:#2f5c58;
     --ok:#5cc489; --ok-soft:#163325; --warn:#f08a76; --warn-soft:#3b201b;
     --info:#93b9e6; --info-soft:#1a2939;
-    --field:#222b2d; --soft:#283234; --track:#2c373a; --hl:#1f2c2b; --on-accent:#0d1716; --game:#a996ef;
+    --field:#222b2d; --soft:#283234; --track:#2c373a; --hl:#1f2c2b; --on-accent:#0d1716; --game:#a996ef; --extra:#ef8fb3;
     color-scheme: dark;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -213,6 +213,28 @@
   .blokbalk .greep{cursor:grab;padding:0 6px 0 2px;color:var(--muted);font-size:16px}
   .blokbalk .bnaam{flex:1;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .indelbalk{position:sticky;top:60px;z-index:4}
+  /* ===== Maandrooster ===== */
+  .md{display:grid;grid-template-columns:30px repeat(7,minmax(0,1fr));gap:4px}
+  .mdkop{font-size:12px;color:var(--muted);text-align:center;padding:2px 0;font-weight:600;text-transform:uppercase}
+  .mdwk{font-size:11px;color:var(--muted);padding-top:6px;text-align:right;padding-right:4px}
+  .mdcel{background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:118px;padding:4px 5px;cursor:pointer;min-width:0;overflow:hidden}
+  .mdcel:hover{border-color:var(--accent)}
+  .mdcel.weekend{background:var(--hl)}
+  .mdcel.anders{opacity:.45}
+  .mdcel.vandaag{outline:2px solid var(--accent);outline-offset:-1px}
+  .mdnr{font-size:13px;font-weight:700;margin-bottom:2px}
+  .mditem{display:flex;gap:4px;font-size:12px;line-height:1.3;margin-top:2px;border-radius:5px;padding:1px 4px;background:var(--soft);min-width:0}
+  .mditem .mdtekst{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mditem.periode{background:var(--ok-soft)} .mditem.tentamen{background:var(--info-soft)} .mditem.deadline{background:var(--warn-soft)}
+  .mditem.werk{background:var(--accent-soft)} .mditem.klaar .mdtekst{text-decoration:line-through;color:var(--muted)}
+  .mditem.blokken,.mditem.meer{background:transparent;color:var(--muted)}
+  /* telefoon: vakjes klein, alleen de pictogrammen */
+  @media (max-width: 899px){
+    .md{grid-template-columns:18px repeat(7,minmax(0,1fr));gap:2px}
+    .mdcel{min-height:64px;padding:3px}
+    .mditem{display:inline-flex;padding:0;background:transparent !important;margin:0}
+    .mditem .mdtekst,.mditem.blokken,.mditem.meer{display:none}
+  }
   /* ===== Rooster ===== */
   /* breed scherm: het weekrooster gebruikt maximaal 95% van de breedte; de andere schermen (kaarten naast elkaar)
      maximaal 1600 pixels, dat zijn drie kolommen. De datum/week-navigatie blijft compact in het midden. */
@@ -252,6 +274,7 @@
   .blok.sport{background:var(--ok-soft);border-left-color:var(--ok)}
   .blok.coderen{background:var(--soft);border-left-color:var(--game)}
   .blok.taak{background:var(--warn-soft);border-left-color:var(--warn)}
+  .blok.extra{background:var(--soft);border-left-color:var(--extra)}
   .blok.anders{background:var(--card);border:1px dashed var(--line);border-left:3px solid var(--muted)}
   .blok.klaar{opacity:.55}
   .blok.klaar .bt{text-decoration:line-through}
@@ -259,7 +282,7 @@
   .nu-lijn::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--warn)}
   .bolletje{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;background:var(--muted);vertical-align:middle}
   .bolletje.studie{background:var(--info)} .bolletje.sport{background:var(--ok)} .bolletje.coderen{background:var(--game)}
-  .bolletje.taak{background:var(--warn)} .bolletje.werk{background:var(--accent)}
+  .bolletje.taak{background:var(--warn)} .bolletje.werk{background:var(--accent)} .bolletje.extra{background:var(--extra)}
   .ag .vink{width:28px;height:28px;font-size:14px;align-self:center}
   .ag .vink-plek{width:28px;flex:none}
   .ag .tijd{min-width:92px}
@@ -302,8 +325,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-4';
-const SERVER_MIN = '2026.11.24-4';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen)
+const APP_VERSIE = '2026.11.25-7';
+const SERVER_MIN = '2026.11.25-2';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -488,6 +511,49 @@ function lessenWeek(ma){
 }
 function lessenOp(s){ const w=lessenWeek(maandag(s)); if (!w || w.fout) return w; return {lessen: w.lessen.filter(l=>l.datum===s), buiten: w.buiten}; }
 
+/** Extra agenda's (⚙︎ → Werk en agenda), bijv. van een vereniging: alleen om te tonen in Rooster en Agenda.
+ *  Ze tellen niet mee in je studieplan. Opgehaald bij het opstarten, voor dezelfde periode als de lessen. */
+const EXTRA_KEY = 'planner-extra-agenda';
+let EXTRA = null;                        // { van, tot, items, fout }
+function haalExtraOp(){
+  if (!D || !String(I().extraAgenda || '').trim()) { EXTRA = null; opslag.weg(EXTRA_KEY); return Promise.resolve(); }
+  const b = lesBereik();
+  return api('haalExtraAgenda', b.van, b.tot)
+    .then(r => { EXTRA = Object.assign({}, b, r); opslag.set(EXTRA_KEY, EXTRA); achtergrondRender(); })
+    .catch(() => { if (!EXTRA) EXTRA = { items: [], fout: 'Extra agenda laden lukte niet.' }; achtergrondRender(); });
+}
+const extraOp = s => (EXTRA && EXTRA.items || []).filter(x => x.datum === s);
+/**
+ * Hoeveel uur van je actieve dag (⚙︎) gaat op dag s op aan afspraken uit je extra agenda's (instelling extraTelt = aan).
+ * Afspraak met tijd: het deel binnen je actieve dag. Meerdaagse afspraak met tijden: eerste dag "vanaf", laatste dag "tot",
+ * de dagen ertussen helemaal. Afspraken van een hele dag zonder tijd (bijv. een herinnering) tellen niet mee.
+ */
+function extraUren(s){
+  if (!D || I().extraTelt === 'uit') return 0;
+  const { a, b } = actieveDag(), deel = (van, tot) => Math.max(0, Math.min(tot, b) - Math.max(van, a));
+  // overlap optellen, maar dubbel geboekte tijd (twee afspraken tegelijk) één keer tellen
+  const stukken = extraOp(s).map(x => {
+    if (!x.heleDag) { const m = minuten(x); return [m.b, m.e]; }
+    if (x.tijdTekst === undefined) return null;                       // hele dag zonder tijd
+    const t = (x.tijdTekst.match(/\d{2}:\d{2}/) || [])[0];
+    if (/^vanaf/.test(x.tijdTekst) && t) return [mins(t), b];
+    if (/^tot/.test(x.tijdTekst) && t) return [a, mins(t)];
+    return [a, b];                                                      // dag ertussen: helemaal weg
+  }).filter(Boolean).sort((p, q) => p[0] - q[0]);
+  let tot = 0, eind = -1;
+  stukken.forEach(([v, e]) => { const begin = Math.max(v, eind); if (e > begin) { tot += deel(begin, e); eind = e; } });
+  return tot / 60;
+}
+function openExtra(x){
+  sheet(`<h3>${esc(x.titel)}</h3>
+    <div class="note">${dagKort(x.datum)} · ${x.heleDag ? 'hele dag' + (x.tijdTekst ? ' (' + esc(x.tijdTekst) + ')' : '') : x.begin + '–' + x.eind} · agenda ${esc(x.agenda)}</div>
+    <div class="note">Deze afspraak komt uit je Google Agenda. Wijzigen of verwijderen doe je daar; de app neemt het over als je hem opnieuw opent.</div>
+    <button class="btn ghost" id="xSluit">Sluiten</button>`);
+  $('#xSluit').onclick = closeSheet;
+}
+let extraKlik = [];
+const extraData = x => `data-extra="${extraKlik.push(x) - 1}"`;
+
 // ================= SCHOOLVAKANTIES EN UITJES =================
 // Periodes staan in het tabblad "Periodes": soort vakantie (gewone schoolvakantie), zomer of uitje.
 // - vakantie: lager studiedoel (⚙︎), gamen = vrije daglimiet (hoeft niet verdiend), eventueel extra werkuren.
@@ -602,9 +668,9 @@ function vakVerdeling(m){
   return uit;
 }
 // Het plan wordt per week één keer uitgerekend en onthouden, tot de gegevens, de lessen of de datum veranderen.
-let PLAN = { D: null, L: null, nu: '', w: {} };
+let PLAN = { D: null, L: null, E: null, nu: '', w: {} };
 function weekPlan(ma){
-  if (PLAN.D !== D || PLAN.L !== LESSEN || PLAN.nu !== vandaag()) PLAN = { D, L: LESSEN, nu: vandaag(), w: {} };
+  if (PLAN.D !== D || PLAN.L !== LESSEN || PLAN.E !== EXTRA || PLAN.nu !== vandaag()) PLAN = { D, L: LESSEN, E: EXTRA, nu: vandaag(), w: {} };
   return PLAN.w[ma] || (PLAN.w[ma] = maakWeekPlan(ma));
 }
 function maakWeekPlan(ma){
@@ -614,13 +680,13 @@ function maakWeekPlan(ma){
   const vakken = D.vakken.map(v => v.vak);
   const dagen = [...Array(7)].map((_, k) => {
     const s = plus(ma, k), vak = vakantieOp(s), uit = uitjeOp(s), m = toetsweek(s), er = uit ? 1 - uit.deel : 1;
-    const les = lesUren(s), dienst = dienstenOp(s).reduce((t, x) => t + nettoU(x), 0);
+    const les = lesUren(s), dienst = dienstenOp(s).reduce((t, x) => t + nettoU(x), 0), extra = extraUren(s);
     const gedaanVak = studieOp(s), dagRij = D.dagen.find(x => x.datum === s) || {};
-    return { s, vak, uit, m, er, les: les.uren, lesOnbekend: les.onbekend, dienst,
+    return { s, vak, uit, m, er, les: les.uren, lesOnbekend: les.onbekend, dienst, extra,
              school: !vak || !!m,                                   // vakantie met tentamen in de buurt = schooldag
              gewicht: isWeekend(s) ? wkGew : 1,
-             vrij: Math.max(0, maxDag * er - les.uren - dienst),
-             cap: Math.min(Math.max(0, maxDag * er - les.uren - dienst), maxStudie * er),
+             vrij: Math.max(0, maxDag * er - les.uren - dienst - extra),
+             cap: Math.min(Math.max(0, maxDag * er - les.uren - dienst - extra), maxStudie * er),
              split: vakVerdeling(m), gedaanVak, gedaan: Object.values(gedaanVak).reduce((x, y) => x + y, 0),
              gamed: Number(dagRij.gamen) || 0,
              klaar: vakken.filter(v => klaarOp(v, s)), doel: 0, perVak: {} };
@@ -840,9 +906,9 @@ function render(){
   }
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v===view));
   $('#stickyHost').innerHTML = '';
-  lesKlik = [];
+  lesKlik = []; extraKlik = [];
   // weekrooster en (op een breed scherm) Vandaag met kaarten naast elkaar mogen de hele breedte gebruiken
-  $('#main').classList.toggle('breed', view === 'rooster' && weekModus());
+  $('#main').classList.toggle('breed', view === 'rooster' && (weekModus() || (maandModus() && BREED.matches)));
   $('#main').classList.toggle('midden', view !== 'rooster' && view !== 'maand' && BREED.matches);
   if (indelen && indelen.split('-')[0] !== view) { indelen = null; indelingConcept = null; }   // ander scherm gekozen: indelen stoppen
   ({vandaag:renderVandaag, rooster:renderRooster, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
@@ -1038,6 +1104,10 @@ function renderVandaag(){
     `<div class="ag" ${lesData(l)} style="cursor:pointer"><span class="tijd">${l.begin}–${l.eind}</span><span class="grow">${esc(l.titel)}</span></div>`}));
   ds.forEach(x => agenda.push({t:x.begin, html:
     `<div class="ag werk"><span class="tijd">${x.begin}–${x.eind}</span><span class="grow">${esc(W())}${x.waar?' · '+esc(x.waar):''}</span><span class="sub">${u(nettoU(x))} u</span></div>`}));
+  // extra agenda's (⚙︎): hele dag bovenaan, de rest op tijd
+  extraOp(dag).forEach(x => agenda.push({t: x.heleDag ? '00:00' : x.begin, html:
+    `<div class="ag" ${extraData(x)} style="cursor:pointer"><span class="tijd">${x.heleDag ? 'hele dag' : x.begin + '–' + x.eind}</span>
+      <span class="grow"><span class="bolletje extra"></span>${esc(x.titel)}${x.tijdTekst ? ` <span class="sub">${esc(x.tijdTekst)}</span>` : ''}</span></div>`}));
   // je eigen blokken uit het rooster (tik = wijzigen of afvinken)
   blokken().filter(b => b.datum === dag).forEach(b => agenda.push({t:b.begin, html:
     `<div class="ag blokrij ${b.klaar ? 'klaar' : ''}" data-blok="${b.id}" style="cursor:pointer"><span class="tijd">${b.begin}–${b.eind}</span>
@@ -1290,7 +1360,7 @@ function alleDeadlines(){
   $('#adDicht').onclick = closeSheet;
 }
 function openDeadline(d, terugNaarLijst){
-  const nieuw = !d;
+  const nieuw = !d || !d.id;                  // zonder id = nieuw (een vooraf ingevulde datum mag)
   d = Object.assign({datum:'', tijd:'23:59', vak:'', wat:'', klaar:false}, d||{});
   const vakken = [...new Set(D.vakken.map(v=>v.vak).concat(d.vak?[d.vak]:[]))];
   sheet(`<h3>${nieuw?'Nieuwe deadline':'Deadline wijzigen'}</h3>
@@ -1686,6 +1756,9 @@ function dagAdvies(s){
   const dl = D.deadlines.find(d => !d.klaar && (d.datum === s || d.datum === plus(s,1)));
   if (dl) { op.push('deadline ' + (dl.datum === s ? 'vandaag' : 'morgen')); score -= 1; }
   if (dienstenOp(plus(s,-1)).some(isLaat)) op.push('na late dienst: niet vroeg');
+  // afspraken uit je extra agenda's (⚙︎): noemen, en bij "tellen mee" een lagere score
+  const ex = extraOp(s);
+  if (ex.length) { op.push(ex.map(x => x.titel + (x.heleDag ? '' : ' ' + x.begin + '–' + x.eind)).join(', ')); if (I().extraTelt !== 'uit') score -= 1; }
   return { s, wat, op, score };
 }
 /** Per week, een maand vooruit: lessen, studie, diensten en hoeveel uur werk er nog bij kan. */
@@ -1840,7 +1913,7 @@ function maandUitjes(){
   document.querySelectorAll('[data-uitje]').forEach(el => el.onclick = () => openUitje(periodes().find(p => p.id === el.dataset.uitje)));
 }
 function openUitje(p){
-  const nieuw = !p;
+  const nieuw = !p || !p.id;
   p = Object.assign({ naam: '', van: '', tot: '', vertrek: '', terug: '' }, p || {});
   sheet(`<h3>${nieuw ? 'Nieuw uitje' : 'Uitje wijzigen'}</h3>
     <label class="f">Wat?</label><input id="uNaam" value="${esc(p.naam)}" placeholder="bijv. weekend weg">
@@ -1981,11 +2054,33 @@ function weekTekst(ws, ma = wk, r = refl){
     ws.slaapGem !== null ? `Slaap: gemiddeld ${uMin(ws.slaapGem)} per nacht (${ws.slaapN} nachten ingevuld)` + (ws.bedGem!==null ? `, gemiddeld naar bed om ${uurTekst(ws.bedGem)}` : '') : '',
     `${W()}: ${u(ws.werk)} u deze week · ${ymNaam(ma.slice(0,7))} totaal ${u(mi.tot)} u (doel ${mi.doel})`,
     ws.les!==null ? `Lessen: ${u(ws.les)} u` : '',
+    roosterTekst(ma),
     notitiesWeek(ws).length ? 'Notities per dag:\n' + notitiesWeek(ws).map(d => `- ${dagKort(d.s)}: ${d.notitie}`).join('\n') : '',
     `Wat ging goed: ${r.goed || '-'}`,
     `Wat kan beter: ${r.beter || '-'}`,
     `Focus volgende week: ${r.focus || '-'}`,
   ].filter(Boolean).join('\n');
+}
+/** Rooster, takenlijsten en extra agenda's van week ma, voor het weekoverzicht (Kopieer weekoverzicht + Obsidian). */
+function roosterTekst(ma){
+  const zo = plus(ma, 6), inWeek = x => x >= ma && x <= zo, regels = [];
+  const bl = blokken().filter(b => inWeek(b.datum));
+  if (bl.length) {
+    const per = {};
+    bl.forEach(b => { const k = BLOK_SOORT[b.soort] || 'Blok', x = per[k] = per[k] || { n: 0, klaar: 0, u: 0, uKlaar: 0 };
+      x.n++; x.u += blokUren(b); if (b.klaar) { x.klaar++; x.uKlaar += blokUren(b); } });
+    regels.push('Rooster (eigen blokken): ' + Object.keys(per).map(k => `${k.toLowerCase()} ${per[k].klaar}/${per[k].n} afgevinkt (${uMin(per[k].uKlaar)} van ${uMin(per[k].u)} gepland)`).join(', '));
+  }
+  const tk = (D.taken || []);
+  const wk = tk.filter(t => t.lijst === 'week').map(t => ({ t, st: taakStand(t, zo) })).filter(x => x.st);
+  if (wk.length) regels.push('Weektaken: ' + wk.map(x => (x.st.klaar ? '✓ ' : '✗ ') + x.t.wat).join(', '));
+  const vakAf = tk.filter(t => t.lijst === 'vak' && t.klaar && inWeek(t.klaar));
+  if (vakAf.length) regels.push('Studietaken afgerond: ' + vakAf.map(t => t.vak + ': ' + t.wat).join(', '));
+  const vakOpen = tk.filter(t => t.lijst === 'vak' && !t.klaar);
+  if (vakOpen.length) regels.push('Studietaken nog open: ' + vakOpen.length + ' (eerst: ' + (eersteStudie() && eersteStudie().taak ? eersteStudie().vak + ' · ' + eersteStudie().taak.wat : '-') + ')');
+  const ex = []; for (let k = 0; k < 7; k++) { const s = plus(ma, k); extraOp(s).forEach(x => ex.push(`${dagKort(s)} ${x.heleDag ? '' : x.begin + '–' + x.eind + ' '}${x.titel}`)); }
+  if (ex.length) regels.push('Extra agenda: ' + ex.join(', ') + (I().extraTelt === 'uit' ? ' (telt niet mee in het studieplan)' : ' (telt mee in het studieplan)'));
+  return regels.join('\n');
 }
 // ================= WEEKOVERZICHT NAAR DE SERVER =================
 // Het script op de pc (weekoverzicht.py) zet deze tekst in Obsidian. Zo staan de berekeningen van de app
@@ -2218,6 +2313,13 @@ function openInstellingen(){
       <label class="f">Avonden die je vrijhoudt (dienstzoeker raadt ze af)</label>
       <div class="seg small" id="iVrijeAvond">${WEEKDAGEN.map(d => `<button data-v="${d}" class="${vrijeAvondenLijst().includes(d)?'on':''}">${d}</button>`).join('')}</div>
       <label class="f">Naam van je lesrooster-agenda</label><input id="iAgenda" value="${esc(i.lesAgenda)}">
+      <label class="f">Extra agenda's om te tonen <span class="sub">(bijv. van je vereniging; meerdere: scheiden met een komma)</span></label>
+      <input id="iExtraAgenda" value="${esc(i.extraAgenda || '')}" placeholder="naam zoals in Google Agenda">
+      <label class="f">Afspraken uit die agenda's tellen mee in je studieplan</label>
+      <div class="seg" id="iExtraTelt"><button data-v="aan" class="${i.extraTelt!=='uit'?'on':''}">Aan</button><button data-v="uit" class="${i.extraTelt==='uit'?'on':''}">Uit</button></div>
+      <div class="note">${!String(i.extraAgenda || '').trim() ? 'Afspraken uit deze agenda\'s staan in je Rooster en Agenda, maar tellen niet mee in je studieplan.'
+        : EXTRA && EXTRA.fout ? esc(EXTRA.fout) : EXTRA ? '✓ Gevonden: ' + (EXTRA.items || []).length + ' afspraken in de komende weken.' : 'Wordt geladen…'}
+        Aan = de tijd van een afspraak gaat af van je vrije tijd, net als een dienst (afspraken van een hele dag zonder tijd tellen niet mee). Uit = alleen tonen.</div>
       <label class="f">Diensten automatisch uit de agenda van mijn werk halen</label>
       <div class="seg" id="iWerkImp"><button data-v="aan" class="${i.werkImport==='aan'?'on':''}">Aan</button><button data-v="uit" class="${i.werkImport!=='aan'?'on':''}">Uit</button></div>
       <label class="f">Naam van je werkagenda (een stukje is genoeg)</label><input id="iWerkAgenda" value="${esc(i.werkAgenda)}">
@@ -2291,8 +2393,8 @@ function openInstellingen(){
     } catch(e) { info.textContent = 'Geen verbinding met GitHub.'; }
   };
   const keuze = {herinneringen:i.herinneringen, werkImport:i.werkImport, overslaanBijAfspraak:i.overslaanBijAfspraak,
-                 weekendModus:i.weekendModus||'licht', trillen:i.trillen||'aan', gameMelding:i.gameMelding||'aan'};
-  [['iHer','herinneringen'],['iWerkImp','werkImport'],['iWeekend','weekendModus'],['iTril','trillen'],['iGameMeld','gameMelding'],['iAfspraak','overslaanBijAfspraak']].forEach(([id,k]) =>
+                 weekendModus:i.weekendModus||'licht', trillen:i.trillen||'aan', gameMelding:i.gameMelding||'aan', extraTelt:i.extraTelt||'aan'};
+  [['iHer','herinneringen'],['iWerkImp','werkImport'],['iWeekend','weekendModus'],['iTril','trillen'],['iGameMeld','gameMelding'],['iAfspraak','overslaanBijAfspraak'],['iExtraTelt','extraTelt']].forEach(([id,k]) =>
     document.querySelectorAll('#'+id+' button').forEach(b => b.onclick = () => { keuze[k] = b.dataset.v;
       document.querySelectorAll('#'+id+' button').forEach(y => y.classList.toggle('on', y===b)); planI(); }));
   document.querySelectorAll('#iVrijeAvond button').forEach(b => b.onclick = () => { b.classList.toggle('on'); planI(); });
@@ -2330,7 +2432,7 @@ function openInstellingen(){
   const status = (t, fout) => document.querySelectorAll('.iStatus').forEach(el => { el.textContent = t; el.classList.toggle('fout', !!fout); });
   /** Leest alle velden uit. Geeft { o } of { fout: 'tekst' }. */
   function verzamel(){
-    const o = Object.assign({lesAgenda: $('#iAgenda').value.trim(), werkAgenda: $('#iWerkAgenda').value.trim(),
+    const o = Object.assign({lesAgenda: $('#iAgenda').value.trim(), extraAgenda: $('#iExtraAgenda').value.trim(), werkAgenda: $('#iWerkAgenda').value.trim(),
       werkNaam: $('#iWerkNaam').value.trim() || 'Werk', werkTitelWeg: $('#iWerkTitel').value.trim(),
       vrijeAvonden: [...document.querySelectorAll('#iVrijeAvond button.on')].map(b => b.dataset.v).join(','),
       dienstenInAgenda: i.dienstenInAgenda}, keuze);
@@ -2365,6 +2467,7 @@ function openInstellingen(){
       rijen.forEach(r => { const n = r.querySelector('.vNaam').value.trim(); if (n) r.dataset.oud = n; });   // hernoemd = nu de oude naam
       if (o.werkImport !== vorige.werkImport || o.werkAgenda !== vorige.werkAgenda || o.werkTitelWeg !== vorige.werkTitelWeg) werkSync(false);
       if (o.lesAgenda !== vorige.lesAgenda) { LESSEN = null; opslag.weg(LES_KEY); haalLessenOp(); }
+      if (o.extraAgenda !== vorige.extraAgenda) { EXTRA = null; opslag.weg(EXTRA_KEY); haalExtraOp(); }
       vorige = o;
       status('Opgeslagen ✓'); achtergrondRender();
       return true;
@@ -2927,12 +3030,13 @@ const regelTekst = r => (r.d ? `alleen ${dagKort(r.d)} ${r.b}–${r.e}` : r.w !=
   + (r.p ? ' · ' + r.p : '');
 function bewaarLesRegels(regels, melding){
   D.instellingen.lesVerberg = JSON.stringify(regels);
-  PLAN = { D: null, L: null, nu: '', w: {} };           // studieplan opnieuw uitrekenen (lesuren veranderen)
+  PLAN = { D: null, L: null, E: null, nu: '', w: {} };  // studieplan opnieuw uitrekenen (lesuren veranderen)
   render(); if (melding) toast(melding);
   api('bewaarInstelling', 'lesVerberg', D.instellingen.lesVerberg).then(d => { D = d; achtergrondRender(); }).catch(() => {});
 }
 function lesKnoppen(){
   document.querySelectorAll('#main [data-les]').forEach(el => el.onclick = e => { e.stopPropagation(); openLes(lesKlik[+el.dataset.les]); });
+  document.querySelectorAll('#main [data-extra]').forEach(el => el.onclick = e => { e.stopPropagation(); openExtra(extraKlik[+el.dataset.extra]); });
 }
 function openLes(l){
   if (!l) return;
@@ -3098,6 +3202,7 @@ const BREED = window.matchMedia ? matchMedia('(min-width: 900px)') : { matches: 
 let rd = vandaag();                                                 // dag die het rooster laat zien (week = de week van rd)
 let roosterModus = opslag.get(ROOSTER_KEY) || 'auto';               // 'auto', 'dag' of 'week'
 const weekModus = () => roosterModus === 'week' || (roosterModus === 'auto' && BREED.matches);
+const maandModus = () => roosterModus === 'maand';
 // draai je de telefoon of maak je het venster smaller/breder, dan past het rooster zich aan
 if (BREED.addEventListener) BREED.addEventListener('change', () => { if (view === 'rooster' && roosterModus === 'auto') achtergrondRender(); });
 
@@ -3114,6 +3219,7 @@ const blokNaam = b => b.wat || (b.soort === 'studie' ? (b.vak || 'Studie') : BLO
 function roosterItems(s){
   const uit = [], lo = lessenOp(s);
   if (lo && lo.lessen) lo.lessen.forEach(l => uit.push(Object.assign(minuten(l), { soort: 'les', titel: l.titel, tijd: l.begin + '–' + l.eind, les: l })));
+  extraOp(s).filter(x => !x.heleDag).forEach(x => uit.push(Object.assign(minuten(x), { soort: 'extra', titel: x.titel, tijd: x.begin + '–' + x.eind, extra: x })));
   dienstenOp(s).forEach(x => uit.push(Object.assign(minuten(x), { soort: 'werk', titel: W() + (x.waar ? ' · ' + x.waar : ''),
     tijd: x.begin + '–' + x.eind, dienst: x.id })));
   blokken().filter(b => b.datum === s).forEach(b => uit.push(Object.assign(minuten(b), { soort: b.soort, titel: blokNaam(b),
@@ -3126,6 +3232,7 @@ function roosterKop(s){
   const vak = vakantieOp(s); if (vak) uit.push((vak.soort === 'zomer' ? '☀ ' : '🏖 ') + vak.naam);
   const weg = uitjeOp(s); if (weg) uit.push('🧳 ' + weg.lijst.map(p => p.naam).join(', '));
   D.tentamens.filter(t => t.datum === s).forEach(t => uit.push('📚 ' + t.vak + (t.tijd ? ' ' + t.tijd : '')));
+  extraOp(s).filter(x => x.heleDag).forEach(x => uit.push('📅 ' + x.titel + (x.tijdTekst ? ' ' + x.tijdTekst : '')));
   D.deadlines.filter(d => d.datum === s && !d.klaar).forEach(d => uit.push('⏰ ' + deadlineNaam(d) + (d.tijd && d.tijd !== '23:59' ? ' ' + d.tijd : '')));
   return uit;
 }
@@ -3162,12 +3269,22 @@ function banen(items){
 function renderRooster(){
   $('#title').textContent = 'Rooster';
   const wkMa = maandag(rd), nu = vandaag();
-  const keuze = `<div class="seg small" id="rModus" style="flex:none">${[['auto','Auto'],['dag','Dag'],['week','Week']].map(([v, l]) =>
+  const keuze = `<div class="seg small" id="rModus" style="flex:none">${[['auto','Auto'],['dag','Dag'],['week','Week'],['maand','Maand']].map(([v, l]) =>
     `<button data-v="${v}" class="${roosterModus === v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const oud = roosterKlaar() ? '' : `<div class="alert">Je Code.gs is nog niet bijgewerkt: blokken en taken kun je pas opslaan als de nieuwe versie online staat (⚙︎ → Versie).</div>`;
   const lesInfo = LESSEN === null ? '<div class="note">Lessen laden…</div>' : LESSEN && LESSEN.fout ? `<div class="note">${esc(LESSEN.fout)}</div>` : '';
+  const extraInfo = EXTRA && EXTRA.fout ? `<div class="note">${esc(EXTRA.fout)}</div>` : '';
   let links;
-  if (weekModus()) {
+  if (roosterModus === 'maand') {
+    links = `<div class="daynav"><button class="nb" id="rPrev" aria-label="vorige maand">‹</button>
+        <div class="lbl">${ymNaam(ymVan(rd))}</div>
+        <button class="nb" id="rNext" aria-label="volgende maand">›</button></div>
+      <div class="row" style="flex-wrap:wrap;margin:4px 0 8px">
+        ${ymVan(rd) !== ymVan(nu) ? '<button class="btn ghost small" id="rNu">Deze maand</button>' : ''}
+        <div class="grow note" style="margin:0">Klik op een dag om iets toe te voegen of te bekijken.</div>${keuze}</div>
+      ${oud}${extraInfo}
+      ${maandRooster(ymVan(rd))}`;
+  } else if (weekModus()) {
     const zo = plus(wkMa, 6);
     const gepland = [...Array(7)].reduce((t, _, k) => t + studieVanDag(plus(wkMa, k)).gepland, 0);
     const wp = weekPlan(wkMa), doel = wp.dagen.reduce((t, d) => t + (d.s >= nu ? d.planTot : d.doel), 0);
@@ -3179,7 +3296,7 @@ function renderRooster(){
         <button class="btn sec small" id="rNieuw">+ Blok</button>
         <button class="btn ghost small" id="rKopie">Blokken van vorige week overnemen</button>
         <div class="grow"></div>${keuze}</div>
-      ${oud}${lesInfo}${verborgenKnop(wkMa)}
+      ${oud}${lesInfo}${extraInfo}${verborgenKnop(wkMa)}
       <div class="note" style="margin:0 2px 6px">Studie gepland deze week: <b>${uMin(gepland)}</b> van je studieplan ${uD(doel)}.
         Klik in een leeg vak om een blok te plannen, klik op een blok om het te wijzigen of af te vinken.</div>
       ${weekRooster(wkMa)}`;
@@ -3191,7 +3308,7 @@ function renderRooster(){
       <div class="row" style="margin:4px 0 8px">
         ${rd !== nu ? '<button class="btn ghost small" id="rNu">Vandaag</button>' : ''}
         <button class="btn sec small" id="rNieuw">+ Blok</button><div class="grow"></div>${keuze}</div>
-      ${oud}${lesInfo}${verborgenKnop(maandag(rd))}
+      ${oud}${lesInfo}${extraInfo}${verborgenKnop(maandag(rd))}
       <h2>${DAGEN_LANG[dt(rd).getDay()].replace(/^./, c => c.toUpperCase())} ${dt(rd).getDate()} ${MAANDEN[dt(rd).getMonth()]}
         ${st ? `<span class="sub">${st}</span>` : ''}</h2>
       ${kop.length ? `<div class="kopchips">${kop.map(k => `<span class="kopchip">${esc(k)}</span>`).join('')}</div>` : ''}
@@ -3229,7 +3346,7 @@ function weekRooster(ma){
 }
 function itemHtml(x, start){
   const top = (x.b - start) / 30 * SLOT, h = Math.max(SLOT - 4, (x.e - x.b) / 30 * SLOT - 2);
-  const data = x.blok ? `data-blok="${x.blok}"` : x.dienst ? `data-dienst="${x.dienst}"` : x.les ? lesData(x.les) : '';
+  const data = x.blok ? `data-blok="${x.blok}"` : x.dienst ? `data-dienst="${x.dienst}"` : x.les ? lesData(x.les) : x.extra ? extraData(x.extra) : '';
   return `<div class="blok ${x.soort} ${x.klaar ? 'klaar' : ''}" ${data} title="${esc(x.tijd + ' ' + x.titel)}"
     style="top:${top}px;height:${h}px;left:calc(${x.l / x.n * 100}% + 2px);width:calc(${100 / x.n}% - 4px)">
     <div class="bt">${x.klaar ? '✓ ' : ''}${esc(x.titel)}</div>${h > SLOT ? `<div class="bs">${esc(x.tijd)}${x.sub ? ' · ' + esc(x.sub) : ''}</div>` : ''}</div>`;
@@ -3241,18 +3358,21 @@ function dagRooster(s){
   return `<div class="card">${items.map(x => x.blok
     ? `<div class="ag blokrij ${x.soort} ${x.klaar ? 'klaar' : ''}"><button class="vink" data-bvink="${x.blok}" aria-label="afvinken">${x.klaar ? '✓' : ''}</button>
         <span class="tijd">${x.tijd}</span><span class="grow" data-blok="${x.blok}" style="cursor:pointer"><span class="bolletje ${x.soort}"></span>${esc(x.titel)}${x.sub ? ` <span class="sub">${esc(x.sub)}</span>` : ''}</span></div>`
-    : `<div class="ag ${x.soort === 'werk' ? 'werk' : ''}" ${x.dienst ? `data-dienst="${x.dienst}"` : x.les ? lesData(x.les) : ''} style="cursor:pointer"><span class="vink-plek"></span>
+    : `<div class="ag ${x.soort === 'werk' ? 'werk' : ''}" ${x.dienst ? `data-dienst="${x.dienst}"` : x.les ? lesData(x.les) : x.extra ? extraData(x.extra) : ''} style="cursor:pointer"><span class="vink-plek">${x.extra ? '<span class="bolletje extra"></span>' : ''}</span>
         <span class="tijd">${x.tijd}</span><span class="grow">${esc(x.titel)}${x.sub ? ` <span class="sub">${esc(x.sub)}</span>` : ''}</span></div>`).join('')}</div>`;
 }
 
 function roosterKnoppen(){
   const stap = n => verlaat(() => { rd = plus(rd, n); render(); });
-  $('#rPrev').onclick = () => stap(weekModus() ? -7 : -1);
-  $('#rNext').onclick = () => stap(weekModus() ? 7 : 1);
+  // naar een andere maand: in de huidige maand blijft vandaag de dag (voor de takenlijsten), anders de 1e
+  const maandStap = n => verlaat(() => { const m = ymPlus(ymVan(rd), n); rd = m === ymVan(vandaag()) ? vandaag() : m + '-01'; render(); });
+  $('#rPrev').onclick = () => roosterModus === 'maand' ? maandStap(-1) : stap(weekModus() ? -7 : -1);
+  $('#rNext').onclick = () => roosterModus === 'maand' ? maandStap(1) : stap(weekModus() ? 7 : 1);
+  document.querySelectorAll('.mdcel[data-dag]').forEach(el => el.onclick = () => openMaandDag(el.dataset.dag));
   if ($('#rNu')) $('#rNu').onclick = () => { rd = vandaag(); render(); };
   if ($('#rDatum')) $('#rDatum').onchange = e => { if (e.target.value) { rd = e.target.value; render(); } };
   document.querySelectorAll('#rModus button').forEach(b => b.onclick = () => { roosterModus = b.dataset.v; opslag.set(ROOSTER_KEY, roosterModus); render(); });
-  $('#rNieuw').onclick = () => openBlok(null, { datum: rd });
+  if ($('#rNieuw')) $('#rNieuw').onclick = () => openBlok(null, { datum: rd });
   if ($('#rKopie')) $('#rKopie').onclick = () => neemVorigeWeekOver();
   document.querySelectorAll('[data-blok]').forEach(el => el.onclick = e => { e.stopPropagation(); openBlok(blokken().find(b => b.id === el.dataset.blok)); });
   document.querySelectorAll('[data-dienst]').forEach(el => el.onclick = e => { e.stopPropagation(); openDienst(D.diensten.find(x => x.id === el.dataset.dienst)); });
@@ -3398,6 +3518,127 @@ async function zetBlokKlaar(b, klaar, log, vak){
   } catch(e) {
     D.blokken = blokken().map(x => x.id === b.id ? Object.assign({}, x, { klaar: !klaar }) : x); render();
   }
+}
+
+
+// ================= MAANDROOSTER (zoals de maandpagina van een papieren planner) =================
+// Per dag een vak met wat er die dag is: vakantie/uitje, tentamens, deadlines, afspraken uit je extra agenda,
+// diensten en je eigen blokken. Dat komt er allemaal vanzelf in. Klik op een dag: alles van die dag + iets toevoegen.
+function maandItems(s){
+  const uit = [];
+  periodes().filter(p => p.van <= s && s <= p.tot).forEach(p => uit.push({ soort: 'periode', ico: p.soort === 'uitje' ? '🧳' : p.soort === 'zomer' ? '☀' : '🏖', tekst: p.naam, p }));
+  D.tentamens.filter(t => t.datum === s).forEach(t => uit.push({ soort: 'tentamen', ico: '📚', tekst: t.vak + (t.tijd ? ' ' + t.tijd : ''), t }));
+  D.deadlines.filter(d => d.datum === s).forEach(d => uit.push({ soort: 'deadline', ico: d.klaar ? '✓' : '⏰', tekst: deadlineNaam(d), klaar: d.klaar, d }));
+  extraOp(s).forEach(x => uit.push({ soort: 'extra', ico: '📅', tekst: (x.heleDag ? '' : x.begin + ' ') + x.titel, x }));
+  dienstenOp(s).forEach(x => uit.push({ soort: 'werk', ico: '💼', tekst: W() + ' ' + x.begin, x }));
+  const bl = blokken().filter(b => b.datum === s);
+  if (bl.length) uit.push({ soort: 'blokken', ico: '▦', tekst: bl.length + (bl.length === 1 ? ' blok' : ' blokken') });
+  return uit;
+}
+function maandRooster(ymS){
+  const eerste = ymS + '-01', start = maandag(eerste), nu = vandaag();
+  const weken = []; for (let ma = start; ma.slice(0, 7) <= ymS; ma = plus(ma, 7)) weken.push(ma);
+  const kop = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'].map(d => `<div class="mdkop">${d}</div>`).join('');
+  const cel = s => {
+    const items = maandItems(s), anders = s.slice(0, 7) !== ymS, wd = dt(s).getDay();
+    return `<div class="mdcel ${anders ? 'anders' : ''} ${s === nu ? 'vandaag' : ''} ${wd === 0 || wd === 6 ? 'weekend' : ''}" data-dag="${s}">
+      <div class="mdnr">${dt(s).getDate()}</div>
+      ${items.slice(0, 5).map(x => `<div class="mditem ${x.soort} ${x.klaar ? 'klaar' : ''}" title="${esc(x.tekst)}"><span class="mdico">${x.ico}</span><span class="mdtekst">${esc(x.tekst)}</span></div>`).join('')}
+      ${items.length > 5 ? `<div class="mditem meer">+${items.length - 5}</div>` : ''}</div>`;
+  };
+  return `<div class="md"><div class="mdkop wknr"></div>${kop}
+    ${weken.map(ma => `<div class="mdwk">${weekNr(ma)}</div>` + [...Array(7)].map((_, k) => cel(plus(ma, k))).join('')).join('')}</div>`;
+}
+/** Eén dag uit het maandrooster: alles van die dag (aanklikbaar) en knoppen om iets toe te voegen. */
+function openMaandDag(s){
+  const items = maandItems(s).filter(x => x.soort !== 'blokken'), bl = blokken().filter(b => b.datum === s).sort((a, b) => a.begin.localeCompare(b.begin));
+  const rij = (x, i) => `<div class="row line" data-mi="${i}" style="cursor:pointer"><span style="width:24px">${x.ico}</span><div class="grow">${esc(x.tekst)}</div><span class="sub">›</span></div>`;
+  sheet(`<h3>${DAGEN_LANG[dt(s).getDay()].replace(/^./, c => c.toUpperCase())} ${dt(s).getDate()} ${MAANDEN[dt(s).getMonth()]}</h3>
+    ${items.length || bl.length ? `<div class="card" style="padding:4px 12px">${items.map(rij).join('')}
+      ${bl.map(b => `<div class="row line" data-mb="${b.id}" style="cursor:pointer"><span style="width:24px"><span class="bolletje ${b.soort}"></span></span>
+        <div class="grow">${b.begin}–${b.eind} ${esc(blokNaam(b))}${b.klaar ? ' ✓' : ''}</div><span class="sub">›</span></div>`).join('')}</div>`
+      : '<div class="note">Nog niets op deze dag.</div>'}
+    <label class="f">Toevoegen</label>
+    <div class="row" style="flex-wrap:wrap;gap:6px">
+      <button class="btn sec small" data-mnieuw="deadline">⏰ Deadline</button>
+      <button class="btn sec small" data-mnieuw="tentamen">📚 Tentamen</button>
+      <button class="btn sec small" data-mnieuw="uitje">🧳 Uitje</button>
+      <button class="btn sec small" data-mnieuw="vakantie">🏖 Vakantie</button>
+      <button class="btn sec small" data-mnieuw="blok">▦ Blok</button></div>
+    <div style="height:10px"></div>
+    <button class="btn ghost" id="mDag">Dagrooster openen</button>
+    <button class="btn ghost" id="mSluit">Sluiten</button>`);
+  $('#mSluit').onclick = closeSheet;
+  $('#mDag').onclick = () => { closeSheet(); rd = s; roosterModus = 'dag'; opslag.set(ROOSTER_KEY, 'dag'); render(); };
+  document.querySelectorAll('[data-mi]').forEach(el => el.onclick = () => {
+    const x = items[+el.dataset.mi];
+    if (x.soort === 'deadline') openDeadline(x.d);
+    else if (x.soort === 'tentamen') openTentamen(x.t);
+    else if (x.soort === 'periode') x.p.soort === 'uitje' ? openUitje(x.p) : openVakantie(x.p);
+    else if (x.soort === 'werk') openDienst(x.x);
+    else if (x.soort === 'extra') openExtra(x.x);
+  });
+  document.querySelectorAll('[data-mb]').forEach(el => el.onclick = () => openBlok(blokken().find(b => b.id === el.dataset.mb)));
+  document.querySelectorAll('[data-mnieuw]').forEach(b => b.onclick = () => {
+    const w = b.dataset.mnieuw;
+    if (w === 'deadline') openDeadline({ datum: s });
+    else if (w === 'tentamen') openTentamen({ datum: s });
+    else if (w === 'uitje') openUitje({ van: s, tot: s });
+    else if (w === 'vakantie') openVakantie({ van: s, tot: s });
+    else openBlok(null, { datum: s });
+  });
+}
+/** Tentamen toevoegen of wijzigen (ook te vinden bij ⚙︎ → Tentamens). */
+function openTentamen(t){
+  t = Object.assign({ datum: '', tijd: '', vak: '', opmerking: '' }, t || {});
+  const nieuw = !t.id;
+  sheet(`<h3>${nieuw ? 'Nieuw tentamen' : 'Tentamen wijzigen'}</h3>
+    <label class="f">Vak</label><input id="tmVak" value="${esc(t.vak)}" placeholder="bijv. Wiskunde">
+    <div class="row"><div class="grow"><label class="f">Datum</label><input type="date" id="tmDatum" value="${t.datum}"></div>
+      <div class="grow"><label class="f">Tijd</label><input type="time" id="tmTijd" value="${t.tijd}"></div></div>
+    <label class="f">Opmerking</label><input id="tmOpm" value="${esc(t.opmerking)}" placeholder="bijv. alleen indien nodig">
+    <div style="height:12px"></div><button class="btn" id="tmOk">Opslaan</button>
+    ${nieuw ? '' : '<button class="btn danger" id="tmDel" style="margin-top:8px">Verwijderen</button>'}
+    <button class="btn ghost" id="tmAnn">Annuleren</button>`);
+  $('#tmAnn').onclick = closeSheet;
+  $('#tmOk').onclick = async () => {
+    const x = { id: t.id, datum: $('#tmDatum').value, tijd: /^\d{2}:\d{2}$/.test($('#tmTijd').value) ? $('#tmTijd').value : '', vak: $('#tmVak').value.trim(), opmerking: $('#tmOpm').value.trim() };
+    if (!x.datum || !x.vak) return toast('Vul in elk geval vak en datum in');
+    const k = $('#tmOk'); k.disabled = true;
+    try { D = await api('bewaarTentamen', x); closeSheet(); render(); toast('Tentamen opgeslagen ✓'); } catch(e){ k.disabled = false; }
+  };
+  if (!nieuw) $('#tmDel').onclick = async () => {
+    const k = $('#tmDel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer om te verwijderen'; return; }
+    try { D = await api('verwijderTentamen', t.id); closeSheet(); render(); toast('Tentamen verwijderd'); } catch(e){}
+  };
+}
+/** Schoolvakantie (of zomervakantie) toevoegen of wijzigen (ook te vinden bij ⚙︎ → Schoolvakanties). */
+function openVakantie(p){
+  p = Object.assign({ naam: '', van: '', tot: '', soort: 'vakantie' }, p || {});
+  const nieuw = !p.id;
+  let soort = p.soort === 'zomer' ? 'zomer' : 'vakantie';
+  sheet(`<h3>${nieuw ? 'Nieuwe vakantie' : 'Vakantie wijzigen'}</h3>
+    <div class="seg" id="vkSoort"><button data-v="vakantie" class="${soort === 'vakantie' ? 'on' : ''}">Schoolvakantie</button><button data-v="zomer" class="${soort === 'zomer' ? 'on' : ''}">Zomervakantie</button></div>
+    <label class="f">Naam</label><input id="vkNaam" value="${esc(p.naam)}" placeholder="bijv. kerstvakantie">
+    <div class="row"><div class="grow"><label class="f">Van</label><input type="date" id="vkVan" value="${p.van}"></div>
+      <div class="grow"><label class="f">Tot en met</label><input type="date" id="vkTot" value="${p.tot}"></div></div>
+    <div class="note">Vakantie: lager studiedoel (⚙︎). Zomervakantie: studiedoel 0.</div>
+    <div style="height:12px"></div><button class="btn" id="vkOk">Opslaan</button>
+    ${nieuw ? '' : '<button class="btn danger" id="vkDel" style="margin-top:8px">Verwijderen</button>'}
+    <button class="btn ghost" id="vkAnn">Annuleren</button>`);
+  document.querySelectorAll('#vkSoort button').forEach(b => b.onclick = () => { soort = b.dataset.v; document.querySelectorAll('#vkSoort button').forEach(y => y.classList.toggle('on', y === b)); });
+  $('#vkAnn').onclick = closeSheet;
+  $('#vkOk').onclick = async () => {
+    const x = { id: p.id, soort, naam: $('#vkNaam').value.trim() || (soort === 'zomer' ? 'Zomervakantie' : 'Vakantie'), van: $('#vkVan').value, tot: $('#vkTot').value || $('#vkVan').value };
+    if (!x.van) return toast('Kies een begindatum');
+    if (x.tot < x.van) return toast('De einddatum ligt vóór de begindatum');
+    const k = $('#vkOk'); k.disabled = true;
+    try { D = await api('bewaarPeriode', x); closeSheet(); render(); toast('Vakantie opgeslagen ✓'); } catch(e){ k.disabled = false; }
+  };
+  if (!nieuw) $('#vkDel').onclick = async () => {
+    const k = $('#vkDel'); if (!k.dataset.zeker) { k.dataset.zeker = 1; k.textContent = 'Tik nog een keer om te verwijderen'; return; }
+    try { D = await api('verwijderPeriode', p.id); closeSheet(); render(); toast('Vakantie verwijderd'); } catch(e){}
+  };
 }
 
 // ================= TAKEN (studie-to-do, deze week, deze maand) =================
@@ -3579,10 +3820,12 @@ function start(){
   if (!IN_GOOGLE && !opslag.get(CFG_KEY)) return koppelScherm();
   const cache = IN_GOOGLE ? null : opslag.get(CACHE_KEY);
   LESSEN = opslag.get(LES_KEY);                       // lessen van de vorige keer, tot de nieuwe binnen zijn
+  EXTRA = opslag.get(EXTRA_KEY);
   if (cache) { D = cache; $('#loading').remove(); if (!herstelConcept()) render(); }      // direct de laatste stand tonen
   api('haalAlles').then(d => {
     D = d; const l = $('#loading'); if (l) l.remove();
     haalLessenOp();                                   // lessen: één keer, bij het opstarten
+    haalExtraOp();                                    // extra agenda's (⚙︎), ook één keer
     if (!herstelConcept()) achtergrondRender();
     werkSync(true);
     verstuurWachtrij();
