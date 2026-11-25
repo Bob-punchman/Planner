@@ -349,7 +349,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-26';
+const APP_VERSIE = '2026.11.25-27';
 const SERVER_MIN = '2026.11.25-9';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -3475,7 +3475,9 @@ const maandModus = () => roosterModus === 'maand';
 if (BREED.addEventListener) BREED.addEventListener('change', () => { if (view === 'rooster' && roosterModus === 'auto') achtergrondRender(); });
 
 const BLOK_SOORT = { studie: 'Studie', sport: 'Sport', coderen: 'Coderen', taak: 'Taak', anders: 'Anders' };
-const blokken = () => (D && D.blokken) || [];
+// tijden altijd als uu:mm ("8:00" uit de sheet wordt "08:00"), anders weigert de server ze bij overnemen of wijzigen
+const tijd2 = t => /^\d:\d{2}$/.test(String(t || '')) ? '0' + t : t;
+const blokken = () => ((D && D.blokken) || []).map(b => /^\d:/.test(b.begin) || /^\d:/.test(b.eind) ? Object.assign(b, { begin: tijd2(b.begin), eind: tijd2(b.eind) }) : b);
 const roosterKlaar = () => !!(D && Array.isArray(D.blokken) && Array.isArray(D.taken));   // nieuwe Code.gs al online?
 const hm = m => pad(Math.floor(((m % 1440) + 1440) % 1440 / 60)) + ':' + pad(m % 60);
 /** Begin en eind in minuten; eindigt hij na middernacht, dan telt het eind door (02:00 → 26:00). */
@@ -3777,7 +3779,8 @@ function openBasisBlok(i, preset){
 // Je ziet eerst wat er gebeurt en kiest dan pas "overnemen".
 /** Basisweek: [{dag (0 = ma … 6 = zo), begin, eind, wat, soort, vak}] uit instelling basisWeek. */
 function basisWeek(){
-  try { const r = JSON.parse((D && D.instellingen && D.instellingen.basisWeek) || '[]'); return Array.isArray(r) ? r : []; } catch (e) { return []; }
+  try { const r = JSON.parse((D && D.instellingen && D.instellingen.basisWeek) || '[]');
+    return Array.isArray(r) ? r.map(x => Object.assign({}, x, { begin: tijd2(x.begin), eind: tijd2(x.eind) })) : []; } catch (e) { return []; }
 }
 /** Bezet op dag s: [{b, e, wat}] in minuten. */
 function bezetOp(s, kandidaat){
