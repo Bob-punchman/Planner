@@ -120,6 +120,16 @@
   .sheet{background:var(--bg);width:100%;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;
     padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-width:680px;margin:0 auto}
   .sheet h3{margin:0 0 6px;font-size:21px}
+  .inst-groep{font-size:17px;font-weight:700;margin:22px 2px 0;padding-bottom:4px;border-bottom:2px solid var(--accent-soft)}
+  .inst-kol > .inst-groep:first-child{margin-top:8px}
+  .exrow{padding:8px 0;border-bottom:1px solid var(--line)}
+  .exrow:last-child{border-bottom:0}
+  /* pc: instellingen breed, in drie kolommen (School | Werk en agenda's | Jij en de app) */
+  @media (min-width: 900px){
+    .sheet.breed-sheet{max-width:min(1500px, 96vw);border-radius:20px 20px 0 0}
+    .inst-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;align-items:start}
+  }
+  @media (min-width: 900px) and (max-width: 1299px){ .inst-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
   .dlkop{background:none;border:0;padding:0;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer}
   .dlmeer{display:block;width:100%;text-align:left;padding:8px 0 2px;white-space:normal}
   .toast.actie{display:flex;align-items:center;gap:12px;pointer-events:auto}
@@ -325,8 +335,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-7';
-const SERVER_MIN = '2026.11.25-2';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda)
+const APP_VERSIE = '2026.11.25-9';
+const SERVER_MIN = '2026.11.25-4';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -529,15 +539,17 @@ const extraOp = s => (EXTRA && EXTRA.items || []).filter(x => x.datum === s);
  * de dagen ertussen helemaal. Afspraken van een hele dag zonder tijd (bijv. een herinnering) tellen niet mee.
  */
 function extraUren(s){
-  if (!D || I().extraTelt === 'uit') return 0;
+  if (!D) return 0;
   const { a, b } = actieveDag(), deel = (van, tot) => Math.max(0, Math.min(tot, b) - Math.max(van, a));
   // overlap optellen, maar dubbel geboekte tijd (twee afspraken tegelijk) één keer tellen
-  const stukken = extraOp(s).map(x => {
-    if (!x.heleDag) { const m = minuten(x); return [m.b, m.e]; }
+  // na afloop nog bezet (⚙︎ per agenda): +1 uur of tot het eind van je dag
+  const na = (x, e) => { const v = extraNaAfloop(x.agenda); return v === 'rest' ? Math.max(e, b) : v === '1' ? e + 60 : e; };
+  const stukken = extraOp(s).filter(x => extraTeltMee(x.agenda)).map(x => {
+    if (!x.heleDag) { const m = minuten(x); return [m.b, na(x, m.e)]; }
     if (x.tijdTekst === undefined) return null;                       // hele dag zonder tijd
     const t = (x.tijdTekst.match(/\d{2}:\d{2}/) || [])[0];
     if (/^vanaf/.test(x.tijdTekst) && t) return [mins(t), b];
-    if (/^tot/.test(x.tijdTekst) && t) return [a, mins(t)];
+    if (/^tot/.test(x.tijdTekst) && t) return [a, na(x, mins(t))];
     return [a, b];                                                      // dag ertussen: helemaal weg
   }).filter(Boolean).sort((p, q) => p[0] - q[0]);
   let tot = 0, eind = -1;
@@ -1758,7 +1770,7 @@ function dagAdvies(s){
   if (dienstenOp(plus(s,-1)).some(isLaat)) op.push('na late dienst: niet vroeg');
   // afspraken uit je extra agenda's (⚙︎): noemen, en bij "tellen mee" een lagere score
   const ex = extraOp(s);
-  if (ex.length) { op.push(ex.map(x => x.titel + (x.heleDag ? '' : ' ' + x.begin + '–' + x.eind)).join(', ')); if (I().extraTelt !== 'uit') score -= 1; }
+  if (ex.length) { op.push(ex.map(x => x.titel + (x.heleDag ? '' : ' ' + x.begin + '–' + x.eind)).join(', ')); if (ex.some(x => extraTeltMee(x.agenda))) score -= 1; }
   return { s, wat, op, score };
 }
 /** Per week, een maand vooruit: lessen, studie, diensten en hoeveel uur werk er nog bij kan. */
@@ -2078,8 +2090,8 @@ function roosterTekst(ma){
   if (vakAf.length) regels.push('Studietaken afgerond: ' + vakAf.map(t => t.vak + ': ' + t.wat).join(', '));
   const vakOpen = tk.filter(t => t.lijst === 'vak' && !t.klaar);
   if (vakOpen.length) regels.push('Studietaken nog open: ' + vakOpen.length + ' (eerst: ' + (eersteStudie() && eersteStudie().taak ? eersteStudie().vak + ' · ' + eersteStudie().taak.wat : '-') + ')');
-  const ex = []; for (let k = 0; k < 7; k++) { const s = plus(ma, k); extraOp(s).forEach(x => ex.push(`${dagKort(s)} ${x.heleDag ? '' : x.begin + '–' + x.eind + ' '}${x.titel}`)); }
-  if (ex.length) regels.push('Extra agenda: ' + ex.join(', ') + (I().extraTelt === 'uit' ? ' (telt niet mee in het studieplan)' : ' (telt mee in het studieplan)'));
+  const ex = []; for (let k = 0; k < 7; k++) { const s = plus(ma, k); extraOp(s).forEach(x => ex.push(`${dagKort(s)} ${x.heleDag ? '' : x.begin + '–' + x.eind + ' '}${x.titel}${extraTeltMee(x.agenda) ? '' : ' (alleen tonen)'}`)); }
+  if (ex.length) regels.push('Extra agenda: ' + ex.join(', '));
   return regels.join('\n');
 }
 // ================= WEEKOVERZICHT NAAR DE SERVER =================
@@ -2238,20 +2250,42 @@ function renderWeek(){
 }
 
 // ================= INSTELLINGEN =================
-const VELDEN = [
-  ['Studie', [['schoolUren','Schooltijd per week, inclusief lessen (uur)'],['maxStudieDag','Maximaal zelfstudie per dag (uur)'],['maxPerDag','Maximaal school + werk per dag (uur)'],
-              ['weekendProcent','Weekenddag telt voor (% van een doordeweekse dag, bij "lichter")']]],
-  ['Doelen per week', [['gameMax','Gamen per week (uur)'],['sportDoel','Sportschool (keer)'],
-                       ['codeerDoel','Coderen (uur)'],['slaapDoel','Slaap per nacht (uur)']]],
-  ['Toetsweekmodus', [['toetsweekDagen','Aantal dagen vóór een tentamen (0 = uit)'],['toetsweekAandeel','Deel van je studietijd voor tentamenvakken (%)'],['toetsweekGameMax','Gamen per week in de toetsweekmodus (uur)']]],
-  ['Vakanties', [['vakantieStudie','Studiedoel per week in een schoolvakantie (uur; zomervakantie = 0)'],
-                 ['vakantieGameDag','Gamen per dag in vakanties (uur, hoeft niet verdiend)'],
-                 ['vakantieWerkExtra','Extra werkuren per vakantieweek (bovenop je maanddoel)']]],
-  ['Werk (uren en loon)', [['maandDoel','Standaard maanddoel (uur)'],['maandMinimum','Standaard minimum (uur)'],
-             ['grens1','Eerste bonusgrens (uur)'],['grens2','Tweede bonusgrens (uur)'],
-             ['loonBasis','Uurloon basis (€)'],['loon1','Uurloon vanaf grens 1 (€)'],['loon2','Uurloon vanaf grens 2 (€)'],
-             ['pauzeVanaf','Onbetaalde pauze bij diensten langer dan (uur)'],['pauzeMin','Pauze (minuten)']]],
-];
+// Getallen in de instellingen, per kopje. Alle velden met data-k worden bij het opslaan uitgelezen, waar ze ook staan.
+const VELDEN = {
+  studie: [['schoolUren','Schooltijd per week, inclusief lessen (uur)'],['maxStudieDag','Maximaal zelfstudie per dag (uur)'],['maxPerDag','Maximaal school + werk per dag (uur)'],
+           ['weekendProcent','Weekenddag telt voor (% van een doordeweekse dag, bij "lichter")']],
+  toetsweek: [['toetsweekDagen','Aantal dagen vóór een tentamen (0 = uit)'],['toetsweekAandeel','Deel van je studietijd voor tentamenvakken (%)'],['toetsweekGameMax','Gamen per week in de toetsweekmodus (uur)']],
+  vakantie: [['vakantieStudie','Studiedoel per week in een schoolvakantie (uur; zomervakantie = 0)'],['vakantieGameDag','Gamen per dag in vakanties (uur, hoeft niet verdiend)']],
+  doelen: [['gameMax','Gamen per week (uur)'],['sportDoel','Sportschool (keer)'],['codeerDoel','Coderen (uur)'],['slaapDoel','Slaap per nacht (uur)']],
+  werk: [['maandDoel','Standaard maanddoel (uur)'],['maandMinimum','Standaard minimum (uur)'],
+         ['grens1','Eerste bonusgrens (uur)'],['grens2','Tweede bonusgrens (uur)'],
+         ['loonBasis','Uurloon basis (€)'],['loon1','Uurloon vanaf grens 1 (€)'],['loon2','Uurloon vanaf grens 2 (€)'],
+         ['pauzeVanaf','Onbetaalde pauze bij diensten langer dan (uur)'],['pauzeMin','Pauze (minuten)'],
+         ['vakantieWerkExtra','Extra werkuren per vakantieweek (bovenop je maanddoel)']],
+};
+const veldenKaart = (i, sleutel) => `<div class="card">${VELDEN[sleutel].map(([k,l]) =>
+  `<div class="row line"><div class="grow">${l}</div><input data-k="${k}" inputmode="decimal" value="${String(i[k]).replace('.',',')}" style="width:92px;text-align:right"></div>`).join('')}</div>`;
+/** Extra agenda's: namen (instelling extraAgenda, met komma's) + welke níet meetellen (extraNietTellen). */
+const extraNamen = () => String(I().extraAgenda || '').split(',').map(x => x.trim()).filter(Boolean);
+const extraNietTellen = () => String(I().extraNietTellen || '').split(',').map(x => x.trim()).filter(Boolean);
+/** Telt agenda naam mee in je studieplan? (extraTelt = uit: de oude knop voor alles tegelijk) */
+const extraTeltMee = naam => I().extraTelt !== 'uit' && !extraNietTellen().includes(naam);
+/** Na afloop van een afspraak uit agenda naam nog bezet: '' (niets), '1' (+1 uur) of 'rest' (rest van de dag). */
+function extraNaAfloop(naam){
+  const r = String(I().extraNaAfloop || '').split(',').map(x => x.split('=')).find(x => x[0].trim() === naam);
+  return r ? (r[1] || '').trim() : '';
+}
+function extraRij(naam, telt, na){
+  const n = (EXTRA && EXTRA.items || []).filter(x => x.agenda === naam).length;
+  const weg = naam && EXTRA && EXTRA.fout && EXTRA.fout.includes(naam);
+  return `<div class="exrow" data-oud="${esc(naam)}"><div class="row"><input class="exNaam grow" value="${esc(naam)}" placeholder="naam zoals in Google Agenda">
+      <button class="x exDel" aria-label="verwijderen">×</button></div>
+    <div class="row" style="margin-top:4px"><div class="grow sub">${!naam ? 'Nieuw: wordt opgezocht na opslaan' : weg ? '⚠ Niet gevonden: controleer de naam' : EXTRA ? '✓ ' + n + ' afspraken in de komende weken' : 'Wordt geladen…'}</div>
+      <div class="seg small exTelt" style="flex:none"><button data-v="ja" class="${telt ? 'on' : ''}">Telt mee</button><button data-v="nee" class="${telt ? '' : 'on'}">Alleen tonen</button></div></div>
+    <div class="row exNaRij" style="margin-top:4px;${telt ? '' : 'display:none'}"><div class="grow sub">Na afloop nog bezet</div>
+      <div class="seg small exNa" style="flex:none">${[['', 'Niets'], ['1', '+1 uur'], ['rest', 'Rest van de dag']].map(([v, l]) =>
+        `<button data-v="${v}" class="${(na || '') === v ? 'on' : ''}">${l}</button>`).join('')}</div></div></div>`;
+}
 const WEEKDAGEN = ['ma','di','wo','do','vr','za','zo'];
 const DAG_NAAM = {ma:'maandag',di:'dinsdag',wo:'woensdag',do:'donderdag',vr:'vrijdag',za:'zaterdag',zo:'zondag'};
 function leesTijden(str){ const o={}; String(str).split(';').forEach(p=>{ const [d,t]=p.split('='); if (d) o[d.trim()]=(t||'').trim(); }); return o; }
@@ -2263,18 +2297,98 @@ function openInstellingen(){
   const tent = D.tentamens.slice().sort((a,b)=>a.datum.localeCompare(b.datum));
   const vakLijst = periodes().filter(p => p.soort !== 'uitje').sort((a,b) => a.van.localeCompare(b.van));
   const thema = opslag.get('planner-thema') || 'systeem';
+  const verborgenN = lesRegels().length;
+  const kop = t => `<div class="inst-groep">${t}</div>`;
+  // Drie kolommen op de pc (School | Werk en agenda's | Jij en de app), op de telefoon onder elkaar.
   sheet(`<h3>Instellingen</h3>
     <div class="sub autostatus iStatus">Wijzigingen worden vanzelf opgeslagen.</div>
-    <h2>Weergave</h2>
-    <div class="card"><div class="seg" id="iThema">${[['licht','Licht'],['donker','Donker'],['systeem','Systeem']].map(([v,l]) =>
-      `<button data-v="${v}" class="${thema===v?'on':''}">${l}</button>`).join('')}</div>
-      <div class="note">Systeem volgt de instelling van je telefoon of pc. Wordt per apparaat onthouden.</div></div>
+    <div class="inst-grid">
+    <div class="inst-kol">
+    ${kop('🎓 School')}
     <h2>Vakken (verdeling van je studietijd)</h2>
     <div class="card" id="iVakken">${D.vakken.map(vakRij).join('')}</div>
     <button class="btn ghost" id="iVakAdd" style="padding:6px">+ Vak toevoegen</button>
     <div class="note" id="iVakTot"></div>
-    ${VELDEN.map(([kop, velden]) => `<h2>${kop}</h2><div class="card">${velden.map(([k,l]) =>
-      `<div class="row line"><div class="grow">${l}</div><input data-k="${k}" inputmode="decimal" value="${String(i[k]).replace('.',',')}" style="width:92px;text-align:right"></div>`).join('')}</div>`).join('')}
+    <h2>Studietijd</h2>
+    ${veldenKaart(i, 'studie')}
+    <div class="card">
+      <label class="f" style="margin-top:0">Weekend telt mee voor studie</label>
+      <div class="seg" id="iWeekend">${[['nee','Nee'],['licht','Lichter'],['ja','Ja']].map(([v,l]) => `<button data-v="${v}" class="${(i.weekendModus||'licht')===v?'on':''}">${l}</button>`).join('')}</div>
+      <div class="note">Lichter: een weekenddag krijgt het percentage hierboven van een doordeweekse dag.</div></div>
+    <h2>Lesrooster</h2>
+    <div class="card">
+      <label class="f" style="margin-top:0">Naam van je lesrooster-agenda</label><input id="iAgenda" value="${esc(i.lesAgenda)}">
+      <div class="note">${LESSEN && LESSEN.fout ? esc(LESSEN.fout) : LESSEN ? '✓ Gevonden.' : ''} Lessen met dezelfde naam die tegelijk zijn, worden samengevoegd tot de langste.</div>
+      <button class="btn ghost small" id="iVerborgen" style="padding:4px 0">${verborgenN ? verborgenN + (verborgenN === 1 ? ' regel' : ' regels') + ' voor verborgen lessen · bekijken' : 'Verborgen lessen · bekijken'}</button></div>
+    <h2>Toetsweekmodus</h2>
+    ${veldenKaart(i, 'toetsweek')}
+    <h2>Tentamens</h2>
+    <div class="card" style="padding:4px 12px">${tent.map(t => `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">${esc(t.vak)}</div>
+      <div class="sub">${dagKort(t.datum)} ${t.datum.slice(0,4)}${t.tijd?' · '+t.tijd:''}${t.opmerking?' · '+esc(t.opmerking):''}</div></div>
+      <button class="x" data-del="${t.id}" aria-label="verwijderen">×</button></div>`).join('') || '<div class="empty">Geen tentamens.</div>'}</div>
+    <div class="card" data-geen-auto>
+      <div class="row"><div class="grow"><label class="f" style="margin-top:0">Datum</label><input type="date" id="tDatum"></div>
+        <div class="grow"><label class="f" style="margin-top:0">Tijd</label><input type="time" id="tTijd"></div></div>
+      <label class="f">Vak</label><input id="tVak" placeholder="bijv. Wiskunde">
+      <label class="f">Opmerking</label><input id="tOpm" placeholder="bijv. alleen indien nodig">
+      <div style="height:10px"></div><button class="btn sec" id="tAdd">+ Tentamen toevoegen</button>
+      <button class="btn ghost" id="tPlak" style="margin-top:4px">Meerdere tegelijk (rooster plakken)</button>
+    </div>
+    <h2>Schoolvakanties</h2>
+    <div class="card" style="padding:4px 12px">${vakLijst.map(p => `<div class="list-item" style="cursor:default"><div class="grow">
+      <div class="name">${p.soort === 'zomer' ? '☀ ' : '🏖 '}${esc(p.naam)}</div><div class="sub">${dagKort(p.van)} ${p.van.slice(0,4)} – ${dagKort(p.tot)} ${p.tot.slice(0,4)}${p.soort === 'zomer' ? ' · geen studiedoel' : ''}</div></div>
+      <button class="x" data-pdel="${p.id}" aria-label="verwijderen">×</button></div>`).join('') || '<div class="empty">Nog geen schoolvakanties.</div>'}</div>
+    <div class="card" data-geen-auto>
+      <label class="f" style="margin-top:0">Naam</label><input id="pNaam" placeholder="bijv. Kerstvakantie">
+      <div class="row"><div class="grow"><label class="f">Van</label><input type="date" id="pVan"></div>
+        <div class="grow"><label class="f">Tot en met</label><input type="date" id="pTot"></div></div>
+      <label class="f">Soort</label><div class="seg" id="pSoort"><button data-v="vakantie" class="on">Gewone vakantie</button><button data-v="zomer">Zomervakantie</button></div>
+      <div class="note">Staat "zomer" in de naam, dan wordt het vanzelf een zomervakantie (geen studiedoel). Een tentamen vlak na een vakantie zet de toetsweekmodus gewoon aan.</div>
+      <div style="height:10px"></div><button class="btn sec" id="pAdd">+ Schoolvakantie toevoegen</button>
+      <button class="btn ghost" id="pPlak" style="margin-top:4px">Meerdere tegelijk (rooster plakken)</button>
+    </div>
+    ${veldenKaart(i, 'vakantie')}
+    </div>
+    <div class="inst-kol">
+    ${kop('💼 Werk')}
+    <div class="card">
+      <label class="f" style="margin-top:0">Naam van je werk (zo heet het overal in de app)</label><input id="iWerkNaam" value="${esc(i.werkNaam)}" placeholder="Werk">
+      <label class="f">Avonden die je vrijhoudt (dienstzoeker raadt ze af)</label>
+      <div class="seg small" id="iVrijeAvond">${WEEKDAGEN.map(d => `<button data-v="${d}" class="${vrijeAvondenLijst().includes(d)?'on':''}">${d}</button>`).join('')}</div>
+      <label class="f">Diensten automatisch uit de agenda van mijn werk halen</label>
+      <div class="seg" id="iWerkImp"><button data-v="aan" class="${i.werkImport==='aan'?'on':''}">Aan</button><button data-v="uit" class="${i.werkImport!=='aan'?'on':''}">Uit</button></div>
+      <label class="f">Naam van je werkagenda (een stukje is genoeg)</label><input id="iWerkAgenda" value="${esc(i.werkAgenda)}">
+      <div class="note">${!D.werkInfo ? '' : D.werkInfo.gevonden ? '✓ Gevonden. Wordt bijgewerkt als je de app opent.' : 'Niet gevonden met deze naam.'}</div>
+      <label class="f">Tekst die in de agendatitel vóór de locatie staat (wordt weggehaald)</label><input id="iWerkTitel" value="${esc(i.werkTitelWeg)}" placeholder="bijv. Bedrijfsnaam personeel">
+      <div class="note">Een titel als "Bedrijfsnaam personeel Locatie - 150%" wordt dan locatie "Locatie" met 150% toeslag.</div>
+    </div>
+    <h2>Uren en loon</h2>
+    ${veldenKaart(i, 'werk')}
+    ${kop('📅 Agenda\'s')}
+    <h2>Extra agenda's</h2>
+    <div class="card">
+      <div class="note" style="margin-top:0">Bijv. de agenda van je vereniging. Ze staan in je Rooster en Agenda. <b>Telt mee</b> = de tijd van een afspraak gaat af van je vrije tijd (studieplan), net als een dienst; afspraken van een hele dag zonder tijd tellen nooit mee. <b>Na afloop</b>: doe je na een borrel niets meer, kies dan +1 uur of rest van de dag. De agenda moet in je Google Agenda-lijst staan.</div>
+      <div id="iExtra">${extraNamen().map(n => extraRij(n, extraTeltMee(n), extraNaAfloop(n))).join('')}</div>
+      <button class="btn ghost small" id="iExtraAdd" style="padding:6px 0">+ Agenda toevoegen</button></div>
+    <h2>Mijn dag</h2>
+    <div class="card">
+      <div class="note" style="margin-top:0">Van wanneer tot wanneer je dag loopt. Gebruikt voor het rooster, uitjes (vertrek je om 18:00 en loopt je dag van 08:00 tot 23:00, dan ben je 5 van de 15 uur weg) en afspraken die meetellen.</div>
+      <div class="row line"><div class="grow">Mijn dag begint om</div><input type="time" id="iDagStart" value="${i.dagStart||'08:00'}" style="width:120px"></div>
+      <div class="row line"><div class="grow">Mijn dag eindigt om</div><input type="time" id="iDagEind" value="${i.dagEind||'23:00'}" style="width:120px"></div>
+    </div>
+    </div>
+    <div class="inst-kol">
+    ${kop('🙂 Jij')}
+    <h2>Doelen per week</h2>
+    ${veldenKaart(i, 'doelen')}
+    <h2>Gametimer</h2>
+    <div class="card">
+      <label class="f" style="margin-top:0">Trillen als je vrije gametijd op is</label>
+      <div class="seg" id="iTril"><button data-v="aan" class="${i.trillen!=='uit'?'on':''}">Aan</button><button data-v="uit" class="${i.trillen==='uit'?'on':''}">Uit</button></div>
+      <label class="f">Agendamelding als je gametijd op is</label>
+      <div class="seg" id="iGameMeld"><button data-v="aan" class="${i.gameMelding!=='uit'?'on':''}">Aan</button><button data-v="uit" class="${i.gameMelding==='uit'?'on':''}">Uit</button></div>
+      <div class="note">Bij het starten van de gametimer zet de app een afspraak "🎮 Gametijd op" in je agenda "Planner". Je telefoon geeft dan een melding, ook als de app dicht is. Stop je eerder, dan verdwijnt hij weer.</div>
+    </div>
     <h2>Herinneringen (in je agenda)</h2>
     <div class="card">
       <div class="seg" id="iHer"><button data-v="uit" class="${i.herinneringen!=='aan'?'on':''}">Uit</button><button data-v="aan" class="${i.herinneringen==='aan'?'on':''}">Aan</button></div>
@@ -2296,70 +2410,13 @@ function openInstellingen(){
       <div class="note">Tijdens of vlak voor een dienst krijg je geen herinnering om in te vullen; wat je dan mist, komt de volgende ochtend. Deadline-herinneringen komen altijd.</div>
       <button class="btn sec" id="iPlan" style="margin-top:8px">Bekijk herinneringen van vandaag</button>
     </div>
-    <h2>Weekend en gametimer</h2>
-    <div class="card">
-      <label class="f" style="margin-top:0">Weekend telt mee voor studie</label>
-      <div class="seg" id="iWeekend">${[['nee','Nee'],['licht','Lichter'],['ja','Ja']].map(([v,l]) => `<button data-v="${v}" class="${(i.weekendModus||'licht')===v?'on':''}">${l}</button>`).join('')}</div>
-      <div class="note">Lichter: een weekenddag krijgt het percentage bij Studie van een doordeweekse dag.</div>
-      <label class="f">Trillen als je vrije gametijd op is</label>
-      <div class="seg" id="iTril"><button data-v="aan" class="${i.trillen!=='uit'?'on':''}">Aan</button><button data-v="uit" class="${i.trillen==='uit'?'on':''}">Uit</button></div>
-      <label class="f">Agendamelding als je gametijd op is</label>
-      <div class="seg" id="iGameMeld"><button data-v="aan" class="${i.gameMelding!=='uit'?'on':''}">Aan</button><button data-v="uit" class="${i.gameMelding==='uit'?'on':''}">Uit</button></div>
-      <div class="note">Bij het starten van de gametimer zet de app een afspraak "🎮 Gametijd op" in je agenda "Planner". Je telefoon geeft dan een melding, ook als de app dicht is. Stop je eerder, dan verdwijnt hij weer.</div>
-    </div>
-    <h2>Werk en agenda</h2>
-    <div class="card">
-      <label class="f" style="margin-top:0">Naam van je werk (zo heet het overal in de app)</label><input id="iWerkNaam" value="${esc(i.werkNaam)}" placeholder="Werk">
-      <label class="f">Avonden die je vrijhoudt (dienstzoeker raadt ze af)</label>
-      <div class="seg small" id="iVrijeAvond">${WEEKDAGEN.map(d => `<button data-v="${d}" class="${vrijeAvondenLijst().includes(d)?'on':''}">${d}</button>`).join('')}</div>
-      <label class="f">Naam van je lesrooster-agenda</label><input id="iAgenda" value="${esc(i.lesAgenda)}">
-      <label class="f">Extra agenda's om te tonen <span class="sub">(bijv. van je vereniging; meerdere: scheiden met een komma)</span></label>
-      <input id="iExtraAgenda" value="${esc(i.extraAgenda || '')}" placeholder="naam zoals in Google Agenda">
-      <label class="f">Afspraken uit die agenda's tellen mee in je studieplan</label>
-      <div class="seg" id="iExtraTelt"><button data-v="aan" class="${i.extraTelt!=='uit'?'on':''}">Aan</button><button data-v="uit" class="${i.extraTelt==='uit'?'on':''}">Uit</button></div>
-      <div class="note">${!String(i.extraAgenda || '').trim() ? 'Afspraken uit deze agenda\'s staan in je Rooster en Agenda, maar tellen niet mee in je studieplan.'
-        : EXTRA && EXTRA.fout ? esc(EXTRA.fout) : EXTRA ? '✓ Gevonden: ' + (EXTRA.items || []).length + ' afspraken in de komende weken.' : 'Wordt geladen…'}
-        Aan = de tijd van een afspraak gaat af van je vrije tijd, net als een dienst (afspraken van een hele dag zonder tijd tellen niet mee). Uit = alleen tonen.</div>
-      <label class="f">Diensten automatisch uit de agenda van mijn werk halen</label>
-      <div class="seg" id="iWerkImp"><button data-v="aan" class="${i.werkImport==='aan'?'on':''}">Aan</button><button data-v="uit" class="${i.werkImport!=='aan'?'on':''}">Uit</button></div>
-      <label class="f">Naam van je werkagenda (een stukje is genoeg)</label><input id="iWerkAgenda" value="${esc(i.werkAgenda)}">
-      <div class="note">${!D.werkInfo ? '' : D.werkInfo.gevonden ? '✓ Gevonden. Wordt bijgewerkt als je de app opent.' : 'Niet gevonden met deze naam.'}</div>
-      <label class="f">Tekst die in de agendatitel vóór de locatie staat (wordt weggehaald)</label><input id="iWerkTitel" value="${esc(i.werkTitelWeg)}" placeholder="bijv. Bedrijfsnaam personeel">
-      <div class="note">Een titel als "Bedrijfsnaam personeel Locatie - 150%" wordt dan locatie "Locatie" met 150% toeslag.</div>
-    </div>
+    ${kop('⚙︎ App')}
+    <h2>Weergave</h2>
+    <div class="card"><div class="seg" id="iThema">${[['licht','Licht'],['donker','Donker'],['systeem','Systeem']].map(([v,l]) =>
+      `<button data-v="${v}" class="${thema===v?'on':''}">${l}</button>`).join('')}</div>
+      <div class="note">Systeem volgt de instelling van je telefoon of pc. Wordt per apparaat onthouden.</div></div>
     ${IN_GOOGLE ? '' : `<h2>Koppeling</h2><div class="card"><div class="note" style="margin-top:0">Gekoppeld met je Google Sheet.</div>
       <button class="btn danger" id="iOntkoppel">Ontkoppelen</button></div>`}
-    <h2>Schoolvakanties</h2>
-    <div class="card" style="padding:4px 12px">${vakLijst.map(p => `<div class="list-item" style="cursor:default"><div class="grow">
-      <div class="name">${p.soort === 'zomer' ? '☀ ' : '🏖 '}${esc(p.naam)}</div><div class="sub">${dagKort(p.van)} ${p.van.slice(0,4)} – ${dagKort(p.tot)} ${p.tot.slice(0,4)}${p.soort === 'zomer' ? ' · geen studiedoel' : ''}</div></div>
-      <button class="x" data-pdel="${p.id}" aria-label="verwijderen">×</button></div>`).join('') || '<div class="empty">Nog geen schoolvakanties.</div>'}</div>
-    <div class="card" data-geen-auto>
-      <label class="f" style="margin-top:0">Naam</label><input id="pNaam" placeholder="bijv. Kerstvakantie">
-      <div class="row"><div class="grow"><label class="f">Van</label><input type="date" id="pVan"></div>
-        <div class="grow"><label class="f">Tot en met</label><input type="date" id="pTot"></div></div>
-      <label class="f">Soort</label><div class="seg" id="pSoort"><button data-v="vakantie" class="on">Gewone vakantie</button><button data-v="zomer">Zomervakantie</button></div>
-      <div class="note">Staat "zomer" in de naam, dan wordt het vanzelf een zomervakantie (geen studiedoel). Een tentamen vlak na een vakantie zet de toetsweekmodus gewoon aan.</div>
-      <div style="height:10px"></div><button class="btn sec" id="pAdd">+ Schoolvakantie toevoegen</button>
-      <button class="btn ghost" id="pPlak" style="margin-top:4px">Meerdere tegelijk (rooster plakken)</button>
-    </div>
-    <h2>Uitjes</h2>
-    <div class="card">
-      <div class="note" style="margin-top:0">Je uitjes zelf plan je bij Maand → Uitjes. Hier stel je in hoe lang je dag is: vertrek je om 18:00 en loopt je dag van 08:00 tot 23:00, dan ben je 5 van de 15 uur weg en houd je 67% van je doelen.</div>
-      <div class="row line"><div class="grow">Mijn dag begint om</div><input type="time" id="iDagStart" value="${i.dagStart||'08:00'}" style="width:120px"></div>
-      <div class="row line"><div class="grow">Mijn dag eindigt om</div><input type="time" id="iDagEind" value="${i.dagEind||'23:00'}" style="width:120px"></div>
-    </div>
-    <h2>Tentamens</h2>
-    <div class="card" style="padding:4px 12px">${tent.map(t => `<div class="list-item" style="cursor:default"><div class="grow"><div class="name">${esc(t.vak)}</div>
-      <div class="sub">${dagKort(t.datum)} ${t.datum.slice(0,4)}${t.tijd?' · '+t.tijd:''}${t.opmerking?' · '+esc(t.opmerking):''}</div></div>
-      <button class="x" data-del="${t.id}" aria-label="verwijderen">×</button></div>`).join('') || '<div class="empty">Geen tentamens.</div>'}</div>
-    <div class="card" data-geen-auto>
-      <div class="row"><div class="grow"><label class="f" style="margin-top:0">Datum</label><input type="date" id="tDatum"></div>
-        <div class="grow"><label class="f" style="margin-top:0">Tijd</label><input type="time" id="tTijd"></div></div>
-      <label class="f">Vak</label><input id="tVak" placeholder="bijv. Wiskunde">
-      <label class="f">Opmerking</label><input id="tOpm" placeholder="bijv. alleen indien nodig">
-      <div style="height:10px"></div><button class="btn sec" id="tAdd">+ Tentamen toevoegen</button>
-      <button class="btn ghost" id="tPlak" style="margin-top:4px">Meerdere tegelijk (rooster plakken)</button>
-    </div>
     <h2>Gegevens</h2>
     <div class="card" data-geen-auto>
       <div class="note" style="margin-top:0">Download je gegevens als back-up, of één tabblad om te openen in Excel of LibreOffice. Je geheime sleutel zit er niet in.</div>
@@ -2374,8 +2431,22 @@ function openInstellingen(){
       ${(D.versie || '') < SERVER_MIN ? `<div class="alert">Code.gs is ouder dan deze app verwacht (${SERVER_MIN}). Plak de nieuwste Code.gs en kies Implementeren → Implementaties beheren → Nieuwe versie.</div>` : ''}
       ${IN_GOOGLE ? '' : '<button class="btn sec" id="iUpdate" style="margin-top:8px">Controleer op update</button><div class="note" id="iUpdateInfo"></div>'}
     </div>
+    </div>
+    </div>
     <div class="sub autostatus iStatus" style="text-align:center;margin-top:8px"></div>
     <button class="btn ghost" id="iAnn">Sluiten</button>`);
+  $('.sheet').classList.add('breed-sheet');
+  $('#iVerborgen').onclick = async () => { await sheetHaak(); verborgenLessen(); };
+  // extra agenda's: rijen toevoegen/verwijderen, telt mee of niet
+  const exEvents = () => {
+    document.querySelectorAll('.exDel').forEach(b => b.onclick = () => { b.closest('.exrow').remove(); planI(); });
+    document.querySelectorAll('.exTelt button, .exNa button').forEach(b => b.onclick = () => {
+      b.parentNode.querySelectorAll('button').forEach(y => y.classList.toggle('on', y === b));
+      const rij = b.closest('.exrow'); rij.querySelector('.exNaRij').style.display = rij.querySelector('.exTelt button[data-v="ja"]').classList.contains('on') ? '' : 'none';
+      planI(); });
+  };
+  exEvents();
+  $('#iExtraAdd').onclick = () => { $('#iExtra').insertAdjacentHTML('beforeend', extraRij('', true, '')); exEvents(); $('#iExtra .exrow:last-child .exNaam').focus(); };
   if ($('#iUpdate')) $('#iUpdate').onclick = async () => {
     const info = $('#iUpdateInfo'); info.textContent = 'Kijken op GitHub…';
     try {
@@ -2393,8 +2464,8 @@ function openInstellingen(){
     } catch(e) { info.textContent = 'Geen verbinding met GitHub.'; }
   };
   const keuze = {herinneringen:i.herinneringen, werkImport:i.werkImport, overslaanBijAfspraak:i.overslaanBijAfspraak,
-                 weekendModus:i.weekendModus||'licht', trillen:i.trillen||'aan', gameMelding:i.gameMelding||'aan', extraTelt:i.extraTelt||'aan'};
-  [['iHer','herinneringen'],['iWerkImp','werkImport'],['iWeekend','weekendModus'],['iTril','trillen'],['iGameMeld','gameMelding'],['iAfspraak','overslaanBijAfspraak'],['iExtraTelt','extraTelt']].forEach(([id,k]) =>
+                 weekendModus:i.weekendModus||'licht', trillen:i.trillen||'aan', gameMelding:i.gameMelding||'aan'};
+  [['iHer','herinneringen'],['iWerkImp','werkImport'],['iWeekend','weekendModus'],['iTril','trillen'],['iGameMeld','gameMelding'],['iAfspraak','overslaanBijAfspraak']].forEach(([id,k]) =>
     document.querySelectorAll('#'+id+' button').forEach(b => b.onclick = () => { keuze[k] = b.dataset.v;
       document.querySelectorAll('#'+id+' button').forEach(y => y.classList.toggle('on', y===b)); planI(); }));
   document.querySelectorAll('#iVrijeAvond button').forEach(b => b.onclick = () => { b.classList.toggle('on'); planI(); });
@@ -2432,7 +2503,11 @@ function openInstellingen(){
   const status = (t, fout) => document.querySelectorAll('.iStatus').forEach(el => { el.textContent = t; el.classList.toggle('fout', !!fout); });
   /** Leest alle velden uit. Geeft { o } of { fout: 'tekst' }. */
   function verzamel(){
-    const o = Object.assign({lesAgenda: $('#iAgenda').value.trim(), extraAgenda: $('#iExtraAgenda').value.trim(), werkAgenda: $('#iWerkAgenda').value.trim(),
+    const exRijen = [...document.querySelectorAll('.exrow')].map(r => ({ naam: r.querySelector('.exNaam').value.trim().replace(/,/g, ' '),
+      telt: !!r.querySelector('.exTelt button[data-v="ja"].on'), na: (r.querySelector('.exNa button.on') || {}).dataset?.v || '' })).filter(x => x.naam);
+    const o = Object.assign({lesAgenda: $('#iAgenda').value.trim(),
+      extraAgenda: exRijen.map(x => x.naam).join(', '), extraNietTellen: exRijen.filter(x => !x.telt).map(x => x.naam).join(','),
+      extraNaAfloop: exRijen.filter(x => x.na).map(x => x.naam + '=' + x.na).join(','), extraTelt: 'aan', werkAgenda: $('#iWerkAgenda').value.trim(),
       werkNaam: $('#iWerkNaam').value.trim() || 'Werk', werkTitelWeg: $('#iWerkTitel').value.trim(),
       vrijeAvonden: [...document.querySelectorAll('#iVrijeAvond button.on')].map(b => b.dataset.v).join(','),
       dienstenInAgenda: i.dienstenInAgenda}, keuze);
