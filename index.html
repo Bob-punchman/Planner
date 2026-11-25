@@ -302,7 +302,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-3';
+const APP_VERSIE = '2026.11.25-4';
 const SERVER_MIN = '2026.11.24-4';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen)
 
 // ================= data & helpers =================
@@ -1742,6 +1742,7 @@ function maandCijfers(ym){
 }
 function renderMaand(){
   $('#title').textContent = 'Maand';
+  $('#stickyHost').innerHTML = '';   // knop van het vorige tabblad (+ Dienst, + Uitje) weghalen; het tabblad zet zelf weer de juiste
   // Overzicht en Werk mogen op een breed scherm in kolommen; Diensten en Uitjes zijn lijsten, die blijven smal
   $('#main').classList.toggle('midden', BREED.matches && (maandTab === 'overzicht' || maandTab === 'werk'));
   const mi = maandInfo(ym), i = I();
