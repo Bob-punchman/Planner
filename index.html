@@ -345,7 +345,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-19';
+const APP_VERSIE = '2026.11.25-20';
 const SERVER_MIN = '2026.11.25-8';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd)
 
 // ================= data & helpers =================
@@ -766,18 +766,24 @@ function maakWeekPlan(ma){
   // vakantiedagen zonder tentamen: het vakantiedoel (zomer 0)
   dagen.filter(d => !d.school).forEach(d =>
     d.doel = Math.min(d.cap, (d.vak.soort === 'zomer' ? 0 : (Number(i.vakantieStudie) || 0) / 7) * d.er));
-  // 2. verdelen naar gewicht × vrije tijd, maar nooit meer dan de vrije tijd van die dag ("water vullen")
-  let rest = zelf, open = schoolDagen.filter(d => d.gewicht > 0 && d.cap > 0.01);
-  for (let ronde = 0; ronde < 10 && rest > 0.001 && open.length; ronde++) {
-    const q = open.reduce((t, d) => t + d.gewicht * d.cap, 0);
-    let over = 0;
-    open.forEach(d => {
-      const bij = rest * d.gewicht * d.cap / q, ruimte = d.cap - d.doel;
-      if (bij > ruimte) { d.doel += ruimte; over += bij - ruimte; } else d.doel += bij;
-    });
-    rest = over;
-    open = open.filter(d => d.cap - d.doel > 0.01);
-  }
+  // 2. verdelen zodat je dagen ongeveer even vol zitten ("drukte gelijk trekken"):
+  //    drukte van een dag = vast (lessen, diensten, afspraken, reistijd) + zelfstudie. We zoeken één niveau L:
+  //    doordeweeks vul je aan tot L, een weekenddag tot L × weekendgewicht (bij "lichter" 50% = een halve dag),
+  //    steeds hoogstens de vrije tijd en je max zelfstudie per dag (cap).
+  //    Drukke doordeweekse dagen krijgen zo minder zelfstudie en een vrije weekenddag meer; een rustige week geeft
+  //    ook een rustiger weekend.
+  const vast = d => d.les + d.dienst + d.extra;
+  const open = schoolDagen.filter(d => d.gewicht > 0 && d.cap > 0.01);
+  const vul = L => open.reduce((t, d) => t + Math.min(d.cap, Math.max(0, L * d.gewicht - vast(d))), 0);
+  let rest = 0;
+  if (zelf > 0.001 && open.length) {
+    let lo = 0, hi = 48;
+    if (vul(hi) <= zelf) lo = hi;                                   // past niet: alles vol, rest = tekort
+    else for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (vul(m) < zelf) lo = m; else hi = m; }
+    const L = lo === 48 ? 48 : hi;
+    open.forEach(d => d.doel += Math.min(d.cap, Math.max(0, L * d.gewicht - vast(d))));
+    rest = Math.max(0, zelf - open.reduce((t, d) => t + d.doel, 0));
+  } else rest = zelf;
   const tekort = rest > 0.05 ? rest : 0;
   // 3. per vak, en "klaar": die tijd naar de andere vakken; alles klaar = vrije tijd
   dagen.forEach(d => {
@@ -2436,7 +2442,8 @@ function openInstellingen(){
     <div class="card">
       <label class="f" style="margin-top:0">Weekend telt mee voor studie</label>
       <div class="seg" id="iWeekend">${[['nee','Nee'],['licht','Lichter'],['ja','Ja']].map(([v,l]) => `<button data-v="${v}" class="${(i.weekendModus||'licht')===v?'on':''}">${l}</button>`).join('')}</div>
-      <div class="note">Lichter: een weekenddag krijgt het percentage hierboven van een doordeweekse dag.</div></div>
+      <div class="note">Het studieplan trekt je dagen gelijk: drukke dagen (veel lessen, werk, afspraken, reizen) krijgen minder zelfstudie, rustige meer.
+        Lichter: een weekenddag wordt hoogstens zo vol als het percentage hierboven van een doordeweekse dag. Is je week druk, dan krijgt een vrije weekenddag dus meer (50% = ongeveer een halve dag); een rustige week geeft een rustig weekend.</div></div>
     <h2>Lesrooster</h2>
     <div class="card">
       <label class="f" style="margin-top:0">Naam van je lesrooster-agenda</label><input id="iAgenda" value="${esc(i.lesAgenda)}">
