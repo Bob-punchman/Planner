@@ -345,7 +345,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-22';
+const APP_VERSIE = '2026.11.25-23';
 const SERVER_MIN = '2026.11.25-9';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -2606,6 +2606,7 @@ function openInstellingen(){
       b.onclick = async () => {
         if (viesDag()) bewaarConcept();
         try { const reg = await navigator.serviceWorker?.getRegistration(); if (reg) await reg.update(); } catch(e){}
+        try { await fetch('index.html', { cache: 'reload' }); } catch(e){}    // ook de browsercache verversen
         location.reload();
       };
     } catch(e) { info.textContent = 'Geen verbinding met GitHub.'; }
