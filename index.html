@@ -348,9 +348,12 @@
 
 <script>
 // ================= versie =================
+/** Versies vergelijken als getallen: "2026.11.25-11" is nieuwer dan "2026.11.25-9" (als tekst zou dat andersom zijn). */
+function versieNr(v){ return String(v || '').split(/[.-]/).map(Number).reduce((t, x) => t * 1000 + (x || 0), 0); }
+const versieMin = (v, min) => !!v && versieNr(v) >= versieNr(min);
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-28';
-const SERVER_MIN = '2026.11.25-9';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
+const APP_VERSIE = '2026.11.25-29';
+const SERVER_MIN = '2026.11.25-11';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -2238,7 +2241,7 @@ let woTimer = null, woBezig = false;
 function planWeekSync(){ clearTimeout(woTimer); woTimer = setTimeout(syncWeekoverzicht, 5000); }
 async function syncWeekoverzicht(){
   // pas als de lessen binnen zijn (anders klopt het studieplan niet) en de server bewaarWeekoverzicht kent
-  if (woBezig || !D || !LESSEN || LESSEN.fout || !(String(D.versie || '') >= '2026.11.24-1')) return;
+  if (woBezig || !D || !LESSEN || LESSEN.fout || !versieMin(D.versie, '2026.11.24-1')) return;
   if (!IN_GOOGLE && !opslag.get(CFG_KEY)) return;
   woBezig = true;
   const verstuurd = opslag.get(WO_KEY) || {}, nu = maandag(vandaag());
@@ -2588,7 +2591,7 @@ function openInstellingen(){
     <div class="card">
       <div class="row line"><div class="grow">App <span class="sub">(index.html)</span></div><div class="name">${APP_VERSIE}</div></div>
       <div class="row line"><div class="grow">Server <span class="sub">(Code.gs)</span></div><div class="name">${esc(D.versie || 'ouder dan 2026.11.15')}</div></div>
-      ${(D.versie || '') < SERVER_MIN ? `<div class="alert">Code.gs is ouder dan deze app verwacht (${SERVER_MIN}). Plak de nieuwste Code.gs en kies Implementeren → Implementaties beheren → Nieuwe versie.</div>` : ''}
+      ${!versieMin(D.versie, SERVER_MIN) ? `<div class="alert">Code.gs is ouder dan deze app verwacht (${SERVER_MIN}). Plak de nieuwste Code.gs en kies Implementeren → Implementaties beheren → Nieuwe versie.</div>` : ''}
       ${IN_GOOGLE ? '' : '<button class="btn sec" id="iUpdate" style="margin-top:8px">Controleer op update</button><div class="note" id="iUpdateInfo"></div>'}
     </div>
     </div>
