@@ -214,9 +214,11 @@
   @media (min-width: 900px){ .vkaarten > .vblok.vol{grid-column:span 2} }
   @media (max-width: 899px){ .breedknop{display:none} }
   /* ===== Rooster ===== */
-  /* breed scherm: maximaal 95% van de breedte (in het midden), alleen de datum/week-navigatie blijft compact */
+  /* breed scherm: het weekrooster gebruikt maximaal 95% van de breedte; de andere schermen (kaarten naast elkaar)
+     maximaal 1600 pixels, dat zijn drie kolommen. De datum/week-navigatie blijft compact in het midden. */
   main.breed{max-width:95%;padding-left:0;padding-right:0}
-  main.breed > .daynav, main.breed .rooster-hoofd > .daynav{max-width:900px;margin-left:auto;margin-right:auto}
+  main.midden{max-width:1600px}
+  main.breed > .daynav, main.midden > .daynav, main.breed .rooster-hoofd > .daynav{max-width:900px;margin-left:auto;margin-right:auto}
   .rooster-zij h2:first-child{margin-top:6px}
   /* breed scherm (pc/laptop): rooster links, takenlijsten rechts ernaast. Smal (telefoon): onder elkaar */
   @media (min-width: 900px){
@@ -300,7 +302,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.24-7';
+const APP_VERSIE = '2026.11.25-1';
 const SERVER_MIN = '2026.11.24-4';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen)
 
 // ================= data & helpers =================
@@ -840,7 +842,8 @@ function render(){
   $('#stickyHost').innerHTML = '';
   lesKlik = [];
   // weekrooster en (op een breed scherm) Vandaag met kaarten naast elkaar mogen de hele breedte gebruiken
-  $('#main').classList.toggle('breed', (view === 'rooster' && weekModus()) || (view !== 'rooster' && BREED.matches));
+  $('#main').classList.toggle('breed', view === 'rooster' && weekModus());
+  $('#main').classList.toggle('midden', view !== 'rooster' && view !== 'maand' && BREED.matches);
   if (indelen && indelen.split('-')[0] !== view) { indelen = null; indelingConcept = null; }   // ander scherm gekozen: indelen stoppen
   ({vandaag:renderVandaag, rooster:renderRooster, maand:renderMaand, week:renderWeek, trends:renderTrends})[view]();
   planWeekSync();
@@ -1740,7 +1743,7 @@ function maandCijfers(ym){
 function renderMaand(){
   $('#title').textContent = 'Maand';
   // Overzicht en Werk mogen op een breed scherm in kolommen; Diensten en Uitjes zijn lijsten, die blijven smal
-  $('#main').classList.toggle('breed', BREED.matches && (maandTab === 'overzicht' || maandTab === 'werk'));
+  $('#main').classList.toggle('midden', BREED.matches && (maandTab === 'overzicht' || maandTab === 'werk'));
   const mi = maandInfo(ym), i = I();
   $('#main').innerHTML = `
     <div class="daynav" style="${maandTab==='diensten'||maandTab==='uitjes'?'display:none':''}"><button class="nb" id="mPrev" aria-label="vorige maand">‹</button>
