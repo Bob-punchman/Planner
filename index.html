@@ -345,7 +345,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-21';
+const APP_VERSIE = '2026.11.25-22';
 const SERVER_MIN = '2026.11.25-9';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -3642,7 +3642,7 @@ function roosterKnoppen(){
     if (e.target !== kol) return;
     const m = Number(kol.dataset.start) + Math.floor(e.offsetY / SLOT) * 30;
     if (m >= 1440) return toast('Na middernacht: plan dat blok op de volgende dag');
-    openBlok(null, { datum: kol.dataset.s, begin: hm(m), eind: hm(Math.min(m + 60, 1439)) });
+    openBlok(null, { datum: kol.dataset.s });                // alleen de dag; tijden vul je zelf in
   });
 }
 
@@ -3700,9 +3700,9 @@ function overnemenScherm(titel, kandidaten){
   $('#oAnn').onclick = closeSheet;
   $('#oOk').onclick = () => {
     const nieuw = mee.map(({ n, r }) => Object.assign({}, n, r.status === 'kort' ? { begin: r.begin, eind: r.eind } : {}));
-    const k = $('#oOk'); k.disabled = true; k.textContent = 'Overnemen…';
+    const k = $('#oOk'); tril(); k.classList.add('bezig'); k.textContent = 'Bezig met overnemen…'; $('#oAnn').classList.add('bezig');
     api('bewaarBlokken', nieuw).then(d => { D = d; closeSheet(); render(); toast(nieuw.length + (nieuw.length === 1 ? ' blok' : ' blokken') + ' overgenomen ✓'); })
-      .catch(() => { k.disabled = false; k.textContent = 'Opnieuw proberen'; });
+      .catch(() => { k.classList.remove('bezig'); $('#oAnn').classList.remove('bezig'); k.textContent = 'Opnieuw proberen'; });
   };
 }
 /** Blokken van de week ervóór naar de week die je ziet (zonder vinkjes). */
@@ -3737,7 +3737,9 @@ function bewaarBasisweek(){
   $('#bwAnn').onclick = closeSheet;
   const bewaar = (waarde, melding) => {
     D.instellingen.basisWeek = waarde;
-    api('bewaarInstelling', 'basisWeek', waarde).then(d => { D = d; closeSheet(); render(); toast(melding); }).catch(() => {});
+    const k = $('#bwOk'); if (k) { tril(); k.classList.add('bezig'); k.textContent = 'Bewaren…'; }
+    api('bewaarInstelling', 'basisWeek', waarde).then(d => { D = d; closeSheet(); render(); toast(melding); })
+      .catch(() => { if (k) { k.classList.remove('bezig'); k.textContent = 'Bewaren'; } });
   };
   $('#bwOk').onclick = () => {
     const ids = [...document.querySelectorAll('.bwKies:checked')].map(x => x.dataset.id);
@@ -3803,9 +3805,7 @@ function openBlok(b, preset){
   };
   document.querySelectorAll('#bSoort button').forEach(k => k.onclick = () => {
     soort = k.dataset.v; document.querySelectorAll('#bSoort button').forEach(y => y.classList.toggle('on', y === k)); info(); });
-  // begin ingevuld en nog geen eind: standaard een uur later
-  $('#bBegin').addEventListener('change', () => { const v = $('#bBegin').value;
-    if (/^\d{2}:\d{2}$/.test(v) && !$('#bEind').value) { $('#bEind').value = hm(mins(v) + 60); } info(); });
+  $('#bBegin').addEventListener('change', info);
   ['#bBegin', '#bEind'].forEach(s => $(s).addEventListener('input', info));
   info();
   $('#bAnn').onclick = closeSheet;
