@@ -201,6 +201,7 @@
   .vblok{min-width:0;margin-bottom:12px}
   .vblok > .vinhoud > :first-child{margin-top:0}
   .vblok > .vinhoud > h2:first-child{margin-top:8px}
+  .kopplek{visibility:hidden}                       /* onzichtbaar kopje, zodat de bovenste kaarten op één lijn beginnen */
   .vblok.uit,.vblok.leeg{display:none}
   .vkaarten.indelen{align-items:stretch}               /* tijdens indelen: kolommen even hoog, zodat je overal in een kolom kunt loslaten */
   .vkaarten.indelen .vkol{min-height:160px;border-radius:12px;background:var(--soft);padding:6px 6px 60px}
@@ -301,7 +302,7 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-2';
+const APP_VERSIE = '2026.11.25-3';
 const SERVER_MIN = '2026.11.24-4';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen)
 
 // ================= data & helpers =================
@@ -2999,6 +3000,12 @@ function indelingHtml(scherm, blokken){
   // één kolom (telefoon): eerst alle blokken van kolom 1, dan 2, dan 3 (sort is stabiel: volgorde binnen een kolom blijft)
   const ruw = bezigMee ? indelingConcept : indelingVan(scherm, ids);
   const lijst = n === 1 ? [...ruw].sort((a, b) => a.kol - b.kol) : ruw;
+  // Bovenste kaarten op één lijn: heeft de bovenste kaart van een kolom een kopje (h2) en die van een andere kolom niet,
+  // dan krijgt die laatste een onzichtbaar kopje van dezelfde hoogte (alleen buiten de indeelmodus en met >1 kolom).
+  const zichtbaar = x => x.aan && per[x.id] && String(per[x.id].html || '').trim();
+  const heeftKop = x => /^\s*<h2[\s>]/.test(per[x.id].html || '');
+  const bovenste = [...Array(n)].map((_, i) => lijst.find(x => kolVan(x) === i + 1 && zichtbaar(x))).filter(Boolean);
+  const metPlek = new Set(!bezigMee && n > 1 && bovenste.some(heeftKop) ? bovenste.filter(x => !heeftKop(x)).map(x => x.id) : []);
   const blokHtml = x => {
     const b = per[x.id]; if (!b) return '';
     const leeg = !String(b.html || '').trim(), k = kolVan(x);
@@ -3010,7 +3017,7 @@ function indelingHtml(scherm, blokken){
         <button class="mini-knop" data-iop="${x.id}" aria-label="omhoog" ${pos === 0 ? 'disabled' : ''}>▲</button>
         <button class="mini-knop" data-ineer="${x.id}" aria-label="omlaag" ${pos === inKol.length - 1 ? 'disabled' : ''}>▼</button>
         <button class="mini-knop" data-ioog="${x.id}" title="tonen of verbergen">${x.aan ? '👁' : '⊘'}</button></div>` : ''}
-      <div class="vinhoud">${b.html || ''}</div></div>`;
+      <div class="vinhoud">${metPlek.has(x.id) ? '<h2 class="kopplek" aria-hidden="true">&nbsp;</h2>' : ''}${b.html || ''}</div></div>`;
   };
   const kolommen = [...Array(n)].map((_, i) =>
     `<div class="vkol" data-kol="${i + 1}">${lijst.filter(x => kolVan(x) === i + 1).map(blokHtml).join('')}</div>`).join('');
