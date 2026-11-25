@@ -256,10 +256,13 @@
   main.midden{max-width:1600px}
   main.breed > .daynav, main.midden > .daynav, main.breed .rooster-hoofd > .daynav{max-width:900px;margin-left:auto;margin-right:auto}
   .rooster-zij h2:first-child{margin-top:6px}
-  /* breed scherm (pc/laptop): rooster links, takenlijsten rechts ernaast. Smal (telefoon): onder elkaar */
+  /* to-do onder het rooster, zoals onderaan een Passion Planner-week: breed scherm Studie-to-do | Persoonlijke to-do
+     naast elkaar, smal (telefoon) onder elkaar */
+  .rooster-zij{margin-top:14px}
+  .todo-sub{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:10px 0 2px}
+  .todo-sub:first-child{margin-top:0}
   @media (min-width: 900px){
-    .rooster-wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
-    .rooster-zij{position:sticky;top:64px;max-height:calc(100vh - 150px);overflow:auto;padding-right:2px}
+    .rooster-zij{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
   }
   .wk{display:grid;grid-template-columns:46px repeat(7,minmax(0,1fr));background:var(--card);border:1px solid var(--line);
     border-radius:var(--radius);overflow:hidden}
@@ -342,8 +345,8 @@
 <script>
 // ================= versie =================
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.25-17';
-const SERVER_MIN = '2026.11.25-7';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd)
+const APP_VERSIE = '2026.11.25-19';
+const SERVER_MIN = '2026.11.25-8';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd)
 
 // ================= data & helpers =================
 let D = null;          // alle gegevens uit de spreadsheet
@@ -2378,6 +2381,8 @@ const veldenKaart = (i, sleutel) => `<div class="card">${VELDEN[sleutel].map(([k
 const extraNamen = () => String(I().extraAgenda || '').split(',').map(x => x.trim()).filter(Boolean);
 const extraNietTellen = () => String(I().extraNietTellen || '').split(',').map(x => x.trim()).filter(Boolean);
 /** Telt agenda naam mee in je studieplan? (extraTelt = uit: de oude knop voor alles tegelijk) */
+/** Komen afspraken uit agenda naam in het maandrooster? (extraNietInMaand: bijv. je reisagenda niet) */
+const extraInMaand = naam => !String(I().extraNietInMaand || '').split(',').map(x => x.trim()).includes(naam);
 const extraTeltMee = naam => I().extraTelt !== 'uit' && !extraNietTellen().includes(naam);
 /** Na afloop van een afspraak uit agenda naam nog bezet: '' (niets), '1' (+1 uur) of 'rest' (rest van de dag). */
 function extraNaAfloop(naam){
@@ -2389,7 +2394,7 @@ function reisRij(r){
     <input class="rMin" inputmode="numeric" value="${r.min || ''}" placeholder="min" style="width:64px;text-align:right"><span class="sub">min</span>
     <button class="x rDel" aria-label="verwijderen">×</button></div>`;
 }
-function extraRij(naam, telt, na){
+function extraRij(naam, telt, na, maand = true){
   const n = (EXTRA && EXTRA.items || []).filter(x => x.agenda === naam).length;
   const weg = naam && EXTRA && EXTRA.fout && EXTRA.fout.includes(naam);
   return `<div class="exrow" data-oud="${esc(naam)}"><div class="row"><input class="exNaam grow" value="${esc(naam)}" placeholder="naam zoals in Google Agenda">
@@ -2398,7 +2403,9 @@ function extraRij(naam, telt, na){
       <div class="seg small exTelt" style="flex:none"><button data-v="ja" class="${telt ? 'on' : ''}">Telt mee</button><button data-v="nee" class="${telt ? '' : 'on'}">Alleen tonen</button></div></div>
     <div class="row exNaRij" style="margin-top:4px;${telt ? '' : 'display:none'}"><div class="grow sub">Na afloop nog bezet</div>
       <div class="seg small exNa" style="flex:none">${[['', 'Niets'], ['1', '+1 uur'], ['rest', 'Rest van de dag']].map(([v, l]) =>
-        `<button data-v="${v}" class="${(na || '') === v ? 'on' : ''}">${l}</button>`).join('')}</div></div></div>`;
+        `<button data-v="${v}" class="${(na || '') === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <div class="row" style="margin-top:4px"><div class="grow sub">In het maandrooster</div>
+      <div class="seg small exMaand" style="flex:none"><button data-v="ja" class="${maand ? 'on' : ''}">Tonen</button><button data-v="nee" class="${maand ? '' : 'on'}">Niet tonen</button></div></div></div>`;
 }
 const WEEKDAGEN = ['ma','di','wo','do','vr','za','zo'];
 const DAG_NAAM = {ma:'maandag',di:'dinsdag',wo:'woensdag',do:'donderdag',vr:'vrijdag',za:'zaterdag',zo:'zondag'};
@@ -2483,7 +2490,7 @@ function openInstellingen(){
     <h2>Extra agenda's</h2>
     <div class="card">
       <div class="note" style="margin-top:0">Bijv. de agenda van je vereniging. Ze staan in je Rooster en Agenda. <b>Telt mee</b> = de tijd van een afspraak gaat af van je vrije tijd (studieplan), net als een dienst; afspraken van een hele dag zonder tijd tellen nooit mee. <b>Na afloop</b>: doe je na een borrel niets meer, kies dan +1 uur of rest van de dag. De agenda moet in je Google Agenda-lijst staan.</div>
-      <div id="iExtra">${extraNamen().map(n => extraRij(n, extraTeltMee(n), extraNaAfloop(n))).join('')}</div>
+      <div id="iExtra">${extraNamen().map(n => extraRij(n, extraTeltMee(n), extraNaAfloop(n), extraInMaand(n))).join('')}</div>
       <button class="btn ghost small" id="iExtraAdd" style="padding:6px 0">+ Agenda toevoegen</button></div>
     <h2>🚆 Reistijd</h2>
     <div class="card">
@@ -2563,7 +2570,7 @@ function openInstellingen(){
   // extra agenda's: rijen toevoegen/verwijderen, telt mee of niet
   const exEvents = () => {
     document.querySelectorAll('.exDel').forEach(b => b.onclick = () => { b.closest('.exrow').remove(); planI(); });
-    document.querySelectorAll('.exTelt button, .exNa button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.exTelt button, .exNa button, .exMaand button').forEach(b => b.onclick = () => {
       b.parentNode.querySelectorAll('button').forEach(y => y.classList.toggle('on', y === b));
       const rij = b.closest('.exrow'); rij.querySelector('.exNaRij').style.display = rij.querySelector('.exTelt button[data-v="ja"]').classList.contains('on') ? '' : 'none';
       planI(); });
@@ -2631,10 +2638,12 @@ function openInstellingen(){
   /** Leest alle velden uit. Geeft { o } of { fout: 'tekst' }. */
   function verzamel(){
     const exRijen = [...document.querySelectorAll('.exrow')].map(r => ({ naam: r.querySelector('.exNaam').value.trim().replace(/,/g, ' '),
-      telt: !!r.querySelector('.exTelt button[data-v="ja"].on'), na: (r.querySelector('.exNa button.on') || {}).dataset?.v || '' })).filter(x => x.naam);
+      telt: !!r.querySelector('.exTelt button[data-v="ja"].on'), na: (r.querySelector('.exNa button.on') || {}).dataset?.v || '',
+      maand: !r.querySelector('.exMaand button[data-v="nee"].on') })).filter(x => x.naam);
     const o = Object.assign({lesAgenda: $('#iAgenda').value.trim(),
       extraAgenda: exRijen.map(x => x.naam).join(', '), extraNietTellen: exRijen.filter(x => !x.telt).map(x => x.naam).join(','),
       extraNaAfloop: exRijen.filter(x => x.na).map(x => x.naam + '=' + x.na).join(','), extraTelt: 'aan',
+      extraNietInMaand: exRijen.filter(x => !x.maand).map(x => x.naam).join(','),
       reisRegels: JSON.stringify([...document.querySelectorAll('.reisrow')].map(r => ({ tekst: r.querySelector('.rTekst').value.trim(),
         min: Math.max(0, Math.round(num(r.querySelector('.rMin').value) || 0)) })).filter(x => x.tekst && x.min)), werkAgenda: $('#iWerkAgenda').value.trim(),
       werkNaam: $('#iWerkNaam').value.trim() || 'Werk', werkTitelWeg: $('#iWerkTitel').value.trim(),
@@ -3761,7 +3770,7 @@ function maandItems(s){
   periodes().filter(p => p.van <= s && s <= p.tot).forEach(p => uit.push({ soort: 'periode', ico: p.soort === 'uitje' ? '🧳' : p.soort === 'zomer' ? '☀' : '🏖', tekst: p.naam, p }));
   D.tentamens.filter(t => t.datum === s).forEach(t => uit.push({ soort: 'tentamen', ico: '📚', tekst: t.vak + (t.tijd ? ' ' + t.tijd : ''), t }));
   D.deadlines.filter(d => d.datum === s).forEach(d => uit.push({ soort: 'deadline', ico: d.klaar ? '✓' : '⏰', tekst: deadlineNaam(d), klaar: d.klaar, d }));
-  extraOp(s).forEach(x => uit.push({ soort: 'extra', ico: '📅', tekst: (x.heleDag ? '' : x.begin + ' ') + x.titel, x }));
+  extraOp(s).filter(x => extraInMaand(x.agenda)).forEach(x => uit.push({ soort: 'extra', ico: '📅', tekst: (x.heleDag ? '' : x.begin + ' ') + x.titel, x }));
   dienstenOp(s).forEach(x => uit.push({ soort: 'werk', ico: '💼', tekst: W() + ' ' + x.begin, x }));
   const bl = blokken().filter(b => b.datum === s);
   if (bl.length) uit.push({ soort: 'blokken', ico: '▦', tekst: bl.length + (bl.length === 1 ? ' blok' : ' blokken') });
@@ -3969,16 +3978,18 @@ function takenKaarten(){
       <button class="mini-knop" data-tnieuwvak="${esc(v)}" aria-label="taak toevoegen">+</button></div>
       ${open.concat(af).map(t => taakRij({ t, st: { klaar: !!t.klaar } })).join('')}</div>`;
   };
-  return `<h2>Studie-to-do</h2><div class="card">
+  return `<div class="todo-kol"><h2>Studie-to-do</h2><div class="card">
       ${eerst && eerst.taak ? `<div class="infobox" style="margin-top:0">Eerst: <b>${esc(eerst.vak)}</b> · ${esc(eerst.taak.wat)}</div>` : ''}
       ${prio.map(vakGroep).join('') || '<div class="note">Voeg vakken toe bij ⚙︎.</div>'}
       <div class="note">Bovenaan = hoogste prioriteit (↑ ↓). Bij een studieblok kijk je hier wat eerst moet.</div></div>
-    <h2>${maandag(s) === maandag(vandaag()) ? 'Deze week' : 'Week ' + weekNr(s)}</h2><div class="card">
+    </div><div class="todo-kol">
+    <h2>Persoonlijke to-do</h2><div class="card">
+      <div class="todo-sub">${maandag(s) === maandag(vandaag()) ? 'Deze week' : 'Week ' + weekNr(s)}</div>
       ${wk.map(taakRij).join('') || '<div class="note">Nog geen taken voor deze week.</div>'}
-      <button class="btn ghost small" data-tnieuw="week" style="margin-top:4px">+ Taak voor deze week</button></div>
-    <h2>${ymVan(s) === ymVan(vandaag()) ? 'Deze maand' : ymNaam(ymVan(s))}</h2><div class="card">
+      <button class="btn ghost small" data-tnieuw="week" style="margin-top:4px">+ Taak voor deze week</button>
+      <div class="todo-sub" style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">${ymVan(s) === ymVan(vandaag()) ? 'Deze maand' : ymNaam(ymVan(s))}</div>
       ${mnd.map(taakRij).join('') || '<div class="note">Nog geen taken voor deze maand.</div>'}
-      <button class="btn ghost small" data-tnieuw="maand" style="margin-top:4px">+ Taak voor deze maand</button></div>`;
+      <button class="btn ghost small" data-tnieuw="maand" style="margin-top:4px">+ Taak voor deze maand</button></div></div>`;
 }
 function takenKnoppen(){
   document.querySelectorAll('[data-tvink]').forEach(b => b.onclick = () => vinkTaak((D.taken || []).find(t => t.id === b.dataset.tvink)));
