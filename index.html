@@ -51,6 +51,7 @@
   input,select,textarea{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;
     background:var(--field);color:var(--ink);appearance:none;-webkit-appearance:none}
   textarea{min-height:70px;resize:vertical}
+  textarea.groeit{min-height:0;resize:none;overflow:hidden;line-height:1.4}   /* hoogte zet groei() */
   .btn{border:0;border-radius:12px;padding:13px 16px;font:inherit;font-weight:600;background:var(--accent);color:var(--on-accent);width:100%;cursor:pointer}
   .btn.sec{background:var(--accent-soft);color:var(--accent)}
   .btn.ghost{background:none;color:var(--muted);font-weight:500}
@@ -354,7 +355,7 @@
 function versieNr(v){ return String(v || '').split(/[.-]/).map(Number).reduce((t, x) => t * 1000 + (x || 0), 0); }
 const versieMin = (v, min) => !!v && versieNr(v) >= versieNr(min);
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.26-2';
+const APP_VERSIE = '2026.11.26-3';
 const SERVER_MIN = '2026.11.25-11';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -425,6 +426,16 @@ const CFG_KEY = 'planner-koppeling', CACHE_KEY = 'planner-cache';
 const opslag = { get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
                  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
                  weg(k){ try { localStorage.removeItem(k); } catch(e){} } };
+/** Tekstvak precies zo hoog maken als de tekst erin (eerst op 'auto', anders krimpt hij nooit terug).
+ *  scrollHeight = hoogte van de inhoud incl. padding; + de rand, want box-sizing is border-box. */
+function groei(el){
+  if (!el || !el.scrollHeight) return;                   // verborgen (display:none): niets te meten
+  const s = getComputedStyle(el), rand = parseFloat(s.borderTopWidth) + parseFloat(s.borderBottomWidth);
+  el.style.height = 'auto';
+  el.style.height = (el.scrollHeight + rand) + 'px';
+}
+// smaller/breder venster = andere regelafbreking: meegroeiende vakken opnieuw meten
+window.addEventListener('resize', () => document.querySelectorAll('textarea.groeit').forEach(groei));
 function roep(fn, args, cfg){
   if (IN_GOOGLE) return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
   cfg = cfg || opslag.get(CFG_KEY);
@@ -1281,7 +1292,7 @@ function renderVandaag(){
       <div class="row line"><div class="grow">Sportschool</div>
         <div class="seg small" id="vSport"><button data-v="0" class="${!inv.sport?'on':''}">Nee</button><button data-v="1" class="${inv.sport?'on':''}">Ja</button></div></div>
       <div class="note">Tik op een getal om het precies in te typen. Wijzigingen worden vanzelf opgeslagen, een paar seconden nadat je klaar bent.</div>
-      <label class="f">Notitie</label><input id="vNot" value="${esc(inv.notitie)}" placeholder="bijv. moe na dienst">
+      <label class="f">Notitie</label><textarea id="vNot" class="groeit" rows="1" enterkeyhint="done" placeholder="bijv. moe na dienst">${esc(inv.notitie)}</textarea>
     </div>` },
       { id: 'week', naam: 'Week', html: `<h2>Week ${weekNr(dag)}</h2>
     <div class="card">
@@ -1325,7 +1336,15 @@ function renderVandaag(){
       if (isNaN(uu) || isNaN(mm) || uu<0 || mm<0) return toast('Vul geldige getallen in');
       invSet(k, Math.round((uu + mm/60)*100)/100); closeSheet(); renderVandaag(); planAuto(); };
   });
-  $('#vNot').oninput = e => { inv.notitie = e.target.value; planAuto(); };
+  // Notitie: één alinea die meegroeit met de tekst (sinds 2026.11.26-3). Enter = klaar (geen nieuwe regel),
+  // zodat de notitie in het weekoverzicht op één regel blijft; geplakte regels worden spaties.
+  const not = $('#vNot');
+  not.oninput = () => {
+    if (/\n/.test(not.value)) not.value = not.value.replace(/\s*\n\s*/g, ' ');
+    inv.notitie = not.value; groei(not); planAuto();
+  };
+  not.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); not.blur(); } };
+  groei(not);
   $('#vStatus').onclick = () => { if (autoStatus === 'fout') nuOpslaan(); };
   const slaapBij = () => {   // alleen de regel eronder bijwerken, zodat je niet uit het veld springt
     const ok = t => /^\d{2}:\d{2}$/.test(t);
