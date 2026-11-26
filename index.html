@@ -354,7 +354,7 @@
 function versieNr(v){ return String(v || '').split(/[.-]/).map(Number).reduce((t, x) => t * 1000 + (x || 0), 0); }
 const versieMin = (v, min) => !!v && versieNr(v) >= versieNr(min);
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.26-1';
+const APP_VERSIE = '2026.11.26-2';
 const SERVER_MIN = '2026.11.25-11';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -4072,7 +4072,7 @@ async function zetBlokKlaar(b, klaar, log, vak){
 
 // ================= MAANDROOSTER (zoals de maandpagina van een papieren planner) =================
 // Per dag een vak met wat er die dag is: vakantie/uitje, tentamens, deadlines, afspraken uit je extra agenda,
-// diensten en je eigen blokken. Dat komt er allemaal vanzelf in. Klik op een dag: alles van die dag + iets toevoegen.
+// en diensten. Dat komt er allemaal vanzelf in. Klik op een dag: alles van die dag (ook je blokken) + iets toevoegen.
 function maandItems(s){
   const uit = [];
   periodes().filter(p => p.van <= s && s <= p.tot).forEach(p => uit.push({ soort: 'periode', ico: p.soort === 'uitje' ? '🧳' : p.soort === 'zomer' ? '☀' : '🏖', tekst: p.naam, p }));
@@ -4080,8 +4080,7 @@ function maandItems(s){
   D.deadlines.filter(d => d.datum === s).forEach(d => uit.push({ soort: 'deadline', ico: d.klaar ? '✓' : '⏰', tekst: deadlineNaam(d), klaar: d.klaar, d }));
   extraOp(s).filter(x => extraInMaand(x.agenda)).forEach(x => uit.push({ soort: 'extra', ico: '📅', tekst: (x.heleDag ? '' : x.begin + ' ') + x.titel, x, kleur: x.kleur }));
   dienstenOp(s).forEach(x => uit.push({ soort: 'werk', ico: '💼', tekst: W() + ' ' + x.begin, x }));
-  const bl = blokken().filter(b => b.datum === s);
-  if (bl.length) uit.push({ soort: 'blokken', ico: '▦', tekst: bl.length + (bl.length === 1 ? ' blok' : ' blokken') });
+  // eigen blokken staan niet in het vakje (sinds 2026.11.26-2): te druk, ze staan in het week-/dagrooster en als je op de dag klikt
   return uit;
 }
 function maandRooster(ymS){
@@ -4100,7 +4099,7 @@ function maandRooster(ymS){
 }
 /** Eén dag uit het maandrooster: alles van die dag (aanklikbaar) en knoppen om iets toe te voegen. */
 function openMaandDag(s){
-  const items = maandItems(s).filter(x => x.soort !== 'blokken'), bl = blokken().filter(b => b.datum === s).sort((a, b) => a.begin.localeCompare(b.begin));
+  const items = maandItems(s), bl =blokken().filter(b => b.datum === s).sort((a, b) => a.begin.localeCompare(b.begin));
   const rij = (x, i) => `<div class="row line" data-mi="${i}" style="cursor:pointer"><span style="width:24px">${x.ico}</span><div class="grow">${esc(x.tekst)}</div><span class="sub">›</span></div>`;
   sheet(`<h3>${DAGEN_LANG[dt(s).getDay()].replace(/^./, c => c.toUpperCase())} ${dt(s).getDate()} ${MAANDEN[dt(s).getMonth()]}</h3>
     ${items.length || bl.length ? `<div class="card" style="padding:4px 12px">${items.map(rij).join('')}
