@@ -355,7 +355,7 @@
 function versieNr(v){ return String(v || '').split(/[.-]/).map(Number).reduce((t, x) => t * 1000 + (x || 0), 0); }
 const versieMin = (v, min) => !!v && versieNr(v) >= versieNr(min);
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.27-1';
+const APP_VERSIE = '2026.11.27-3';
 const SERVER_MIN = '2026.11.25-11';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -1877,40 +1877,182 @@ function openDienst(x){
 /** Avonden die je vrijhoudt (⚙︎), bijv. ['wo']. */
 const vrijeAvondenLijst = () => String(I().vrijeAvonden || '').split(',').map(x => x.trim()).filter(Boolean);
 const vrijeAvond = s => vrijeAvondenLijst().includes(DAGEN[dt(s).getDay()]);
-/** Beoordeelt een dag voor een extra dienst. null = niet geschikt. */
-function dagAdvies(s){
-  if (dienstenOp(s).length) return null;
-  const weg = uitjeOp(s);
-  if (weg && weg.deel >= 0.999) return null;                                       // je bent de hele dag weg
-  if (['12-31','01-01'].includes(s.slice(5))) return null;                         // oud & nieuw vrij
-  if (D.tentamens.some(t => t.datum === s || t.datum === plus(s,1))) return null;  // tentamen of dag ervoor
-  const w = lessenWeek(maandag(s));
-  if (w === null) return { s, laden: true };
-  const les = w && w.lessen ? w.lessen.filter(l => l.datum === s) : [];
-  const onbekend = !!(w && (w.buiten || w.fout));
-  const begin = les.reduce((m,l) => !m || l.begin < m ? l.begin : m, ''), eind = les.reduce((m,l) => l.eind > m ? l.eind : m, '');
-  let wat, score;
-  if (!les.length) { wat = 'hele dag vrij'; score = 3; }
-  else if (mins(eind) <= 16*60+30) { wat = 'na je les (tot ' + eind + ')'; score = 2; }
-  else if (mins(begin) >= 13*60) { wat = 'ochtend (les vanaf ' + begin + ')'; score = 1; }
-  else return null;
-  const op = [];
-  if (onbekend) { op.push('lesrooster onbekend, check het zelf'); score -= 0.5; }
-  if (vrijeAvond(s)) { op.push("avond houd je vrij"); score -= 0.5; }
-  if (weg) { op.push('weg: ' + weg.lijst.map(p => p.naam).join(', ')); score -= 1; }
-  const ruimte = weekPlan(maandag(s)).ruimte;                 // past je studie die week nog met een dienst van ±6 u erbij?
-  if (ruimte < 6) { op.push(ruimte <= 0 ? 'studie past die week al niet' : 'studie past dan niet meer'); score -= 2; }
-  const m = toetsweek(s, false, Math.min(7, Number(I().toetsweekDagen) || 7));   // jouw regel: de week ervóór geen diensten
-  if (m) { op.push(m.t.vak + ' over ' + m.dagen + ' d'); score -= 2; }
-  const vk = vakantieOp(s);                                   // vakantie zonder tentamen in de buurt: goede dag voor extra uren
-  if (vk && !m) { op.push(vk.soort === 'zomer' ? 'zomervakantie' : 'vakantie'); score += 0.5; }
-  const dl = D.deadlines.find(d => !d.klaar && (d.datum === s || d.datum === plus(s,1)));
-  if (dl) { op.push('deadline ' + (dl.datum === s ? 'vandaag' : 'morgen')); score -= 1; }
-  if (dienstenOp(plus(s,-1)).some(isLaat)) op.push('na late dienst: niet vroeg');
-  // afspraken uit je extra agenda's (⚙︎): noemen, en bij "tellen mee" een lagere score
-  const ex = extraOp(s);
-  if (ex.length) { op.push(ex.map(x => x.titel + (x.heleDag ? '' : ' ' + x.begin + '–' + x.eind)).join(', ')); if (ex.some(x => extraTeltMee(x.agenda))) score -= 1; }
-  return { s, wat, op, score };
+// ================= DIENSTCHECKER =================
+// Krijg je een dienst aangeboden? Vul datum en tijd in en de app zegt of hij past.
+// botst  = overlapt met iets vasts (les, dienst, meetellende afspraak, weg, reistijd)
+// zwaar  = past wel, maar tegen je eigen regels in (tentamen, toetsweek, studie past niet meer)
+// licht  = goed om te weten (deadline, late dienst, vrije avond, blok dat moet schuiven)
+let CHECK = { datum: '', begin: '', eind: '', waar: '', modus: 'een', lijst: '' };   // blijft staan als het scherm opnieuw tekent (bijv. als lessen binnenkomen)
+const overlapt = (p, q) => p.b < q.e && p.e > q.b;
+const tijdTxt = m => hm(m.b) + '–' + hm(m.e);
+function dienstCheck(c){
+  const s = c.datum, ds = minuten(c), rd = reisMin(c.waar);
+  const bezet = { b: ds.b - rd, e: ds.e + rd };                     // dienst plus reistijd heen en terug
+  const netto = nettoU(Object.assign({}, c, { pauze: stdPauze(brutoU(c)) }));
+  const botst = [], zwaar = [], licht = [], goed = [];
+  // 1. vaste dingen op die dag
+  dienstenOp(s).forEach(x => { const m = minuten(x); if (overlapt(bezet, m)) botst.push(`${W()}: dienst ${tijdTxt(m)}`); });
+  const lo = lessenOp(s);
+  let lesU = 0;
+  if (lo === null) licht.push('Lesrooster laadt nog…');
+  else if (lo.fout || lo.buiten) licht.push('Lesrooster van die week onbekend: check het zelf.');
+  else lo.lessen.forEach(l => { const m = minuten(l); lesU += (m.e - m.b) / 60; if (overlapt(bezet, m)) botst.push(`les ${l.titel} ${tijdTxt(m)}`); });
+  reisOp(s).forEach(r => { if (overlapt(ds, r)) botst.push(`reistijd ${r.titel} ${tijdTxt(r)}`); });
+  extraOp(s).forEach(x => {
+    if (x.heleDag) { (extraTeltMee(x.agenda) ? zwaar : licht).push(`hele dag: ${x.titel}`); return; }
+    const m = minuten(x); if (!overlapt(bezet, m)) return;
+    (extraTeltMee(x.agenda) ? botst : licht).push(`${x.titel} ${tijdTxt(m)}`);
+  });
+  periodes().filter(p => p.soort === 'uitje' && p.van <= s && s <= p.tot).forEach(p => {
+    const w = { b: s === p.van && p.vertrek ? mins(p.vertrek) : -1e4, e: s === p.tot && p.terug ? mins(p.terug) : 1e4 };
+    if (overlapt(bezet, w)) botst.push(`🧳 weg: ${p.naam} (${periodeTekst(p)})`);
+  });
+  blokken().filter(x => x.datum === s).forEach(x => { const m = minuten(x); if (overlapt(ds, m)) licht.push(`blok ${blokNaam(x)} ${tijdTxt(m)} moet dan schuiven`); });
+  // 2. jouw regels
+  const t = D.tentamens.find(x => !/indien nodig/i.test(x.opmerking || '') && (x.datum === s || x.datum === plus(s, 1)));
+  if (t) zwaar.push(`📚 tentamen ${t.vak} ${t.datum === s ? 'die dag' : 'de dag erna'}`);
+  const m = toetsweek(s, false, Math.min(7, Number(I().toetsweekDagen) || 7));
+  if (m && !t) zwaar.push(`📚 toetsweek: ${m.t.vak} over ${m.dagen} d`);
+  const r = weekPlan(maandag(s)).ruimte - netto;
+  if (r < -0.25) zwaar.push(`studie past in week ${weekNr(s)} niet meer (±${uD(-r)} tekort)`);
+  const max = Number(I().maxPerDag) || 0, dag = lesU + dienstenOp(s).reduce((x, y) => x + nettoU(y), 0) + netto;
+  if (max && dag > max + 0.01) licht.push(`${u(Math.round(dag * 10) / 10)} u school + werk die dag (max ${u(max)})`);
+  // 3. de dag eromheen
+  const dl = D.deadlines.find(x => !x.klaar && (x.datum === s || x.datum === plus(s, 1)));
+  if (dl) licht.push(`deadline ${deadlineNaam(dl)} ${dl.datum === s ? 'die dag' : 'de dag erna'}`);
+  if (ds.b < 10 * 60 && dienstenOp(plus(s, -1)).some(isLaat)) licht.push('vroeg na een late dienst de avond ervoor');
+  if (isLaat(c)) {
+    const morgen = dienstenOp(plus(s, 1)).map(minuten).concat(((lessenOp(plus(s, 1)) || {}).lessen || []).map(minuten));
+    if (morgen.some(x => x.b < 10 * 60)) licht.push('laat klaar, en de ochtend erna vroeg iets');
+  }
+  if (vrijeAvond(s) && ds.e > 18 * 60) licht.push('avond die je vrijhoudt');
+  if (['12-31', '01-01'].includes(s.slice(5))) licht.push('oud & nieuw');
+  const vk = vakantieOp(s); if (vk && !m && !t) goed.push(vk.soort === 'zomer' ? 'zomervakantie' : 'vakantie: goed moment voor extra uren');
+  return { netto, botst, zwaar, licht, goed };
+}
+/**
+ * Lijst met beschikbare diensten lezen. Werkt met twee vormen (door elkaar mag ook):
+ * - blokken zoals de werk-app ze geeft:   19:30 - 01:15 / Meldtijd / 00:00 / Datum / 27/11/2026 / Naam / Locatie
+ *   (meldtijd wordt overgeslagen: die klopt niet altijd)
+ * - zelf getypt, één dienst per regel:     4-12 17:00-23:00 Ahoy   of   vr 4 dec 17.00 tot 23.00
+ * Een nieuwe tijd terwijl er al een tijd is, of een nieuwe datum terwijl er al datum + tijd is = volgende dienst.
+ */
+function leesDienstLijst(tekst){
+  const nu = vandaag(), jaarNu = +nu.slice(0, 4), uit = [], fout = [];
+  const TIJD = /(\d{1,2})[:.](\d{2})\s*(?:-|–|tot)\s*(\d{1,2})[:.](\d{2})/;
+  const DATUM = new RegExp('\\b(\\d{4})-(\\d{1,2})-(\\d{1,2})\\b|\\b(\\d{1,2})[-\\/](\\d{1,2})(?:[-\\/](\\d{2,4}))?\\b|\\b(\\d{1,2})\\s+' + MAAND_RE + '(?:\\s+(\\d{4}))?', 'i');
+  const isoVan = g => {
+    let d, m, y;
+    if (g[1]) [y, m, d] = [+g[1], +g[2], +g[3]];
+    else if (g[4]) [d, m, y] = [+g[4], +g[5], g[6] ? +g[6] : null];
+    else [d, m, y] = [+g[7], maandNr(g[8]), g[9] ? +g[9] : null];
+    if (y !== null && y < 100) y += 2000;
+    const iso = j => j + '-' + pad(m) + '-' + pad(d);
+    if (y === null) { y = jaarNu; if (dagenTot(iso(y), nu) > 60) y++; }   // zonder jaar: eerstvolgende keer
+    const t = new Date(y, m - 1, d);
+    return m && t.getMonth() === m - 1 && t.getDate() === d ? iso(y) : null;
+  };
+  let cur = {}, wacht = '';
+  const klaar = () => {
+    if (cur.begin && cur.datum) uit.push(cur);
+    else if (cur.begin || cur.datum) fout.push(cur.regel || '?');
+    cur = {};
+  };
+  String(tekst || '').split(/\r?\n/).map(r => r.replace(/\t+/g, ' ').trim()).filter(Boolean).forEach(regel => {
+    const label = regel.toLowerCase().replace(/:$/, '');
+    if (['meldtijd', 'datum', 'naam', 'locatie', 'tijd'].includes(label)) { wacht = label; return; }
+    if (wacht === 'meldtijd') { wacht = ''; return; }
+    if (wacht === 'naam' || wacht === 'locatie') { cur.waar = regel; wacht = ''; return; }
+    wacht = '';
+    let r = regel;
+    const t = r.match(TIJD), d = r.match(DATUM);
+    if (t && d && (cur.begin || cur.datum)) klaar();             // datum + tijd op één regel = een eigen dienst
+    else if (t && cur.begin) klaar();
+    else if (d && !t && cur.datum && cur.begin) klaar();
+    const iso = d ? isoVan(d) : null;
+    if (d && !iso) { fout.push(regel + ' (datum bestaat niet)'); cur = {}; return; }   // hele dienst vervalt
+    if (t) { cur.begin = pad(+t[1]) + ':' + t[2]; cur.eind = pad(+t[3]) + ':' + t[4]; r = r.replace(t[0], ' '); }
+    if (d) { cur.datum = iso; r = r.replace(d[0], ' '); }
+    if (!cur.regel) cur.regel = regel;
+    // wat er op een zelf getypte regel overblijft = waar
+    const rest = r.replace(/\b(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|ma|di|wo|do|vr|za|zo)\b\.?/gi, ' ').replace(/[-–|,·]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if ((t || d) && rest) cur.waar = rest;
+  });
+  klaar();
+  return { diensten: uit, fout };
+}
+function dienstLijstUit(){
+  const el = $('#dcUit'); if (!el) return;
+  const { diensten, fout } = leesDienstLijst(CHECK.lijst);
+  if (!diensten.length && !fout.length) { el.innerHTML = '<div class="note">Plak je lijst hierboven.</div>'; return; }
+  const rang = x => x.botst.length ? 2 : x.zwaar.length ? 1 : 0;
+  const rijen = diensten.filter(c => c.datum >= vandaag()).map((c, i) => {
+    const x = dienstCheck(c);
+    // twee diensten uit dezelfde lijst die elkaar overlappen: je kunt er maar één nemen
+    const ander = diensten.filter((y, j) => j !== i && y.datum === c.datum && overlapt(minuten(c), minuten(y)));
+    if (ander.length) x.licht.push('overlapt met ' + ander.map(y => y.begin + '–' + y.eind).join(', ') + ' uit je lijst');
+    return { c, x, i };
+  }).sort((p, q) => rang(p.x) - rang(q.x) || (p.c.datum + p.c.begin).localeCompare(q.c.datum + q.c.begin));
+  const verleden = diensten.length - rijen.length;
+  LIJST = rijen.map(r => r.c);
+  const badge = x => x.botst.length ? ['warn', 'Botst'] : x.zwaar.length ? ['none', 'Liever niet'] : ['', 'Kan'];
+  el.innerHTML = `<div class="sub" style="margin-top:10px">${rijen.length} ${rijen.length === 1 ? 'dienst' : 'diensten'} gevonden${verleden ? ` (${verleden} al geweest, overgeslagen)` : ''}</div>
+    ${rijen.map(({ c, x }, k) => { const [kl, l] = badge(x), waarom = x.botst.concat(x.zwaar, x.licht);
+      return `<div class="list-item" style="cursor:default"><div class="grow">
+        <div class="name">${dagKort(c.datum)} ${c.begin}–${c.eind} <span class="sub">${u(x.netto)} u</span></div>
+        <div class="sub">${c.waar ? esc(c.waar) + (waarom.length ? ' · ' : '') : ''}${esc(waarom.join(' · '))}</div></div>
+        <span class="badge ${kl}">${l}</span><button class="btn ghost small" data-dcplan="${k}" aria-label="inplannen">＋</button></div>`; }).join('')}
+    ${fout.length ? `<div class="note">Niet herkend: ${fout.map(esc).join(' · ')}</div>` : ''}
+    <div class="note">＋ = als dienst inplannen. Bovenaan wat het best past.</div>`;
+  el.querySelectorAll('[data-dcplan]').forEach(b => b.onclick = () => { const c = LIJST[+b.dataset.dcplan]; openDienst({ datum: c.datum, begin: c.begin, eind: c.eind, waar: c.waar || '' }); });
+}
+let LIJST = [];
+/** Kaart: invulvelden + uitkomst. De uitkomst ververst los (zie dienstCheckKnoppen), zodat je focus in het veld blijft. */
+function dienstChecker(ym, mi){
+  if (!CHECK.datum) CHECK.datum = ym === vandaag().slice(0, 7) ? plus(vandaag(), 1) : ym + '-01';
+  const doelU = mi.tot < mi.minimum ? mi.minimum : mi.doel;
+  return `<h2>Dienstchecker</h2><div class="card">
+    ${mi.tot < mi.doel && ym >= vandaag().slice(0, 7) ? `<div class="sub">Nog ${u(doelU - mi.tot)} u tot je ${mi.tot < mi.minimum ? 'minimum' : 'doel'} (${doelU} u) in ${ymNaam(ym)}</div>` : ''}
+    <div class="seg small" id="dcModus" style="margin-top:6px"><button data-v="een" class="${CHECK.modus === 'een' ? 'on' : ''}">Eén dienst</button><button data-v="lijst" class="${CHECK.modus === 'lijst' ? 'on' : ''}">Lijst plakken</button></div>
+    ${CHECK.modus === 'lijst' ? `
+    <label class="f">Plak de beschikbare diensten</label>
+    <textarea id="dcLijst" rows="6" placeholder="19:30 - 01:15&#10;Meldtijd&#10;00:00&#10;Datum&#10;27/11/2026&#10;Naam&#10;Locatie&#10;&#10;of per regel: 4-12 17:00-23:00 Ahoy">${esc(CHECK.lijst)}</textarea>
+    <div class="note">Zo uit de app van je werk, of zelf getypt (één per regel). De meldtijd wordt overgeslagen.</div>` : `
+    <label class="f">Datum</label><input type="date" id="dcDatum" value="${CHECK.datum}">
+    <div class="row">
+      <div class="grow"><label class="f">Begin</label><input type="time" id="dcBegin" value="${CHECK.begin}"></div>
+      <div class="grow"><label class="f">Eind</label><input type="time" id="dcEind" value="${CHECK.eind}"></div>
+    </div>
+    <label class="f">Waar (optioneel, voor reistijd)</label><input id="dcWaar" value="${esc(CHECK.waar)}" placeholder="locatie of klant">`}
+    <div id="dcUit"></div></div>`;
+}
+function dienstCheckUit(){
+  const el = $('#dcUit'); if (!el) return;
+  const c = CHECK;
+  if (!c.datum || !/^\d{2}:\d{2}$/.test(c.begin) || !/^\d{2}:\d{2}$/.test(c.eind)) { el.innerHTML = '<div class="note">Vul datum, begin- en eindtijd in.</div>'; return; }
+  if (c.datum < vandaag()) { el.innerHTML = '<div class="note">Die datum is al geweest.</div>'; return; }
+  const x = dienstCheck(c);
+  const [kl, oordeel] = x.botst.length ? ['warn', 'Botst'] : x.zwaar.length ? ['none', 'Kan, liever niet'] : ['', 'Kan'];
+  const lijst = (titel, l) => l.length ? `<div class="sub" style="margin-top:6px">${titel}</div>${l.map(t => `<div>· ${esc(t)}</div>`).join('')}` : '';
+  const ym = c.datum.slice(0, 7), na = maandInfo(ym).tot + x.netto;
+  el.innerHTML = `<div class="row" style="margin-top:10px"><div class="grow"><div class="name">${dagKort(c.datum)} ${c.begin}–${c.eind}</div>
+      <div class="sub">${u(x.netto)} u netto · ${ymNaam(ym)} wordt ${u(na)} u</div></div><span class="badge ${kl}">${oordeel}</span></div>
+    ${lijst('Overlapt met', x.botst)}${lijst('Tegen je eigen regels', x.zwaar)}${lijst('Let op', x.licht)}${lijst('Pluspunt', x.goed)}
+    ${!x.botst.length && !x.zwaar.length && !x.licht.length ? '<div class="okbox">Niets in de weg.</div>' : ''}
+    ${grensTekst(na)}
+    <button class="btn sec" id="dcPlan" style="margin-top:8px">Als dienst inplannen</button>`;
+  $('#dcPlan').onclick = () => openDienst({ datum: c.datum, begin: c.begin, eind: c.eind, waar: c.waar });
+}
+function dienstCheckKnoppen(){
+  if (!$('#dcUit')) return;                        // kaart verborgen via Indeling
+  document.querySelectorAll('#dcModus button').forEach(b => b.onclick = () => { CHECK.modus = b.dataset.v; renderMaand(); });
+  if (CHECK.modus === 'lijst') {
+    $('#dcLijst').oninput = () => { CHECK.lijst = $('#dcLijst').value; dienstLijstUit(); };
+    return dienstLijstUit();
+  }
+  [['#dcDatum', 'datum'], ['#dcBegin', 'begin'], ['#dcEind', 'eind'], ['#dcWaar', 'waar']]
+    .forEach(([id, k]) => $(id).oninput = () => { CHECK[k] = k === 'waar' ? $(id).value.trim() : $(id).value; dienstCheckUit(); });
+  dienstCheckUit();
 }
 /** Per week, een maand vooruit: lessen, studie, diensten en hoeveel uur werk er nog bij kan. */
 function ruimteKaart(){
@@ -1923,27 +2065,6 @@ function ruimteKaart(){
       <tr><th>Week</th><th>Les</th><th>Studie</th><th>${esc(W())}</th><th>Ruimte</th></tr>${weken.map(rij).join('')}</table></div>
     <div class="note">Ruimte = hoeveel uur werk er nog bij kan zonder dat je studie in de knel komt, binnen je maximum van ${u(I().maxPerDag)} u school + werk per dag (⚙︎ → Studie). ? = lesrooster nog onbekend.</div></div>`;
 }
-function dienstzoeker(ym, mi){
-  const nu = vandaag();
-  if (ym < nu.slice(0,7)) return '';
-  const doelU = mi.tot < mi.minimum ? mi.minimum : mi.doel;
-  if (mi.tot >= mi.doel) return '';
-  const tekort = doelU - mi.tot, diensten = Math.max(1, Math.ceil(tekort / 6));
-  const dagen = []; let s = ym + '-01'; if (s <= nu) s = plus(nu, 1);
-  for (; s.startsWith(ym); s = plus(s, 1)) { const a = dagAdvies(s); if (a) dagen.push(a); }
-  const laden = dagen.some(a => a.laden);
-  const goed = dagen.filter(a => !a.laden).sort((a,b) => b.score - a.score || a.s.localeCompare(b.s)).slice(0, 8);
-  const label = sc => sc >= 2 ? ['', 'goed'] : sc >= 1 ? ['none', 'kan'] : ['warn', 'liever niet'];
-  return `<h2>Dienstzoeker</h2><div class="card">
-    <div class="name">Nog ${u(tekort)} u tot je ${mi.tot < mi.minimum ? 'minimum' : 'doel'} (${doelU} u) · ±${diensten} ${diensten===1?'dienst':'diensten'} van 6 u</div>
-    ${mi.tot < mi.minimum && mi.doel > mi.minimum ? `<div class="sub">Tot je doel van ${mi.doel} u: nog ${u(mi.doel - mi.tot)} u</div>` : ''}
-    ${laden ? '<div class="note">Lessen laden…</div>' : ''}
-    ${goed.map(a => { const [c,l] = label(a.score); return `<div class="list-item" style="cursor:default"><div class="grow">
-      <div class="name">${dagKort(a.s)}</div><div class="sub">${esc(a.wat)}${a.op.length ? ' · ' + esc(a.op.join(' · ')) : ''}</div></div>
-      <span class="badge ${c}">${l}</span></div>`; }).join('') || (laden ? '' : '<div class="empty">Geen geschikte dagen meer deze maand.</div>')}
-    <div class="note">Kijk in het rooster of de app van je werk welke diensten er op deze dagen open staan. Diensten uit je werkagenda komen vanzelf in de planner.</div></div>`;
-}
-
 // ================= MAAND =================
 let ym = vandaag().slice(0,7), maandTab = 'overzicht';
 /** Cijfers van een maand; de doelen zijn de optelsom van de dagdoelen (toetsweekmodus per dag meegerekend). */
@@ -2156,7 +2277,7 @@ function maandWerk(mi){
     </div>` },
       { id: 'diensten', naam: 'Diensten', html: `<h2>Diensten</h2>
     <div class="card" style="padding:4px 12px">${alleDiensten.map(dienstItem).join('') || '<div class="empty">Nog geen diensten deze maand.</div>'}</div>` },
-      { id: 'zoeker', naam: 'Dienstzoeker', html: dienstzoeker(ym, mi) },
+      { id: 'zoeker', naam: 'Dienstchecker', html: dienstChecker(ym, mi) },
       { id: 'ruimte', naam: 'Ruimte voor diensten', html: ruimteKaart() },
       { id: 'loon', naam: 'Loon', html: `<div class="card">
       <div class="row line"><div class="grow">Uurloon bij deze uren</div><div class="name">${euroC(mi.tarief)}</div></div>
@@ -2175,6 +2296,7 @@ function maandWerk(mi){
   $('#dNieuw').onclick = () => openDienst({ datum: ym === vandaag().slice(0,7) ? vandaag() : ym + '-01' });
   document.querySelectorAll('tr[data-m]').forEach(tr => tr.onclick = () => { ym = tr.dataset.m; renderMaand(); window.scrollTo(0,0); });
   dienstKnoppen();
+  dienstCheckKnoppen();
   $('#mDoel').onclick = () => {
     sheet(`<h3>Urendoel ${ymNaam(ym)}</h3>
       <div class="row"><div class="grow"><label class="f">Doel (uur)</label><input id="gDoel" inputmode="decimal" value="${mi.doel}"></div>
@@ -2554,7 +2676,7 @@ function openInstellingen(){
     ${kop('💼 Werk')}
     <div class="card">
       <label class="f" style="margin-top:0">Naam van je werk (zo heet het overal in de app)</label><input id="iWerkNaam" value="${esc(i.werkNaam)}" placeholder="Werk">
-      <label class="f">Avonden die je vrijhoudt (dienstzoeker raadt ze af)</label>
+      <label class="f">Avonden die je vrijhoudt (dienstchecker waarschuwt)</label>
       <div class="seg small" id="iVrijeAvond">${WEEKDAGEN.map(d => `<button data-v="${d}" class="${vrijeAvondenLijst().includes(d)?'on':''}">${d}</button>`).join('')}</div>
       <label class="f">Diensten automatisch uit de agenda van mijn werk halen</label>
       <div class="seg" id="iWerkImp"><button data-v="aan" class="${i.werkImport==='aan'?'on':''}">Aan</button><button data-v="uit" class="${i.werkImport!=='aan'?'on':''}">Uit</button></div>
