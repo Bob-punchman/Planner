@@ -355,7 +355,7 @@
 function versieNr(v){ return String(v || '').split(/[.-]/).map(Number).reduce((t, x) => t * 1000 + (x || 0), 0); }
 const versieMin = (v, min) => !!v && versieNr(v) >= versieNr(min);
 // Verhoog bij elke wijziging (jjjj.mm.dd, eventueel met -2, -3 als er op één dag meer updates zijn).
-const APP_VERSIE = '2026.11.26-3';
+const APP_VERSIE = '2026.11.27-1';
 const SERVER_MIN = '2026.11.25-11';   // deze app verwacht minstens deze Code.gs-versie (rooster, lessen verbergen, extra agenda, gat tussen lessen, reistijd, taken na vaste tijd, basisweek)
 
 // ================= data & helpers =================
@@ -1422,14 +1422,18 @@ function planKnoppen(s){
 function gameKaart(s){
   const wp = weekPlan(maandag(s)), d = wp.dagen.find(x => x.s === s), g = wp.game, nu = vandaag();
   if (s > nu) return `<div class="card"><div class="sub">Gametijd ${dagKort(s)}</div><div class="note" style="margin:4px 0 0">Dagdeel ${uD(d.gameDeel)}. Komt die dag vrij naarmate je studie af is.</div></div>`;
-  const over = d.gameBeschikbaar;
+  // over < 0 = voorschot (eerder of vandaag te veel gegamed). Groot getal nooit onder 0: "−12 min over" leest raar.
+  // De schuld staat apart in de uitleg en gaat eerst af van wat je vandaag vrijspeelt.
+  const over = d.gameBeschikbaar, inlopen = over < -1 / 120 ? -over : 0;
   const uitleg = !d.school ? 'Vakantie: vrij tot je daglimiet.' : d.studieAf ? 'Je studie is af: je dagdeel is helemaal vrij.'
                : `${procent(d.frac)} van je studieplan gedaan, dus ${procent(d.frac)} van je dagdeel vrij.`;
   const saldo = d.saldoIn > 0.01 ? (d.studieAf ? `Plus ${uMin(d.saldoIn)} doorgeschoven van eerdere dagen.` : `Nog ${uMin(d.saldoIn)} van eerdere dagen staat klaar zodra je studie af is.`)
-              : d.saldoIn < -0.01 ? `Min ${uMin(-d.saldoIn)} voorschot van eerdere dagen.` : '';
+              : d.saldoIn < -0.01 ? `Eerder ${uMin(-d.saldoIn)} te veel gegamed (voorschot): dat gaat van vandaag af.` : '';
+  const schuld = inlopen ? `Nog ${uMin(inlopen)} voorschot in te lopen voordat je weer gametijd hebt.` : '';
   return `<div class="card"><div class="row"><div class="grow"><div class="sub">Gametijd ${s === nu ? 'vandaag' : dagKort(s)}</div>
       <div class="sub">vrijgespeeld ${uMin(d.gameVrij)} van ${uD(d.gameDeel)} · gebruikt ${uMin(d.gamed)}</div></div>
-      <div class="big ${over < 0 ? 'neg' : ''}">${uMin(over)}<span class="unit">over</span></div></div>
+      <div class="big">${uMin(Math.max(0, over))}<span class="unit">over</span></div></div>
+    ${schuld ? `<div class="alert" style="margin:6px 0 0">${schuld}</div>` : ''}
     <div class="note" style="margin:6px 0 0">${uitleg}${saldo ? ' ' + saldo : ''} Deze week ${uMin(g.gamed)} van max ${uD(g.max)}.</div></div>`;
 }
 
